@@ -7,13 +7,15 @@
 -- 사용 순서:
 --   1. ./gradlew hashPassword --console=plain 로 초기 비밀번호의 BCrypt 해시를 생성한다.
 --   2. 아래 <PLACEHOLDER> 값을 실제 값으로 바꾼다.
---   3. 대상 환경 DB에 이 스크립트를 직접 실행한다.
---        예) mysql -h <host> -P <port> -u <user> -p <database> < scripts/seed-platform-admin.sql
+--   3. 대상 환경 DB에 이 스크립트를 직접 실행한다. --default-character-set=utf8mb4를 꼭 붙인다
+--      (빠뜨리면 한글 name 값이 깨져서 저장된다).
+--        예) mysql --default-character-set=utf8mb4 -h <host> -P <port> -u <user> -p <database> \
+--              < scripts/seed-platform-admin.sql
 --   4. 발급한 초기 비밀번호로 최초 로그인하면 비밀번호 변경이 강제된다
 --      (is_password_reset_required = TRUE, business/user-organization-design.md 5.3절).
 --
--- users 테이블 스키마는 business/user-organization-design.md 3.2절을 따른다.
--- 이 스크립트를 실행하기 전에 해당 스키마의 마이그레이션이 먼저 적용되어 있어야 한다.
+-- users 테이블 스키마는 db/migration/V1__create_users_and_login_history.sql을 따른다.
+-- 이 스크립트를 실행하기 전에 그 마이그레이션이 먼저 적용되어 있어야 한다.
 
 INSERT INTO users (
     login_id,
