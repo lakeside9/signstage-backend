@@ -35,3 +35,11 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+tasks.register('hashPassword', JavaExec) {
+	group = 'signstage'
+	description = 'DB 시딩용 BCrypt 해시를 생성한다. 사용: ./gradlew hashPassword --console=plain (표준입력) 또는 --args="평문비밀번호"'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.eformworks.signstage.backend.core.tool.PasswordHashCli'
+	standardInput = System.in
+}
