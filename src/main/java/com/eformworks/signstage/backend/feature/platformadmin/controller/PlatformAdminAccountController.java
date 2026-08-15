@@ -72,6 +72,22 @@ public class PlatformAdminAccountController {
     }
 
     @Operation(
+            summary = "플랫폼 관리자 등급 변경",
+            description = "이미 platform_role이 있는 계정의 등급만 재조정한다(해제 후 재생성할 필요가 없다). "
+                    + "PLATFORM_SUPER만 호출할 수 있고, 본인 계정은 대상으로 지정할 수 없다."
+    )
+    @PutMapping("/{userId}/role")
+    public ApiResponse<PlatformAdminUserDto.Response.UserSummary> updateAccountRole(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long userId,
+            @Valid @RequestBody PlatformAdminAccountDto.Request.UpdateRole request
+    ) {
+        PlatformAdminUserDto.Response.UserSummary response = platformAdminUserService
+                .updateAccountRole(userId, currentUser.userId(), currentUser.platformRole(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
             summary = "플랫폼 관리자 권한 해제",
             description = "platform_role만 비워 일반 사용자로 되돌린다(계정 자체는 유지). "
                     + "PLATFORM_SUPER만 호출할 수 있고, 본인 계정은 대상으로 지정할 수 없다."

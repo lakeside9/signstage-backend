@@ -3,16 +3,26 @@ package com.eformworks.signstage.backend.feature.platformadmin.service;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.security.TemporaryPasswordGenerator;
+import com.eformworks.signstage.backend.feature.identity.entity.LoginHistory;
 import com.eformworks.signstage.backend.feature.identity.error.IdentityErrorCode;
+import com.eformworks.signstage.backend.feature.identity.repository.LoginHistoryRepository;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.PlatformRole;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.entity.UserStatus;
+import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
+import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
+import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
+import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminAccountDto;
+import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminLoginHistoryDto;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminUserDto;
 import com.eformworks.signstage.backend.feature.platformadmin.error.PlatformAdminErrorCode;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -36,6 +46,8 @@ public class PlatformAdminUserService {
     private static final Set<String> MEMBER_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
 
     private final UserRepository userRepository;
+    private final MemberRepository memberRepository;
+    private final LoginHistoryRepository loginHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final TemporaryPasswordGenerator temporaryPasswordGenerator;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
@@ -100,8 +112,34 @@ public class PlatformAdminUserService {
         return users.map(this::toUserSummary);
     }
 
-    public PlatformAdminUserDto.Response.UserSummary retrieveUser(Long userId) {
-        return toUserSummary(findUserOrThrow(userId));
+    /**
+     * 기본 정보에 소속 조직 목록을 더해 반환한다(signstage-docs
+     * business/platform-admin-member-management.md 4.1절). REMOVED 멤버십은 뺀다.
+     */
+    public PlatformAdminUserDto.Response.UserDetail retrieveUser(Long userId) {
+        User user = findUserOrThrow(userId);
+        List<PlatformAdminUserDto.Response.OrganizationMembership> organizations =
+                memberRepository.findAllByUserIdAndStatusNot(userId, MemberStatus.REMOVED).stream()
+                        .map(this::toOrganizationMembership)
+                        .toList();
+        return new PlatformAdminUserDto.Response.UserDetail(toUserSummary(user), organizations);
+    }
+
+    /**
+     * 로그인 이력 조회. signstage-docs business/login-security.md 6장에 따라 다른 조회 API와
+     * 달리 PLATFORM_OPS 이상만 볼 수 있다(PLATFORM_SUPPORT는 회원 목록/상세는 봐도 로그인
+     * 이력은 못 본다 — 조회 강도가 다른 유일한 예외).
+     */
+    public Page<PlatformAdminLoginHistoryDto.Response.LoginHistoryEntry> findLoginHistory(
+            Long userId,
+            String actingPlatformRole,
+            Pageable pageable
+    ) {
+        if (!MEMBER_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+        findUserOrThrow(userId);
+        return loginHistoryRepository.findAllByUserId(userId, pageable).map(this::toLoginHistoryEntry);
     }
 
     /**
@@ -158,6 +196,52 @@ public class PlatformAdminUserService {
         user.requirePasswordReset();
 
         auditLogRecorder.record(actingUserId, PlatformAdminAction.FORCE_PASSWORD_RESET, userId, null, null);
+        return toUserSummary(user);
+    }
+
+    /**
+     * 회원을 강제 탈퇴시킨다(signstage-docs business/platform-admin-member-management.md
+     * 4.2절 "회원 탈퇴 강제 처리", user-organization-design.md 8.2절). 민감도가 가장 높아
+     * PLATFORM_SUPER만 호출할 수 있다.
+     *
+     * <p>선행 조건 두 가지를 검사한다 — 8.2절 4번: platform_role이 있으면 먼저 해제해야 한다.
+     * 4.3절 "최소 1 OWNER": 탈퇴자가 마지막 OWNER인 조직이 하나라도 있으면 전체를 막는다
+     * (관리자 강제 조정이라도 이 규칙에 예외를 두지 않기로 했다 — platform-admin-member-management.md
+     * 10장에서 결정 필요 사항으로 남아 있던 것을 "예외 없음"으로 확정했다).
+     */
+    @Transactional
+    public PlatformAdminUserDto.Response.UserSummary forceWithdrawUser(Long userId, Long actingUserId, String actingPlatformRole) {
+        checkSuperRole(actingPlatformRole);
+        if (userId.equals(actingUserId)) {
+            throw new ApplicationException(PlatformAdminErrorCode.CANNOT_TARGET_SELF);
+        }
+
+        User user = findUserOrThrow(userId);
+        if (user.getStatus() == UserStatus.WITHDRAWN) {
+            throw new ApplicationException(PlatformAdminErrorCode.USER_ALREADY_WITHDRAWN);
+        }
+        if (user.getPlatformRole() != null) {
+            throw new ApplicationException(PlatformAdminErrorCode.CANNOT_WITHDRAW_PLATFORM_ADMIN);
+        }
+
+        List<Member> activeMemberships = memberRepository.findAllByUserIdAndStatus(userId, MemberStatus.ACTIVE);
+        for (Member membership : activeMemberships) {
+            if (membership.getRole() == MemberRole.OWNER) {
+                long activeOwnerCount = memberRepository.countByOrganizationIdAndRoleAndStatus(
+                        membership.getOrganization().getId(), MemberRole.OWNER, MemberStatus.ACTIVE
+                );
+                if (activeOwnerCount <= 1) {
+                    throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_LAST_OWNER_REQUIRED);
+                }
+            }
+        }
+
+        String originalLoginId = user.getLoginId();
+        String unusablePasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
+        user.withdraw(unusablePasswordHash);
+        activeMemberships.forEach(Member::remove);
+
+        auditLogRecorder.record(actingUserId, PlatformAdminAction.FORCE_WITHDRAW_USER, userId, null, "loginId was " + originalLoginId);
         return toUserSummary(user);
     }
 
@@ -231,6 +315,37 @@ public class PlatformAdminUserService {
         return new PlatformAdminUserDto.Response.CreatedUser(toUserSummary(user), temporaryPassword);
     }
 
+    /**
+     * 이미 platform_role이 있는 계정의 등급만 바꾼다(부여는 {@link #createAccount}, 해제는
+     * {@link #revokeAccount}). 해제 후 재생성하지 않고 등급만 재조정할 수 있게 한다.
+     */
+    @Transactional
+    public PlatformAdminUserDto.Response.UserSummary updateAccountRole(
+            Long userId,
+            Long actingUserId,
+            String actingPlatformRole,
+            PlatformAdminAccountDto.Request.UpdateRole request
+    ) {
+        checkSuperRole(actingPlatformRole);
+        if (userId.equals(actingUserId)) {
+            throw new ApplicationException(PlatformAdminErrorCode.CANNOT_TARGET_SELF);
+        }
+
+        User user = findUserOrThrow(userId);
+        if (user.getPlatformRole() == null) {
+            throw new ApplicationException(PlatformAdminErrorCode.NOT_A_PLATFORM_ADMIN);
+        }
+        PlatformRole previousRole = user.getPlatformRole();
+        PlatformRole newRole = parsePlatformRole(request.getPlatformRole());
+        user.changePlatformRole(newRole);
+
+        auditLogRecorder.record(
+                actingUserId, PlatformAdminAction.UPDATE_ACCOUNT_ROLE, userId, null,
+                "platformRole: " + previousRole + " -> " + newRole
+        );
+        return toUserSummary(user);
+    }
+
     /** platform_role만 비워 일반 사용자로 되돌린다. 계정 자체(status)는 건드리지 않는다. */
     @Transactional
     public PlatformAdminUserDto.Response.UserSummary revokeAccount(Long userId, Long actingUserId, String actingPlatformRole) {
@@ -302,6 +417,28 @@ public class PlatformAdminUserService {
                 user.isLocked(),
                 user.isPasswordResetRequired(),
                 user.getCreatedAt()
+        );
+    }
+
+    private PlatformAdminUserDto.Response.OrganizationMembership toOrganizationMembership(Member member) {
+        return new PlatformAdminUserDto.Response.OrganizationMembership(
+                member.getOrganization().getId(),
+                member.getOrganization().getName(),
+                member.getOrganization().getCode(),
+                member.getRole().name(),
+                member.getStatus().name(),
+                member.getJoinedAt()
+        );
+    }
+
+    private PlatformAdminLoginHistoryDto.Response.LoginHistoryEntry toLoginHistoryEntry(LoginHistory loginHistory) {
+        return new PlatformAdminLoginHistoryDto.Response.LoginHistoryEntry(
+                loginHistory.getId(),
+                loginHistory.getLoginIdInput(),
+                loginHistory.getStatus().name(),
+                loginHistory.getIpAddress(),
+                loginHistory.getUserAgent(),
+                loginHistory.getCreatedAt()
         );
     }
 }

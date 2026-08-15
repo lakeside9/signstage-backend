@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.platformadmin.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -86,6 +87,31 @@ public final class PlatformAdminUserDto {
 
             private final UserSummary user;
             private final String temporaryPassword;
+        }
+
+        /**
+         * 회원 상세 조회 전용. 기본 정보(UserSummary)에 소속 조직 목록을 더한다
+         * (signstage-docs business/platform-admin-member-management.md 4.1절).
+         * REMOVED 상태 멤버십은 제외한다 — MemberService.findMembers와 같은 규칙.
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class UserDetail {
+
+            private final UserSummary user;
+            private final List<OrganizationMembership> organizations;
+        }
+
+        @Getter
+        @AllArgsConstructor
+        public static class OrganizationMembership {
+
+            private final Long organizationId;
+            private final String organizationName;
+            private final String organizationCode;
+            private final String role;
+            private final String status;
+            private final LocalDateTime joinedAt;
         }
     }
 }

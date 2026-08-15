@@ -45,5 +45,20 @@ public final class PlatformAdminAccountDto {
             @NotBlank
             private String platformRole;
         }
+
+        /**
+         * 이미 platform_role이 있는 계정의 등급만 바꾼다(부여/해제가 아니라 재조정).
+         * 계정을 해제 후 재생성하지 않고 등급만 조정할 수 있게 한다.
+         */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateRole {
+
+            /** PLATFORM_SUPPORT / PLATFORM_OPS / PLATFORM_SUPER 중 하나. */
+            @NotBlank
+            private String platformRole;
+        }
     }
 }

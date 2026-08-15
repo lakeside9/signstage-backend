@@ -5,6 +5,7 @@ import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.identity.entity.UserStatus;
+import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminLoginHistoryDto;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminUserDto;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -72,11 +74,27 @@ public class PlatformAdminUserController {
         return ApiResponse.success(PageResponse.from(result), traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "회원 상세 조회")
+    @Operation(summary = "회원 상세 조회", description = "기본 정보에 소속 조직 목록(조직별 역할/상태)을 더해 반환한다.")
     @GetMapping("/{userId}")
-    public ApiResponse<PlatformAdminUserDto.Response.UserSummary> retrieveUser(@PathVariable Long userId) {
-        PlatformAdminUserDto.Response.UserSummary response = platformAdminUserService.retrieveUser(userId);
+    public ApiResponse<PlatformAdminUserDto.Response.UserDetail> retrieveUser(@PathVariable Long userId) {
+        PlatformAdminUserDto.Response.UserDetail response = platformAdminUserService.retrieveUser(userId);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "회원 로그인 이력 조회",
+            description = "최신순으로 정렬된다. PLATFORM_OPS 이상만 호출할 수 있다(다른 조회 API와 달리 "
+                    + "PLATFORM_SUPPORT는 볼 수 없다 — login-security.md 6장)."
+    )
+    @GetMapping("/{userId}/login-history")
+    public ApiResponse<PageResponse<PlatformAdminLoginHistoryDto.Response.LoginHistoryEntry>> findLoginHistory(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long userId,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        Page<PlatformAdminLoginHistoryDto.Response.LoginHistoryEntry> result =
+                platformAdminUserService.findLoginHistory(userId, currentUser.platformRole(), pageable);
+        return ApiResponse.success(PageResponse.from(result), traceIdProvider.getTraceId());
     }
 
     @Operation(
@@ -124,6 +142,22 @@ public class PlatformAdminUserController {
     ) {
         PlatformAdminUserDto.Response.UserSummary response =
                 platformAdminUserService.forcePasswordReset(userId, currentUser.userId(), currentUser.platformRole());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "회원 강제 탈퇴",
+            description = "논리적 삭제(soft delete) + PII 마스킹 처리한다. 되돌릴 수 없다. **PLATFORM_SUPER**만 "
+                    + "호출할 수 있고, 본인 계정은 대상으로 지정할 수 없다. platform_role이 있는 계정은 먼저 "
+                    + "권한을 해제해야 하고, 탈퇴자가 마지막 OWNER인 조직이 있으면 먼저 소유권을 이전해야 한다."
+    )
+    @PostMapping("/{userId}/withdraw")
+    public ApiResponse<PlatformAdminUserDto.Response.UserSummary> forceWithdrawUser(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long userId
+    ) {
+        PlatformAdminUserDto.Response.UserSummary response =
+                platformAdminUserService.forceWithdrawUser(userId, currentUser.userId(), currentUser.platformRole());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }

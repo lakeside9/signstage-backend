@@ -36,7 +36,8 @@ public class User extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false, unique = true, length = 255)
+    /** 탈퇴 시(PII 마스킹) NULL로 비워진다 — {@link #withdraw(String)} 참고. */
+    @Column(unique = true, length = 255)
     private String email;
 
     @Column(length = 20)
@@ -142,5 +143,32 @@ public class User extends BaseEntity {
      */
     public void revokePlatformRole() {
         this.platformRole = null;
+    }
+
+    /**
+     * PLATFORM_SUPER가 이미 platform_role이 있는 계정의 등급만 바꿀 때 사용한다(부여/해제는
+     * {@link #revokePlatformRole()}). null을 넘기지 않는다 — null로 비우는 것은 해제 전용
+     * 메서드의 역할이라 이 메서드는 등급 값만 다룬다.
+     */
+    public void changePlatformRole(PlatformRole platformRole) {
+        this.platformRole = platformRole;
+    }
+
+    /**
+     * 관리자가 회원을 강제 탈퇴시킬 때 쓰는 논리적 삭제(soft delete) + PII 마스킹이다
+     * (signstage-docs business/user-organization-design.md 8.2절). {@code id}와 그 id를
+     * 참조하는 관계(organization_members 등)는 그대로 남기고, 다시 로그인할 수 없도록
+     * loginId/이름/이메일/전화번호/비밀번호를 지운다.
+     *
+     * @param unusablePasswordHash 아무도 평문을 알 수 없는, 그러나 유효한 형식의 해시
+     *                             (호출부가 {@code passwordEncoder.encode(임의값)}으로 만들어 넘긴다)
+     */
+    public void withdraw(String unusablePasswordHash) {
+        this.loginId = "withdrawn_user_" + this.id;
+        this.name = "(탈퇴한 사용자)";
+        this.email = null;
+        this.phone = null;
+        this.password = unusablePasswordHash;
+        this.status = UserStatus.WITHDRAWN;
     }
 }
