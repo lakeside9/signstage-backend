@@ -1,16 +1,14 @@
 package com.eformworks.signstage.backend.feature.identity.repository;
 
-import com.eformworks.signstage.backend.feature.identity.entity.PlatformRole;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
-import com.eformworks.signstage.backend.feature.identity.entity.UserStatus;
 import java.util.Optional;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
-public interface UserRepository extends JpaRepository<User, Long> {
+/**
+ * 동적 검색 조건(search/searchAccounts)은 {@link UserRepositoryCustom}(QueryDSL 구현은
+ * {@link UserRepositoryImpl})에 있다.
+ */
+public interface UserRepository extends JpaRepository<User, Long>, UserRepositoryCustom {
 
     Optional<User> findByLoginId(String loginId);
 
@@ -19,43 +17,4 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
 
     boolean existsByEmailAndIdNot(String email, Long id);
-
-    /**
-     * 플랫폼 관리자 회원 검색용. 각 조건은 값이 없으면(null/빈 문자열) 무시된다.
-     * loginId/name/email은 부분 일치(대소문자 무시), status는 정확히 일치한다.
-     */
-    @Query("""
-            SELECT u FROM User u
-            WHERE (:loginId IS NULL OR LOWER(u.loginId) LIKE LOWER(CONCAT('%', :loginId, '%')))
-              AND (:name IS NULL OR LOWER(u.name) LIKE LOWER(CONCAT('%', :name, '%')))
-              AND (:email IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :email, '%')))
-              AND (:status IS NULL OR u.status = :status)
-            """)
-    Page<User> search(
-            @Param("loginId") String loginId,
-            @Param("name") String name,
-            @Param("email") String email,
-            @Param("status") UserStatus status,
-            Pageable pageable
-    );
-
-    /**
-     * 플랫폼 관리자 계정(platform_role이 있는 User) 검색용. {@link #search}와 같은 규칙으로
-     * loginId/name/email은 부분 일치, platformRole은 정확히 일치(생략하면 등급 무관 전체).
-     */
-    @Query("""
-            SELECT u FROM User u
-            WHERE u.platformRole IS NOT NULL
-              AND (:loginId IS NULL OR LOWER(u.loginId) LIKE LOWER(CONCAT('%', :loginId, '%')))
-              AND (:name IS NULL OR LOWER(u.name) LIKE LOWER(CONCAT('%', :name, '%')))
-              AND (:email IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :email, '%')))
-              AND (:platformRole IS NULL OR u.platformRole = :platformRole)
-            """)
-    Page<User> searchAccounts(
-            @Param("loginId") String loginId,
-            @Param("name") String name,
-            @Param("email") String email,
-            @Param("platformRole") PlatformRole platformRole,
-            Pageable pageable
-    );
 }

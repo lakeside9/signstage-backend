@@ -7,6 +7,12 @@ plugins {
 group = 'com.eformworks.signstage'
 version = '0.0.1-SNAPSHOT'
 
+ext {
+	// querydsl/querydsl 프로젝트는 5.1.0 이후 유지보수가 중단됐다. Spring Data 공식 문서가 안내하는
+	// OpenFeign 포크(jakarta 네임스페이스/Hibernate 7 지원)를 사용한다.
+	queryDslVersion = '7.5'
+}
+
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(25)
@@ -31,7 +37,11 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
+
+	implementation "io.github.openfeign.querydsl:querydsl-core:${queryDslVersion}"
+	implementation "io.github.openfeign.querydsl:querydsl-jpa:${queryDslVersion}"
+	annotationProcessor "io.github.openfeign.querydsl:querydsl-apt:${queryDslVersion}:jpa"
 
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
