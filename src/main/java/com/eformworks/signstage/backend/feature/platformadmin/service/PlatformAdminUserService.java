@@ -173,8 +173,21 @@ public class PlatformAdminUserService {
     // ── 플랫폼 관리자 계정 관리 (PLATFORM_SUPER 전용, signstage-docs
     //    business/user-organization-design.md 7.2절) ──────────────────────────
 
-    public Page<PlatformAdminUserDto.Response.UserSummary> findAccounts(Pageable pageable) {
-        return userRepository.findAllByPlatformRoleIsNotNull(pageable).map(this::toUserSummary);
+    public Page<PlatformAdminUserDto.Response.UserSummary> findAccounts(
+            String loginId,
+            String name,
+            String email,
+            PlatformRole platformRole,
+            Pageable pageable
+    ) {
+        Page<User> accounts = userRepository.searchAccounts(
+                blankToNull(loginId),
+                blankToNull(name),
+                blankToNull(email),
+                platformRole,
+                pageable
+        );
+        return accounts.map(this::toUserSummary);
     }
 
     /**

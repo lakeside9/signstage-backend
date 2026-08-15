@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.identity.repository;
 
+import com.eformworks.signstage.backend.feature.identity.repository.entity.PlatformRole;
 import com.eformworks.signstage.backend.feature.identity.repository.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.entity.UserStatus;
 import java.util.Optional;
@@ -38,6 +39,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
             Pageable pageable
     );
 
-    /** 플랫폼 관리자 계정(platform_role이 있는 User) 목록 조회용. */
-    Page<User> findAllByPlatformRoleIsNotNull(Pageable pageable);
+    /**
+     * 플랫폼 관리자 계정(platform_role이 있는 User) 검색용. {@link #search}와 같은 규칙으로
+     * loginId/name/email은 부분 일치, platformRole은 정확히 일치(생략하면 등급 무관 전체).
+     */
+    @Query("""
+            SELECT u FROM User u
+            WHERE u.platformRole IS NOT NULL
+              AND (:loginId IS NULL OR LOWER(u.loginId) LIKE LOWER(CONCAT('%', :loginId, '%')))
+              AND (:name IS NULL OR LOWER(u.name) LIKE LOWER(CONCAT('%', :name, '%')))
+              AND (:email IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :email, '%')))
+              AND (:platformRole IS NULL OR u.platformRole = :platformRole)
+            """)
+    Page<User> searchAccounts(
+            @Param("loginId") String loginId,
+            @Param("name") String name,
+            @Param("email") String email,
+            @Param("platformRole") PlatformRole platformRole,
+            Pageable pageable
+    );
 }

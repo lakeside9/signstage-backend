@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
+import com.eformworks.signstage.backend.feature.identity.repository.entity.PlatformRole;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminAccountDto;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminUserDto;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminUserService;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -37,12 +39,20 @@ public class PlatformAdminAccountController {
     private final PlatformAdminUserService platformAdminUserService;
     private final TraceIdProvider traceIdProvider;
 
-    @Operation(summary = "플랫폼 관리자 계정 목록 조회")
+    @Operation(
+            summary = "플랫폼 관리자 계정 목록 조회",
+            description = "loginId/name/email은 부분 일치 검색, platformRole은 정확히 일치. 전부 생략하면 전체 관리자 계정이다."
+    )
     @GetMapping
     public ApiResponse<PageResponse<PlatformAdminUserDto.Response.UserSummary>> findAccounts(
+            @RequestParam(required = false) String loginId,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) PlatformRole platformRole,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        Page<PlatformAdminUserDto.Response.UserSummary> result = platformAdminUserService.findAccounts(pageable);
+        Page<PlatformAdminUserDto.Response.UserSummary> result =
+                platformAdminUserService.findAccounts(loginId, name, email, platformRole, pageable);
         return ApiResponse.success(PageResponse.from(result), traceIdProvider.getTraceId());
     }
 
