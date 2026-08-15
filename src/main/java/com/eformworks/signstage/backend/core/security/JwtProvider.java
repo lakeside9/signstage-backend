@@ -23,8 +23,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class JwtProvider {
 
-    private static final String CLAIM_USER_ID = "userId";
-    private static final String CLAIM_PLATFORM_ROLE = "platformRole";
+    static final String CLAIM_USER_ID = "userId";
+    static final String CLAIM_PLATFORM_ROLE = "platformRole";
     private static final String CLAIM_PURPOSE = "purpose";
     private static final String PURPOSE_PASSWORD_RESET = "PASSWORD_RESET";
 
@@ -80,6 +80,30 @@ public class JwtProvider {
         }
 
         return claims.get(CLAIM_USER_ID, Long.class);
+    }
+
+    /**
+     * 일반 API 인증(Authorization: Bearer)에 쓰는 access token을 검증한다.
+     * {@code core.security.JwtAuthenticationFilter}에서만 호출한다.
+     *
+     * <p>MVC 계층 밖(서블릿 필터)에서 실행되므로 {@code GlobalExceptionHandler}가 개입할 수 없다 —
+     * 그래서 {@code ApplicationException}으로 감싸지 않고 jjwt의 원본 예외를 그대로 던진다.
+     * 필터가 이를 잡아 인증 실패로 처리하면, Spring Security의 인증 실패 처리 흐름을 탄다.
+     *
+     * <p>비밀번호 재설정 토큰처럼 특수 목적 토큰은 일반 API 인증에 쓸 수 없도록 거부한다.
+     */
+    public Claims parseAccessTokenClaims(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+
+        if (claims.get(CLAIM_PURPOSE, String.class) != null) {
+            throw new JwtException("특수 목적 토큰은 일반 API 인증에 사용할 수 없습니다.");
+        }
+
+        return claims;
     }
 
     private Claims parseClaims(String token) {

@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.identity.dto;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -36,6 +37,37 @@ public final class IdentityDto {
 
             @NotBlank
             private String passwordResetToken;
+
+            @NotBlank
+            private String currentPassword;
+
+            @NotBlank
+            private String newPassword;
+        }
+
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateMe {
+
+            @NotBlank
+            private String name;
+
+            @NotBlank
+            @Email
+            private String email;
+
+            private String phone;
+
+            private String locale;
+        }
+
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class ChangeMyPassword {
 
             @NotBlank
             private String currentPassword;
@@ -81,6 +113,19 @@ public final class IdentityDto {
             private final Long id;
             private final String loginId;
             private final String name;
+            private final String platformRole;
+        }
+
+        @Getter
+        @AllArgsConstructor
+        public static class Me {
+
+            private final Long id;
+            private final String loginId;
+            private final String name;
+            private final String email;
+            private final String phone;
+            private final String locale;
             private final String platformRole;
         }
     }

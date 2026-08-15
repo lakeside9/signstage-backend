@@ -110,4 +110,11 @@ public class User extends BaseEntity {
         this.password = encodedPassword;
         this.passwordResetRequired = false;
     }
+
+    public void changeProfile(String name, String email, String phone, String locale) {
+        this.name = name;
+        this.email = email;
+        this.phone = phone;
+        this.locale = locale != null ? locale : this.locale;
+    }
 }

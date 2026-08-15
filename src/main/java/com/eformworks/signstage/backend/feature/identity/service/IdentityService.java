@@ -97,4 +97,49 @@ public class IdentityService {
 
         user.changePassword(passwordEncoder.encode(request.getNewPassword()));
     }
+
+    public IdentityDto.Response.Me getMe(Long userId) {
+        return toMeResponse(findUserOrThrow(userId));
+    }
+
+    @Transactional
+    public IdentityDto.Response.Me updateMe(Long userId, IdentityDto.Request.UpdateMe request) {
+        User user = findUserOrThrow(userId);
+
+        if (!user.getEmail().equals(request.getEmail())
+                && userRepository.existsByEmailAndIdNot(request.getEmail(), userId)) {
+            throw new ApplicationException(IdentityErrorCode.DUPLICATE_EMAIL);
+        }
+
+        user.changeProfile(request.getName(), request.getEmail(), request.getPhone(), request.getLocale());
+        return toMeResponse(user);
+    }
+
+    @Transactional
+    public void changeMyPassword(Long userId, IdentityDto.Request.ChangeMyPassword request) {
+        User user = findUserOrThrow(userId);
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new ApplicationException(IdentityErrorCode.INVALID_CREDENTIAL);
+        }
+
+        user.changePassword(passwordEncoder.encode(request.getNewPassword()));
+    }
+
+    private User findUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ApplicationException(IdentityErrorCode.INVALID_CREDENTIAL));
+    }
+
+    private IdentityDto.Response.Me toMeResponse(User user) {
+        return new IdentityDto.Response.Me(
+                user.getId(),
+                user.getLoginId(),
+                user.getName(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getLocale(),
+                user.getPlatformRole() != null ? user.getPlatformRole().name() : null
+        );
+    }
 }
