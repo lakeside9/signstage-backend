@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.platformadmin.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.entity.MemberStatus;
@@ -8,6 +9,8 @@ import com.eformworks.signstage.backend.feature.organization.repository.entity.O
 import com.eformworks.signstage.backend.feature.organization.repository.entity.OrganizationStatus;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminOrganizationDto;
 import com.eformworks.signstage.backend.feature.platformadmin.error.PlatformAdminErrorCode;
+import com.eformworks.signstage.backend.feature.platformadmin.repository.entity.PlatformAdminAction;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,8 +30,52 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PlatformAdminOrganizationService {
 
+    private static final Set<String> ORGANIZATION_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
+
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
+    private final PlatformAdminAuditLogRecorder auditLogRecorder;
+
+    /**
+     * ACTIVE↔SUSPENDED만 이 API로 다룬다. TRIAL은 과금 연동 시점에 별도로 다룬다
+     * (signstage-docs business/user-organization-design.md 3.2절 "과금 연동 지점").
+     */
+    @Transactional
+    public PlatformAdminOrganizationDto.Response.OrganizationSummary updateOrganizationStatus(
+            Long organizationId,
+            Long actingUserId,
+            String actingPlatformRole,
+            PlatformAdminOrganizationDto.Request.UpdateStatus request
+    ) {
+        if (!ORGANIZATION_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+
+        Organization organization = findOrganizationOrThrow(organizationId);
+        OrganizationStatus previousStatus = organization.getStatus();
+        OrganizationStatus newStatus = parseAssignableStatus(request.getStatus());
+        organization.changeStatus(newStatus);
+
+        auditLogRecorder.record(
+                actingUserId, PlatformAdminAction.UPDATE_ORGANIZATION_STATUS, null, organizationId,
+                "status: " + previousStatus + " -> " + newStatus
+        );
+        return toSummary(organization);
+    }
+
+    private OrganizationStatus parseAssignableStatus(String status) {
+        OrganizationStatus parsed;
+        try {
+            parsed = OrganizationStatus.valueOf(status);
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+
+        if (parsed != OrganizationStatus.ACTIVE && parsed != OrganizationStatus.SUSPENDED) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+        return parsed;
+    }
 
     public Page<PlatformAdminOrganizationDto.Response.OrganizationSummary> findOrganizations(
             String name,

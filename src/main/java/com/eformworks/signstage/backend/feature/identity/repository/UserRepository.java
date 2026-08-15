@@ -37,4 +37,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("status") UserStatus status,
             Pageable pageable
     );
+
+    /** 플랫폼 관리자 계정(platform_role이 있는 User) 목록 조회용. */
+    Page<User> findAllByPlatformRoleIsNotNull(Pageable pageable);
 }

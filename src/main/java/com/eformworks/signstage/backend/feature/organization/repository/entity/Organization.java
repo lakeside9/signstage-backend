@@ -49,4 +49,12 @@ public class Organization extends BaseEntity {
         this.status = OrganizationStatus.ACTIVE;
         this.defaultLocale = defaultLocale != null ? defaultLocale : "ko-KR";
     }
+
+    /**
+     * 플랫폼 관리자가 조직을 정지/재개할 때 사용한다
+     * (signstage-docs business/platform-admin-member-management.md 참고).
+     */
+    public void changeStatus(OrganizationStatus status) {
+        this.status = status;
+    }
 }

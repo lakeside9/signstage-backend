@@ -134,4 +134,13 @@ public class User extends BaseEntity {
     public void requirePasswordReset() {
         this.passwordResetRequired = true;
     }
+
+    /**
+     * PLATFORM_SUPER가 다른 플랫폼 관리자의 권한을 해제할 때 사용한다. 계정 자체를 막지는
+     * 않는다 — platform_role만 비워 일반 사용자로 되돌린다(signstage-docs
+     * business/user-organization-design.md 7.2절).
+     */
+    public void revokePlatformRole() {
+        this.platformRole = null;
+    }
 }

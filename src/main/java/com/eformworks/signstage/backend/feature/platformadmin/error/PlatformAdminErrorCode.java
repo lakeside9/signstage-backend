@@ -11,6 +11,11 @@ public enum PlatformAdminErrorCode implements ErrorCode {
             "PLATFORM_ADMIN_CANNOT_TARGET_SELF",
             HttpStatus.FORBIDDEN,
             "본인 계정은 이 기능의 대상으로 지정할 수 없습니다."
+    ),
+    NOT_A_PLATFORM_ADMIN(
+            "PLATFORM_ADMIN_NOT_A_PLATFORM_ADMIN",
+            HttpStatus.CONFLICT,
+            "플랫폼 관리자 권한이 없는 계정입니다."
     );
 
     private final String code;

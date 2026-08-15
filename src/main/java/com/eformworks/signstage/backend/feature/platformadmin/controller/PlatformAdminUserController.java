@@ -51,7 +51,7 @@ public class PlatformAdminUserController {
             @Valid @RequestBody PlatformAdminUserDto.Request.CreateUser request
     ) {
         PlatformAdminUserDto.Response.CreatedUser response =
-                platformAdminUserService.createUser(currentUser.platformRole(), request);
+                platformAdminUserService.createUser(currentUser.userId(), currentUser.platformRole(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

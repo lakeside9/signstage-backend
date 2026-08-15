@@ -5,10 +5,13 @@ import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.security.TemporaryPasswordGenerator;
 import com.eformworks.signstage.backend.feature.identity.error.IdentityErrorCode;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
+import com.eformworks.signstage.backend.feature.identity.repository.entity.PlatformRole;
 import com.eformworks.signstage.backend.feature.identity.repository.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.entity.UserStatus;
+import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminAccountDto;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminUserDto;
 import com.eformworks.signstage.backend.feature.platformadmin.error.PlatformAdminErrorCode;
+import com.eformworks.signstage.backend.feature.platformadmin.repository.entity.PlatformAdminAction;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -35,6 +38,7 @@ public class PlatformAdminUserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final TemporaryPasswordGenerator temporaryPasswordGenerator;
+    private final PlatformAdminAuditLogRecorder auditLogRecorder;
 
     /**
      * 관리자가 회원 계정을 직접 만든다. 회원가입(PENDING)→승인 경로를 거치지 않는 대신,
@@ -44,6 +48,7 @@ public class PlatformAdminUserService {
      */
     @Transactional
     public PlatformAdminUserDto.Response.CreatedUser createUser(
+            Long actingUserId,
             String actingPlatformRole,
             PlatformAdminUserDto.Request.CreateUser request
     ) {
@@ -70,6 +75,7 @@ public class PlatformAdminUserService {
                 .build();
         userRepository.save(user);
 
+        auditLogRecorder.record(actingUserId, PlatformAdminAction.CREATE_USER, user.getId(), null, "loginId=" + user.getLoginId());
         return new PlatformAdminUserDto.Response.CreatedUser(toUserSummary(user), temporaryPassword);
     }
 
@@ -112,7 +118,14 @@ public class PlatformAdminUserService {
         checkCanManage(userId, actingUserId, actingPlatformRole);
 
         User user = findUserOrThrow(userId);
-        user.changeStatus(parseAssignableStatus(request.getStatus()));
+        UserStatus previousStatus = user.getStatus();
+        UserStatus newStatus = parseAssignableStatus(request.getStatus());
+        user.changeStatus(newStatus);
+
+        auditLogRecorder.record(
+                actingUserId, PlatformAdminAction.UPDATE_USER_STATUS, userId, null,
+                "status: " + previousStatus + " -> " + newStatus
+        );
         return toUserSummary(user);
     }
 
@@ -127,6 +140,8 @@ public class PlatformAdminUserService {
 
         User user = findUserOrThrow(userId);
         user.resetFailedLoginCount();
+
+        auditLogRecorder.record(actingUserId, PlatformAdminAction.UNLOCK_USER, userId, null, null);
         return toUserSummary(user);
     }
 
@@ -141,6 +156,8 @@ public class PlatformAdminUserService {
 
         User user = findUserOrThrow(userId);
         user.requirePasswordReset();
+
+        auditLogRecorder.record(actingUserId, PlatformAdminAction.FORCE_PASSWORD_RESET, userId, null, null);
         return toUserSummary(user);
     }
 
@@ -150,6 +167,89 @@ public class PlatformAdminUserService {
         }
         if (targetUserId.equals(actingUserId)) {
             throw new ApplicationException(PlatformAdminErrorCode.CANNOT_TARGET_SELF);
+        }
+    }
+
+    // ── 플랫폼 관리자 계정 관리 (PLATFORM_SUPER 전용, signstage-docs
+    //    business/user-organization-design.md 7.2절) ──────────────────────────
+
+    public Page<PlatformAdminUserDto.Response.UserSummary> findAccounts(Pageable pageable) {
+        return userRepository.findAllByPlatformRoleIsNotNull(pageable).map(this::toUserSummary);
+    }
+
+    /**
+     * 일반 회원가입/초대 API로는 platform_role을 절대 설정할 수 없다(7.2절) — 이 API가
+     * platform_role을 지정할 수 있는 유일한 경로다. 회원 직접 생성({@link #createUser})과
+     * 동일하게 임시 비밀번호를 발급하고 다음 로그인 시 변경을 강제한다.
+     */
+    @Transactional
+    public PlatformAdminUserDto.Response.CreatedUser createAccount(
+            Long actingUserId,
+            String actingPlatformRole,
+            PlatformAdminAccountDto.Request.CreateAccount request
+    ) {
+        checkSuperRole(actingPlatformRole);
+        if (userRepository.existsByLoginId(request.getLoginId())) {
+            throw new ApplicationException(IdentityErrorCode.DUPLICATE_LOGIN_ID);
+        }
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new ApplicationException(IdentityErrorCode.DUPLICATE_EMAIL);
+        }
+
+        PlatformRole platformRole = parsePlatformRole(request.getPlatformRole());
+        String temporaryPassword = temporaryPasswordGenerator.generate();
+        User user = User.builder()
+                .loginId(request.getLoginId())
+                .name(request.getName())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .locale(request.getLocale())
+                .password(passwordEncoder.encode(temporaryPassword))
+                .status(UserStatus.ACTIVE)
+                .platformRole(platformRole)
+                .passwordResetRequired(true)
+                .build();
+        userRepository.save(user);
+
+        auditLogRecorder.record(
+                actingUserId, PlatformAdminAction.CREATE_ACCOUNT, user.getId(), null,
+                "loginId=" + user.getLoginId() + ", platformRole=" + platformRole
+        );
+        return new PlatformAdminUserDto.Response.CreatedUser(toUserSummary(user), temporaryPassword);
+    }
+
+    /** platform_role만 비워 일반 사용자로 되돌린다. 계정 자체(status)는 건드리지 않는다. */
+    @Transactional
+    public PlatformAdminUserDto.Response.UserSummary revokeAccount(Long userId, Long actingUserId, String actingPlatformRole) {
+        checkSuperRole(actingPlatformRole);
+        if (userId.equals(actingUserId)) {
+            throw new ApplicationException(PlatformAdminErrorCode.CANNOT_TARGET_SELF);
+        }
+
+        User user = findUserOrThrow(userId);
+        if (user.getPlatformRole() == null) {
+            throw new ApplicationException(PlatformAdminErrorCode.NOT_A_PLATFORM_ADMIN);
+        }
+        PlatformRole previousRole = user.getPlatformRole();
+        user.revokePlatformRole();
+
+        auditLogRecorder.record(
+                actingUserId, PlatformAdminAction.REVOKE_ACCOUNT, userId, null, "platformRole was " + previousRole
+        );
+        return toUserSummary(user);
+    }
+
+    private void checkSuperRole(String actingPlatformRole) {
+        if (!"PLATFORM_SUPER".equals(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+    }
+
+    private PlatformRole parsePlatformRole(String platformRole) {
+        try {
+            return PlatformRole.valueOf(platformRole);
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
     }
 
