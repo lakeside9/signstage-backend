@@ -6,10 +6,11 @@ import org.springframework.http.HttpStatus;
 public enum PlatformAdminErrorCode implements ErrorCode {
 
     USER_NOT_FOUND("PLATFORM_ADMIN_USER_NOT_FOUND", HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
-    CANNOT_CHANGE_OWN_STATUS(
-            "PLATFORM_ADMIN_CANNOT_CHANGE_OWN_STATUS",
+    ORGANIZATION_NOT_FOUND("PLATFORM_ADMIN_ORGANIZATION_NOT_FOUND", HttpStatus.NOT_FOUND, "조직을 찾을 수 없습니다."),
+    CANNOT_TARGET_SELF(
+            "PLATFORM_ADMIN_CANNOT_TARGET_SELF",
             HttpStatus.FORBIDDEN,
-            "본인 계정의 상태는 변경할 수 없습니다."
+            "본인 계정은 이 기능의 대상으로 지정할 수 없습니다."
     );
 
     private final String code;

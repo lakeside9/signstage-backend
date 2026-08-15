@@ -47,6 +47,10 @@ public final class PlatformAdminUserDto {
             private final String locale;
             private final String status;
             private final String platformRole;
+            /** 연속 로그인 실패로 현재 잠긴 상태인지(잠금 즉시 해제 버튼 노출 판단용). */
+            private final boolean locked;
+            /** 다음 로그인 시 비밀번호 변경이 강제되는 상태인지(강제 재설정 중복 요청 방지용). */
+            private final boolean passwordResetRequired;
             private final LocalDateTime createdAt;
         }
     }

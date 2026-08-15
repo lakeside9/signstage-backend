@@ -125,4 +125,13 @@ public class User extends BaseEntity {
     public void changeStatus(UserStatus status) {
         this.status = status;
     }
+
+    /**
+     * 플랫폼 관리자가 이 사용자의 비밀번호를 강제로 재설정하게 만든다. 다음 로그인 시
+     * 5.3절 강제 비밀번호 변경 흐름을 그대로 타게 된다(platform-admin-member-management.md 4.2절).
+     * 관리자는 비밀번호 자체를 조회/대신 설정하지 않고 이 플래그만 켠다.
+     */
+    public void requirePasswordReset() {
+        this.passwordResetRequired = true;
+    }
 }

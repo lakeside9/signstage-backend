@@ -15,10 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 플랫폼 관리자의 회원 조회/승인 처리를 구현한다(signstage-docs
+ * 플랫폼 관리자의 회원 조회/제어를 구현한다(signstage-docs
  * business/platform-admin-member-management.md, backend/signup-approval-implementation-plan.md 4장).
  * URL 레벨({@code SecurityConfig})에서 platform_role 보유자만 이 컨트롤러에 도달하도록 걸러내고,
- * 등급별 세부 권한(상태 변경은 PLATFORM_OPS 이상)은 이 서비스에서 직접 검사한다 —
+ * 등급별 세부 권한(제어 기능은 PLATFORM_OPS 이상)은 이 서비스에서 직접 검사한다 —
  * 조직 role을 organization_members로 직접 검사하는 feature.organization과 같은 패턴이다.
  */
 @Service
@@ -26,7 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PlatformAdminUserService {
 
-    private static final Set<String> STATUS_CHANGE_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
+    /** 회원 상태 변경/잠금 해제/강제 비밀번호 재설정 등 "제어" 기능에 공통으로 적용되는 최소 등급. */
+    private static final Set<String> MEMBER_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
 
     private final UserRepository userRepository;
 
@@ -57,8 +58,7 @@ public class PlatformAdminUserService {
 
     /**
      * PENDING→ACTIVE는 가입 승인, PENDING/ACTIVE→DISABLED는 거절 또는 계정 비활성화다
-     * (signstage-docs business/user-organization-design.md 5.1절 (a)). 본인 계정은 대상에서
-     * 제외한다 — 관리자가 스스로를 잠그거나(DISABLED) 실수로 상태를 바꾸는 사고를 막기 위함이다.
+     * (signstage-docs business/user-organization-design.md 5.1절 (a)).
      */
     @Transactional
     public PlatformAdminUserDto.Response.UserSummary updateUserStatus(
@@ -67,16 +67,48 @@ public class PlatformAdminUserService {
             String actingPlatformRole,
             PlatformAdminUserDto.Request.UpdateStatus request
     ) {
-        if (!STATUS_CHANGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
-        if (userId.equals(actingUserId)) {
-            throw new ApplicationException(PlatformAdminErrorCode.CANNOT_CHANGE_OWN_STATUS);
-        }
+        checkCanManage(userId, actingUserId, actingPlatformRole);
 
         User user = findUserOrThrow(userId);
         user.changeStatus(parseAssignableStatus(request.getStatus()));
         return toUserSummary(user);
+    }
+
+    /**
+     * 연속 로그인 실패로 잠긴 계정을 즉시 풀어준다(failed_login_count=0, locked_until=NULL).
+     * 잠금 자체는 15분 뒤 자동 해제되지만(signstage-docs business/login-security.md 4.2절),
+     * CS 응대 등으로 즉시 풀어줘야 하는 경우를 위한 기능이다.
+     */
+    @Transactional
+    public PlatformAdminUserDto.Response.UserSummary unlockUser(Long userId, Long actingUserId, String actingPlatformRole) {
+        checkCanManage(userId, actingUserId, actingPlatformRole);
+
+        User user = findUserOrThrow(userId);
+        user.resetFailedLoginCount();
+        return toUserSummary(user);
+    }
+
+    /**
+     * 다음 로그인 시 비밀번호 변경을 강제한다(is_password_reset_required=TRUE). 비밀번호를
+     * 잊어버린 사용자를 위한 우회로다 — 관리자가 비밀번호를 직접 조회/대신 설정하지는 않는다
+     * (signstage-docs business/user-organization-design.md 5.3절과 같은 원칙).
+     */
+    @Transactional
+    public PlatformAdminUserDto.Response.UserSummary forcePasswordReset(Long userId, Long actingUserId, String actingPlatformRole) {
+        checkCanManage(userId, actingUserId, actingPlatformRole);
+
+        User user = findUserOrThrow(userId);
+        user.requirePasswordReset();
+        return toUserSummary(user);
+    }
+
+    private void checkCanManage(Long targetUserId, Long actingUserId, String actingPlatformRole) {
+        if (!MEMBER_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+        if (targetUserId.equals(actingUserId)) {
+            throw new ApplicationException(PlatformAdminErrorCode.CANNOT_TARGET_SELF);
+        }
     }
 
     private String blankToNull(String value) {
@@ -112,6 +144,8 @@ public class PlatformAdminUserService {
                 user.getLocale(),
                 user.getStatus().name(),
                 user.getPlatformRole() != null ? user.getPlatformRole().name() : null,
+                user.isLocked(),
+                user.isPasswordResetRequired(),
                 user.getCreatedAt()
         );
     }

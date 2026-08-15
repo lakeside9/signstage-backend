@@ -17,6 +17,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,7 +26,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * PLATFORM_SUPPORT 이상만 호출할 수 있다(SecurityConfig에서 /api/platform-admin/** 전체를 게이트).
- * 상태 변경(승인/거절)은 PLATFORM_OPS 이상만 가능하도록 서비스에서 한 번 더 검사한다.
+ * 조회 외 제어 기능(상태 변경/잠금 해제/강제 비밀번호 재설정)은 PLATFORM_OPS 이상만 가능하도록
+ * 서비스에서 한 번 더 검사하고, 본인 계정은 대상으로 지정할 수 없다.
  */
 @Tag(name = "PlatformAdmin", description = "플랫폼 관리자 회원 관리 API")
 @RestController
@@ -74,6 +76,37 @@ public class PlatformAdminUserController {
         PlatformAdminUserDto.Response.UserSummary response = platformAdminUserService.updateUserStatus(
                 userId, currentUser.userId(), currentUser.platformRole(), request
         );
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "계정 잠금 즉시 해제",
+            description = "연속 로그인 실패로 잠긴 계정의 실패 카운트/잠금을 초기화한다. "
+                    + "PLATFORM_OPS 이상만 호출할 수 있고, 본인 계정은 대상으로 지정할 수 없다."
+    )
+    @PostMapping("/{userId}/unlock")
+    public ApiResponse<PlatformAdminUserDto.Response.UserSummary> unlockUser(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long userId
+    ) {
+        PlatformAdminUserDto.Response.UserSummary response =
+                platformAdminUserService.unlockUser(userId, currentUser.userId(), currentUser.platformRole());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "강제 비밀번호 재설정 요청",
+            description = "다음 로그인 시 비밀번호 변경을 강제한다(is_password_reset_required=TRUE). "
+                    + "관리자가 비밀번호를 직접 조회/설정하지는 않는다. "
+                    + "PLATFORM_OPS 이상만 호출할 수 있고, 본인 계정은 대상으로 지정할 수 없다."
+    )
+    @PostMapping("/{userId}/force-password-reset")
+    public ApiResponse<PlatformAdminUserDto.Response.UserSummary> forcePasswordReset(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long userId
+    ) {
+        PlatformAdminUserDto.Response.UserSummary response =
+                platformAdminUserService.forcePasswordReset(userId, currentUser.userId(), currentUser.platformRole());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }
