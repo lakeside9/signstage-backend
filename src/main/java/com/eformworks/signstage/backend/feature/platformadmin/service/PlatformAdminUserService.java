@@ -2,6 +2,8 @@ package com.eformworks.signstage.backend.feature.platformadmin.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.core.security.TemporaryPasswordGenerator;
+import com.eformworks.signstage.backend.feature.identity.error.IdentityErrorCode;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.identity.repository.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.entity.UserStatus;
@@ -11,6 +13,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +33,45 @@ public class PlatformAdminUserService {
     private static final Set<String> MEMBER_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final TemporaryPasswordGenerator temporaryPasswordGenerator;
+
+    /**
+     * 관리자가 회원 계정을 직접 만든다. 회원가입(PENDING)→승인 경로를 거치지 않는 대신,
+     * 관리자가 만든다는 행위 자체가 승인이라 즉시 ACTIVE로 생성한다. 비밀번호는 서버가
+     * 임시로 생성하고, 다음 로그인 시 변경을 강제한다(5.3절과 같은 원칙 — 관리자는
+     * 비밀번호를 직접 정하지 않는다). platform_role은 이 경로로 설정하지 않는다(7.2절).
+     */
+    @Transactional
+    public PlatformAdminUserDto.Response.CreatedUser createUser(
+            String actingPlatformRole,
+            PlatformAdminUserDto.Request.CreateUser request
+    ) {
+        if (!MEMBER_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+        if (userRepository.existsByLoginId(request.getLoginId())) {
+            throw new ApplicationException(IdentityErrorCode.DUPLICATE_LOGIN_ID);
+        }
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new ApplicationException(IdentityErrorCode.DUPLICATE_EMAIL);
+        }
+
+        String temporaryPassword = temporaryPasswordGenerator.generate();
+        User user = User.builder()
+                .loginId(request.getLoginId())
+                .name(request.getName())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .locale(request.getLocale())
+                .password(passwordEncoder.encode(temporaryPassword))
+                .status(UserStatus.ACTIVE)
+                .passwordResetRequired(true)
+                .build();
+        userRepository.save(user);
+
+        return new PlatformAdminUserDto.Response.CreatedUser(toUserSummary(user), temporaryPassword);
+    }
 
     /**
      * loginId/name/email은 부분 일치 검색이다. 빈 문자열은 "조건 없음"으로 취급해 null로 바꿔 넘긴다

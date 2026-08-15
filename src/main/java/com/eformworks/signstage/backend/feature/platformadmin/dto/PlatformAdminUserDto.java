@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.platformadmin.dto;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
@@ -29,6 +30,27 @@ public final class PlatformAdminUserDto {
             @NotBlank
             private String status;
         }
+
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class CreateUser {
+
+            @NotBlank
+            private String loginId;
+
+            @NotBlank
+            private String name;
+
+            @NotBlank
+            @Email
+            private String email;
+
+            private String phone;
+
+            private String locale;
+        }
     }
 
     public static final class Response {
@@ -52,6 +74,18 @@ public final class PlatformAdminUserDto {
             /** 다음 로그인 시 비밀번호 변경이 강제되는 상태인지(강제 재설정 중복 요청 방지용). */
             private final boolean passwordResetRequired;
             private final LocalDateTime createdAt;
+        }
+
+        /**
+         * 회원 생성 응답 전용. {@code temporaryPassword}는 이 응답에만 담기고 어디에도
+         * 저장되지 않는다 — 관리자가 이 화면을 벗어나면 다시 조회할 수 없다.
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class CreatedUser {
+
+            private final UserSummary user;
+            private final String temporaryPassword;
         }
     }
 }

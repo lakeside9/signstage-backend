@@ -39,6 +39,23 @@ public class PlatformAdminUserController {
     private final TraceIdProvider traceIdProvider;
 
     @Operation(
+            summary = "회원 생성",
+            description = "관리자가 직접 회원 계정을 만든다. 임시 비밀번호는 서버가 생성해 응답에 한 번만 담아 반환하며 "
+                    + "저장하지 않으므로, 이 응답을 놓치면 다시 조회할 수 없다(강제 비밀번호 재설정으로 새로 발급해야 한다). "
+                    + "승인 절차 없이 즉시 ACTIVE로 생성된다(관리자가 만든다는 것 자체가 승인). "
+                    + "PLATFORM_OPS 이상만 호출할 수 있고, platform_role은 이 API로 설정할 수 없다."
+    )
+    @PostMapping
+    public ApiResponse<PlatformAdminUserDto.Response.CreatedUser> createUser(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @Valid @RequestBody PlatformAdminUserDto.Request.CreateUser request
+    ) {
+        PlatformAdminUserDto.Response.CreatedUser response =
+                platformAdminUserService.createUser(currentUser.platformRole(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
             summary = "회원 목록 조회",
             description = "loginId/name/email은 부분 일치 검색, status는 정확히 일치(예: PENDING으로 승인 대기 목록 조회). 전부 생략하면 전체 목록이다."
     )
