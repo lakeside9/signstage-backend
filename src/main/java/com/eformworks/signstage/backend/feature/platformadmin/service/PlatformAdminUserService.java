@@ -30,10 +30,24 @@ public class PlatformAdminUserService {
 
     private final UserRepository userRepository;
 
-    public Page<PlatformAdminUserDto.Response.UserSummary> findUsers(UserStatus status, Pageable pageable) {
-        Page<User> users = status != null
-                ? userRepository.findAllByStatus(status, pageable)
-                : userRepository.findAll(pageable);
+    /**
+     * loginId/name/email은 부분 일치 검색이다. 빈 문자열은 "조건 없음"으로 취급해 null로 바꿔 넘긴다
+     * ({@link UserRepository#search}는 null인 조건만 무시한다).
+     */
+    public Page<PlatformAdminUserDto.Response.UserSummary> findUsers(
+            String loginId,
+            String name,
+            String email,
+            UserStatus status,
+            Pageable pageable
+    ) {
+        Page<User> users = userRepository.search(
+                blankToNull(loginId),
+                blankToNull(name),
+                blankToNull(email),
+                status,
+                pageable
+        );
         return users.map(this::toUserSummary);
     }
 
@@ -43,21 +57,30 @@ public class PlatformAdminUserService {
 
     /**
      * PENDING→ACTIVE는 가입 승인, PENDING/ACTIVE→DISABLED는 거절 또는 계정 비활성화다
-     * (signstage-docs business/user-organization-design.md 5.1절 (a)).
+     * (signstage-docs business/user-organization-design.md 5.1절 (a)). 본인 계정은 대상에서
+     * 제외한다 — 관리자가 스스로를 잠그거나(DISABLED) 실수로 상태를 바꾸는 사고를 막기 위함이다.
      */
     @Transactional
     public PlatformAdminUserDto.Response.UserSummary updateUserStatus(
             Long userId,
+            Long actingUserId,
             String actingPlatformRole,
             PlatformAdminUserDto.Request.UpdateStatus request
     ) {
         if (!STATUS_CHANGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
+        if (userId.equals(actingUserId)) {
+            throw new ApplicationException(PlatformAdminErrorCode.CANNOT_CHANGE_OWN_STATUS);
+        }
 
         User user = findUserOrThrow(userId);
         user.changeStatus(parseAssignableStatus(request.getStatus()));
         return toUserSummary(user);
+    }
+
+    private String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value.trim();
     }
 
     private UserStatus parseAssignableStatus(String status) {

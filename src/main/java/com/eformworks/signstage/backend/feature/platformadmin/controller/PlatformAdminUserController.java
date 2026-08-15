@@ -36,13 +36,20 @@ public class PlatformAdminUserController {
     private final PlatformAdminUserService platformAdminUserService;
     private final TraceIdProvider traceIdProvider;
 
-    @Operation(summary = "회원 목록 조회", description = "status로 필터링할 수 있다(예: PENDING으로 승인 대기 목록 조회).")
+    @Operation(
+            summary = "회원 목록 조회",
+            description = "loginId/name/email은 부분 일치 검색, status는 정확히 일치(예: PENDING으로 승인 대기 목록 조회). 전부 생략하면 전체 목록이다."
+    )
     @GetMapping
     public ApiResponse<PageResponse<PlatformAdminUserDto.Response.UserSummary>> findUsers(
+            @RequestParam(required = false) String loginId,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String email,
             @RequestParam(required = false) UserStatus status,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        Page<PlatformAdminUserDto.Response.UserSummary> result = platformAdminUserService.findUsers(status, pageable);
+        Page<PlatformAdminUserDto.Response.UserSummary> result =
+                platformAdminUserService.findUsers(loginId, name, email, status, pageable);
         return ApiResponse.success(PageResponse.from(result), traceIdProvider.getTraceId());
     }
 
@@ -55,7 +62,8 @@ public class PlatformAdminUserController {
 
     @Operation(
             summary = "회원 상태 변경(승인/거절)",
-            description = "PENDING→ACTIVE는 가입 승인, PENDING/ACTIVE→DISABLED는 거절 또는 계정 비활성화다. PLATFORM_OPS 이상만 호출할 수 있다."
+            description = "PENDING→ACTIVE는 가입 승인, PENDING/ACTIVE→DISABLED는 거절 또는 계정 비활성화다. "
+                    + "PLATFORM_OPS 이상만 호출할 수 있고, 본인 계정은 대상으로 지정할 수 없다."
     )
     @PutMapping("/{userId}/status")
     public ApiResponse<PlatformAdminUserDto.Response.UserSummary> updateUserStatus(
@@ -63,8 +71,9 @@ public class PlatformAdminUserController {
             @PathVariable Long userId,
             @Valid @RequestBody PlatformAdminUserDto.Request.UpdateStatus request
     ) {
-        PlatformAdminUserDto.Response.UserSummary response =
-                platformAdminUserService.updateUserStatus(userId, currentUser.platformRole(), request);
+        PlatformAdminUserDto.Response.UserSummary response = platformAdminUserService.updateUserStatus(
+                userId, currentUser.userId(), currentUser.platformRole(), request
+        );
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }
