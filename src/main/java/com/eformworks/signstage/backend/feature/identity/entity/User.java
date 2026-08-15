@@ -1,4 +1,4 @@
-package com.eformworks.signstage.backend.feature.identity.repository.entity;
+package com.eformworks.signstage.backend.feature.identity.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import jakarta.persistence.Column;

@@ -1,8 +1,8 @@
 package com.eformworks.signstage.backend.feature.platformadmin.service;
 
 import com.eformworks.signstage.backend.feature.platformadmin.repository.PlatformAdminAuditLogRepository;
-import com.eformworks.signstage.backend.feature.platformadmin.repository.entity.PlatformAdminAction;
-import com.eformworks.signstage.backend.feature.platformadmin.repository.entity.PlatformAdminAuditLog;
+import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAuditLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestAttributes;

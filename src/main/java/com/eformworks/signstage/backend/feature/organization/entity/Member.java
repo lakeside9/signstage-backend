@@ -1,7 +1,7 @@
-package com.eformworks.signstage.backend.feature.organization.repository.entity;
+package com.eformworks.signstage.backend.feature.organization.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
-import com.eformworks.signstage.backend.feature.identity.repository.entity.User;
+import com.eformworks.signstage.backend.feature.identity.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

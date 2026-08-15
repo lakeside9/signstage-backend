@@ -1,8 +1,8 @@
 package com.eformworks.signstage.backend.feature.identity.repository;
 
-import com.eformworks.signstage.backend.feature.identity.repository.entity.PlatformRole;
-import com.eformworks.signstage.backend.feature.identity.repository.entity.User;
-import com.eformworks.signstage.backend.feature.identity.repository.entity.UserStatus;
+import com.eformworks.signstage.backend.feature.identity.entity.PlatformRole;
+import com.eformworks.signstage.backend.feature.identity.entity.User;
+import com.eformworks.signstage.backend.feature.identity.entity.UserStatus;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

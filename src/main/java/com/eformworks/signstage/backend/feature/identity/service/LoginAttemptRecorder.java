@@ -2,9 +2,9 @@ package com.eformworks.signstage.backend.feature.identity.service;
 
 import com.eformworks.signstage.backend.feature.identity.repository.LoginHistoryRepository;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
-import com.eformworks.signstage.backend.feature.identity.repository.entity.LoginHistory;
-import com.eformworks.signstage.backend.feature.identity.repository.entity.LoginHistoryStatus;
-import com.eformworks.signstage.backend.feature.identity.repository.entity.User;
+import com.eformworks.signstage.backend.feature.identity.entity.LoginHistory;
+import com.eformworks.signstage.backend.feature.identity.entity.LoginHistoryStatus;
+import com.eformworks.signstage.backend.feature.identity.entity.User;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

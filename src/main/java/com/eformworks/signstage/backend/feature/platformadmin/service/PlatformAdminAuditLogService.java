@@ -1,13 +1,13 @@
 package com.eformworks.signstage.backend.feature.platformadmin.service;
 
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
-import com.eformworks.signstage.backend.feature.identity.repository.entity.User;
+import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
-import com.eformworks.signstage.backend.feature.organization.repository.entity.Organization;
+import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminAuditLogDto;
 import com.eformworks.signstage.backend.feature.platformadmin.repository.PlatformAdminAuditLogRepository;
-import com.eformworks.signstage.backend.feature.platformadmin.repository.entity.PlatformAdminAction;
-import com.eformworks.signstage.backend.feature.platformadmin.repository.entity.PlatformAdminAuditLog;
+import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAuditLog;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;

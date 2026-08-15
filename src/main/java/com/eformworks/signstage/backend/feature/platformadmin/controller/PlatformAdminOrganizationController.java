@@ -4,7 +4,7 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
-import com.eformworks.signstage.backend.feature.organization.repository.entity.OrganizationStatus;
+import com.eformworks.signstage.backend.feature.organization.entity.OrganizationStatus;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminOrganizationDto;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminOrganizationService;
 import io.swagger.v3.oas.annotations.Operation;

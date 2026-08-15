@@ -1,4 +1,4 @@
-package com.eformworks.signstage.backend.feature.organization.repository.entity;
+package com.eformworks.signstage.backend.feature.organization.entity;
 
 /**
  * 조직 내 권한 4단계. 플랫폼 전역 권한({@code User.platformRole})과는 다른 축이다

@@ -1,7 +1,7 @@
 package com.eformworks.signstage.backend.feature.organization.repository;
 
-import com.eformworks.signstage.backend.feature.organization.repository.entity.Organization;
-import com.eformworks.signstage.backend.feature.organization.repository.entity.OrganizationStatus;
+import com.eformworks.signstage.backend.feature.organization.entity.Organization;
+import com.eformworks.signstage.backend.feature.organization.entity.OrganizationStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

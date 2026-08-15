@@ -1,4 +1,4 @@
-package com.eformworks.signstage.backend.feature.identity.repository.entity;
+package com.eformworks.signstage.backend.feature.identity.entity;
 
 /**
  * PENDING은 회원가입 직후 승인 대기 상태다. 이 상태에서는 로그인할 수 없다

@@ -2,7 +2,7 @@ package com.eformworks.signstage.backend.core.security;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.feature.identity.error.IdentityErrorCode;
-import com.eformworks.signstage.backend.feature.identity.repository.entity.User;
+import com.eformworks.signstage.backend.feature.identity.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.JwtException;

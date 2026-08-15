@@ -1,4 +1,4 @@
-package com.eformworks.signstage.backend.feature.platformadmin.repository.entity;
+package com.eformworks.signstage.backend.feature.platformadmin.entity;
 
 /**
  * 플랫폼 관리자가 조직 스코핑을 우회해 수행하는 제어 행위의 종류

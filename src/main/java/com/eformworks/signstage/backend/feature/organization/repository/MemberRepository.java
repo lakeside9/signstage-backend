@@ -1,8 +1,8 @@
 package com.eformworks.signstage.backend.feature.organization.repository;
 
-import com.eformworks.signstage.backend.feature.organization.repository.entity.Member;
-import com.eformworks.signstage.backend.feature.organization.repository.entity.MemberRole;
-import com.eformworks.signstage.backend.feature.organization.repository.entity.MemberStatus;
+import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
+import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
