@@ -28,6 +28,14 @@ public class IdentityController {
     private final IdentityService identityService;
     private final TraceIdProvider traceIdProvider;
 
+    @Operation(summary = "회원가입", description = "가입 직후 승인 대기(PENDING) 상태이며, 관리자 승인 전까지는 로그인할 수 없다.")
+    @SecurityRequirements(value = {})
+    @PostMapping("/signup")
+    public ApiResponse<IdentityDto.Response.Signup> signup(@Valid @RequestBody IdentityDto.Request.Signup request) {
+        IdentityDto.Response.Signup response = identityService.signup(request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
     @Operation(summary = "로그인", description = "성공 시 비밀번호 변경이 필요하면 passwordResetToken을, 아니면 accessToken을 반환한다.")
     @SecurityRequirements(value = {})
     @PostMapping("/login")

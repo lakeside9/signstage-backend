@@ -4,11 +4,12 @@ import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.JwtAuthenticationFilter;
 import com.eformworks.signstage.backend.core.security.JwtProvider;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -39,31 +40,40 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/identity/login", "/api/identity/force-password-change").permitAll()
-                        // 조직 최초 생성(POST /api/organizations)은 소유자 계정을 함께 만드는 가입 경로라
-                        // 인증 없이 호출한다(signstage-docs business/user-organization-design.md 5.1절 (a)).
-                        .requestMatchers(HttpMethod.POST, "/api/organizations").permitAll()
+                        .requestMatchers("/api/identity/signup", "/api/identity/login", "/api/identity/force-password-change").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/api-docs/**").permitAll()
+                        // platform_role 보유자만 통과. 등급별 세부 권한(예: 회원 상태 변경은 PLATFORM_OPS 이상)은
+                        // 서비스 레이어에서 CurrentUser.platformRole()로 한 번 더 검사한다
+                        // (signstage-docs backend/signup-approval-implementation-plan.md 4.2절).
+                        .requestMatchers("/api/platform-admin/**")
+                        .hasAnyRole("PLATFORM_SUPPORT", "PLATFORM_OPS", "PLATFORM_SUPER")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(CommonErrorCode.UNAUTHORIZED.getHttpStatus().value());
-                            response.setContentType("application/json;charset=UTF-8");
-                            // ApiResponse와 같은 모양의 JSON을 직접 만든다. 이 시점은 서블릿 필터 단계라
-                            // Jackson ObjectMapper 빈(스프링부트 4.1부터 별도 모듈 tools.jackson 계열로
-                            // 옮겨져 여기서 그대로 재사용하기 애매하다)에 기대지 않는다.
-                            String body = "{\"code\":\"%s\",\"message\":\"%s\",\"data\":null,\"traceId\":\"%s\"}".formatted(
-                                    CommonErrorCode.UNAUTHORIZED.getCode(),
-                                    CommonErrorCode.UNAUTHORIZED.getMessage(),
-                                    traceIdProvider.getTraceId()
-                            );
-                            response.getWriter().write(body);
-                        })
+                        .authenticationEntryPoint((request, response, authException) ->
+                                writeErrorResponse(response, CommonErrorCode.UNAUTHORIZED))
+                        .accessDeniedHandler((request, response, accessDeniedException) ->
+                                writeErrorResponse(response, CommonErrorCode.ACCESS_DENIED))
                 )
                 .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * ApiResponse와 같은 모양의 JSON을 직접 만든다. 이 시점은 서블릿 필터 단계라
+     * Jackson ObjectMapper 빈(스프링부트 4.1부터 별도 모듈 tools.jackson 계열로
+     * 옮겨져 여기서 그대로 재사용하기 애매하다)에 기대지 않는다.
+     */
+    private void writeErrorResponse(HttpServletResponse response, CommonErrorCode errorCode) throws IOException {
+        response.setStatus(errorCode.getHttpStatus().value());
+        response.setContentType("application/json;charset=UTF-8");
+        String body = "{\"code\":\"%s\",\"message\":\"%s\",\"data\":null,\"traceId\":\"%s\"}".formatted(
+                errorCode.getCode(),
+                errorCode.getMessage(),
+                traceIdProvider.getTraceId()
+        );
+        response.getWriter().write(body);
     }
 
     @Bean

@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.feature.identity.error.IdentityErrorCode;
 import com.eformworks.signstage.backend.feature.identity.repository.entity.User;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -16,9 +17,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * JWT 발급/검증을 담당한다. 이번 최소 구현 범위(플랫폼 관리자 로그인)에서 필요한
- * 두 종류의 토큰만 다룬다 — 조직 로그인용 토큰(organizationId 클레임 포함)은
- * organization_members 등이 구현된 뒤 추가한다(signstage-docs business/user-organization-design.md 5.2/7.6절).
+ * JWT 발급/검증을 담당한다. 조직 로그인용 토큰(organizationId 클레임 포함)은
+ * organization_members 기반 조직 선택 흐름이 구현될 때 추가한다
+ * (signstage-docs business/user-organization-design.md 5.2/7.6절).
  */
 @Component
 public class JwtProvider {
@@ -30,15 +31,18 @@ public class JwtProvider {
 
     private final SecretKey secretKey;
     private final long platformTokenExpiryMinutes;
+    private final long userTokenExpiryMinutes;
     private final long passwordResetTokenExpiryMinutes;
 
     public JwtProvider(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.platform-token-expiry-minutes:60}") long platformTokenExpiryMinutes,
+            @Value("${jwt.user-token-expiry-minutes:480}") long userTokenExpiryMinutes,
             @Value("${jwt.password-reset-token-expiry-minutes:10}") long passwordResetTokenExpiryMinutes
     ) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.platformTokenExpiryMinutes = platformTokenExpiryMinutes;
+        this.userTokenExpiryMinutes = userTokenExpiryMinutes;
         this.passwordResetTokenExpiryMinutes = passwordResetTokenExpiryMinutes;
     }
 
@@ -46,15 +50,31 @@ public class JwtProvider {
      * 플랫폼 관리자 콘솔 토큰. organizationId 클레임이 없다(signstage-docs 7.6절).
      */
     public String createPlatformAccessToken(User user) {
+        return buildAccessToken(user, platformTokenExpiryMinutes);
+    }
+
+    /**
+     * 일반 사용자(조직 소속 여부와 무관) access token. platformRole이 없어 관리자 콘솔 토큰보다
+     * 만료 시간을 길게 둔다(signstage-docs 7.3절 "관리자 토큰을 더 짧게"의 반대 방향).
+     * organizationId 클레임은 아직 싣지 않는다 — 5.2절 조직 선택 흐름 구현 시 추가한다.
+     */
+    public String createUserAccessToken(User user) {
+        return buildAccessToken(user, userTokenExpiryMinutes);
+    }
+
+    private String buildAccessToken(User user, long expiryMinutes) {
         Instant now = Instant.now();
-        return Jwts.builder()
+        JwtBuilder builder = Jwts.builder()
                 .subject(user.getLoginId())
                 .claim(CLAIM_USER_ID, user.getId())
-                .claim(CLAIM_PLATFORM_ROLE, user.getPlatformRole().name())
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plus(platformTokenExpiryMinutes, ChronoUnit.MINUTES)))
-                .signWith(secretKey)
-                .compact();
+                .expiration(Date.from(now.plus(expiryMinutes, ChronoUnit.MINUTES)));
+
+        if (user.getPlatformRole() != null) {
+            builder.claim(CLAIM_PLATFORM_ROLE, user.getPlatformRole().name());
+        }
+
+        return builder.signWith(secretKey).compact();
     }
 
     /**

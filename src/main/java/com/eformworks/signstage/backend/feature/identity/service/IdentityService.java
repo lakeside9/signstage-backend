@@ -15,8 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * signstage-docs business/login-security.md 5장의 로그인 흐름을 구현한다.
- * 이번 최소 구현 범위는 플랫폼 관리자(platformRole 보유자) 로그인만 지원한다 —
- * organization_members가 아직 없어 조직 선택 흐름(5.2절)은 다루지 않는다.
+ * platformRole 보유자(플랫폼 관리자)와 일반 사용자 모두 로그인할 수 있다. 다만 아직
+ * organizationId를 JWT 클레임에 싣는 조직 선택 흐름(user-organization-design.md 5.2절)은
+ * 구현하지 않았다 — 일반 사용자는 조직 소속 여부와 무관하게 항상 같은 형태의 토큰을 받는다.
  *
  * <p>로그인 이력 기록과 실패 카운터/잠금 갱신은 {@link LoginAttemptRecorder}가
  * 별도 트랜잭션으로 처리한다. 이 클래스 자체는 그 값들을 직접 쓰지 않는다 —
@@ -46,6 +47,11 @@ public class IdentityService {
             throw new ApplicationException(IdentityErrorCode.ACCOUNT_LOCKED);
         }
 
+        if (user.getStatus() == UserStatus.PENDING) {
+            loginAttemptRecorder.recordFailure(user.getId(), request.getLoginId(), LoginHistoryStatus.FAILED_PENDING_APPROVAL, ipAddress, userAgent);
+            throw new ApplicationException(IdentityErrorCode.ACCOUNT_PENDING_APPROVAL);
+        }
+
         if (user.getStatus() == UserStatus.DISABLED) {
             loginAttemptRecorder.recordFailure(user.getId(), request.getLoginId(), LoginHistoryStatus.FAILED_DISABLED, ipAddress, userAgent);
             throw new ApplicationException(IdentityErrorCode.ACCOUNT_DISABLED);
@@ -68,20 +74,50 @@ public class IdentityService {
             return IdentityDto.Response.Login.passwordChangeRequired(passwordResetToken);
         }
 
-        if (user.getPlatformRole() == null) {
-            // 조직 기반 로그인은 이번 범위 밖이다(위 클래스 설명 참고).
-            throw new ApplicationException(IdentityErrorCode.ORGANIZATION_LOGIN_NOT_SUPPORTED);
+        if (user.getPlatformRole() != null) {
+            String accessToken = jwtProvider.createPlatformAccessToken(user);
+            IdentityDto.Response.PlatformAdminInfo platformAdmin = new IdentityDto.Response.PlatformAdminInfo(
+                    user.getId(),
+                    user.getLoginId(),
+                    user.getName(),
+                    user.getPlatformRole().name()
+            );
+            return IdentityDto.Response.Login.success(accessToken, platformAdmin);
         }
 
-        String accessToken = jwtProvider.createPlatformAccessToken(user);
-        IdentityDto.Response.PlatformAdminInfo platformAdmin = new IdentityDto.Response.PlatformAdminInfo(
-                user.getId(),
-                user.getLoginId(),
-                user.getName(),
-                user.getPlatformRole().name()
-        );
+        // 일반 사용자(조직 소속 여부와 무관): platformRole이 없으므로 관리자 콘솔 토큰이 아닌
+        // 일반 액세스 토큰을 발급한다. feature.organization의 API들은 이미 JWT 클레임이 아니라
+        // organization_members를 직접 조회해 권한을 판단하므로, 이 토큰만으로 그대로 호출할 수 있다.
+        String accessToken = jwtProvider.createUserAccessToken(user);
+        return IdentityDto.Response.Login.success(accessToken, null);
+    }
 
-        return IdentityDto.Response.Login.success(accessToken, platformAdmin);
+    /**
+     * 일반 사용자 가입. status=PENDING으로 생성되며, 관리자 승인(PENDING→ACTIVE) 전까지는
+     * 로그인할 수 없다(signstage-docs business/user-organization-design.md 5.1절 (a)).
+     * platform_role은 이 경로로 절대 설정되지 않는다.
+     */
+    @Transactional
+    public IdentityDto.Response.Signup signup(IdentityDto.Request.Signup request) {
+        if (userRepository.existsByLoginId(request.getLoginId())) {
+            throw new ApplicationException(IdentityErrorCode.DUPLICATE_LOGIN_ID);
+        }
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new ApplicationException(IdentityErrorCode.DUPLICATE_EMAIL);
+        }
+
+        User user = User.builder()
+                .loginId(request.getLoginId())
+                .name(request.getName())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .locale(request.getLocale())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .status(UserStatus.PENDING)
+                .build();
+        userRepository.save(user);
+
+        return new IdentityDto.Response.Signup(user.getId(), user.getLoginId(), user.getStatus().name());
     }
 
     @Transactional

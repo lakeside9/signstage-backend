@@ -12,15 +12,15 @@ public enum IdentityErrorCode implements ErrorCode {
 
     INVALID_CREDENTIAL("IDENTITY_INVALID_CREDENTIAL", HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."),
     ACCOUNT_LOCKED("IDENTITY_ACCOUNT_LOCKED", HttpStatus.LOCKED, "계정이 잠겼습니다. 잠시 후 다시 시도해주세요."),
+    ACCOUNT_PENDING_APPROVAL(
+            "IDENTITY_ACCOUNT_PENDING_APPROVAL",
+            HttpStatus.FORBIDDEN,
+            "가입 승인 대기 중입니다. 승인 후 로그인할 수 있습니다."
+    ),
     ACCOUNT_DISABLED("IDENTITY_ACCOUNT_DISABLED", HttpStatus.FORBIDDEN, "비활성화된 계정입니다. 관리자에게 문의하세요."),
     DUPLICATE_LOGIN_ID("IDENTITY_DUPLICATE_LOGIN_ID", HttpStatus.CONFLICT, "이미 존재하는 아이디입니다."),
     DUPLICATE_EMAIL("IDENTITY_DUPLICATE_EMAIL", HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
-    INVALID_RESET_TOKEN("IDENTITY_INVALID_RESET_TOKEN", HttpStatus.UNAUTHORIZED, "비밀번호 변경 요청이 유효하지 않습니다. 다시 로그인해주세요."),
-    ORGANIZATION_LOGIN_NOT_SUPPORTED(
-            "IDENTITY_ORGANIZATION_LOGIN_NOT_SUPPORTED",
-            HttpStatus.NOT_IMPLEMENTED,
-            "아직 지원하지 않는 로그인 방식입니다."
-    );
+    INVALID_RESET_TOKEN("IDENTITY_INVALID_RESET_TOKEN", HttpStatus.UNAUTHORIZED, "비밀번호 변경 요청이 유효하지 않습니다. 다시 로그인해주세요.");
 
     private final String code;
     private final HttpStatus httpStatus;

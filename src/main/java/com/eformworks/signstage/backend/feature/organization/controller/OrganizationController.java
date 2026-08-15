@@ -6,7 +6,6 @@ import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.feature.organization.dto.OrganizationDto;
 import com.eformworks.signstage.backend.feature.organization.service.OrganizationService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -29,15 +28,16 @@ public class OrganizationController {
     private final TraceIdProvider traceIdProvider;
 
     @Operation(
-            summary = "조직 최초 생성",
-            description = "조직과 소유자(OWNER) 계정을 함께 만든다. role은 요청값으로 받지 않고 항상 OWNER로 고정된다."
+            summary = "조직 생성",
+            description = "로그인한 사용자 본인이 자동으로 OWNER가 된다. role은 요청값으로 받지 않는다."
     )
-    @SecurityRequirements(value = {})
     @PostMapping
     public ApiResponse<OrganizationDto.Response.Organization> createOrganization(
+            @AuthenticationPrincipal CurrentUser currentUser,
             @Valid @RequestBody OrganizationDto.Request.CreateOrganization request
     ) {
-        OrganizationDto.Response.Organization response = organizationService.createOrganization(request);
+        OrganizationDto.Response.Organization response =
+                organizationService.createOrganization(request, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

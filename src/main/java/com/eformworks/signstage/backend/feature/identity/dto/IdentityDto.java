@@ -75,6 +75,30 @@ public final class IdentityDto {
             @NotBlank
             private String newPassword;
         }
+
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class Signup {
+
+            @NotBlank
+            private String loginId;
+
+            @NotBlank
+            private String password;
+
+            @NotBlank
+            private String name;
+
+            @NotBlank
+            @Email
+            private String email;
+
+            private String phone;
+
+            private String locale;
+        }
     }
 
     public static final class Response {
@@ -127,6 +151,15 @@ public final class IdentityDto {
             private final String phone;
             private final String locale;
             private final String platformRole;
+        }
+
+        @Getter
+        @AllArgsConstructor
+        public static class Signup {
+
+            private final Long id;
+            private final String loginId;
+            private final String status;
         }
     }
 }

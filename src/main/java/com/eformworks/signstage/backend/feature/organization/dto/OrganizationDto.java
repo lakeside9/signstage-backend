@@ -1,6 +1,5 @@
 package com.eformworks.signstage.backend.feature.organization.dto;
 
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import java.time.LocalDateTime;
@@ -30,19 +29,6 @@ public final class OrganizationDto {
             @NotBlank
             @Pattern(regexp = "^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$", message = "영문 소문자, 숫자, '-'만 사용할 수 있습니다.")
             private String code;
-
-            @NotBlank
-            private String ownerLoginId;
-
-            @NotBlank
-            private String ownerPassword;
-
-            @NotBlank
-            private String ownerName;
-
-            @NotBlank
-            @Email
-            private String ownerEmail;
         }
     }
 

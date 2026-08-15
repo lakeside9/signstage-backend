@@ -16,14 +16,14 @@ import com.eformworks.signstage.backend.feature.organization.repository.entity.O
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * signstage-docs business/user-organization-design.md 5.1절 (a) "조직 최초 생성" 흐름과
- * 조직 조회를 구현한다. 초대 수락((b) 경로)은 organization_invitations이 아직 없어
- * 이번 범위 밖이다.
+ * signstage-docs business/user-organization-design.md 5.1절 (a) "조직 생성" 흐름과
+ * 조직 조회를 구현한다. 조직 생성은 회원가입(feature.identity)·승인을 마친 사용자가
+ * 로그인한 뒤 호출하는 인증된 API다. 초대 수락((b) 경로)은 organization_invitations이
+ * 아직 없어 이번 범위 밖이다.
  */
 @Service
 @RequiredArgsConstructor
@@ -33,41 +33,28 @@ public class OrganizationService {
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
 
     /**
-     * 조직을 만든 사람이 자동으로 OWNER가 된다. role을 요청값으로 받지 않는다
+     * 로그인한 사용자 본인이 자동으로 OWNER가 된다. role을 요청값으로 받지 않는다
      * (signstage-docs business/user-organization-design.md 5.1절 (a)).
      */
     @Transactional
-    public OrganizationDto.Response.Organization createOrganization(OrganizationDto.Request.CreateOrganization request) {
+    public OrganizationDto.Response.Organization createOrganization(
+            OrganizationDto.Request.CreateOrganization request,
+            Long currentUserId
+    ) {
         if (organizationRepository.existsByCode(request.getCode())) {
             throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_CODE_DUPLICATE);
         }
-        if (userRepository.existsByLoginId(request.getOwnerLoginId())) {
-            throw new ApplicationException(IdentityErrorCode.DUPLICATE_LOGIN_ID);
-        }
-        if (userRepository.existsByEmail(request.getOwnerEmail())) {
-            throw new ApplicationException(IdentityErrorCode.DUPLICATE_EMAIL);
-        }
 
+        User owner = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ApplicationException(IdentityErrorCode.INVALID_CREDENTIAL));
+
+        // created_by/updated_by는 인증된 요청이라 SecurityAuditorAware가 채운다.
         Organization organization = Organization.builder()
                 .name(request.getOrganizationName())
                 .code(request.getCode())
                 .build();
-
-        User owner = User.builder()
-                .loginId(request.getOwnerLoginId())
-                .name(request.getOwnerName())
-                .email(request.getOwnerEmail())
-                .locale(organization.getDefaultLocale())
-                .password(passwordEncoder.encode(request.getOwnerPassword()))
-                .build();
-        userRepository.save(owner);
-
-        // 이 시점에는 아직 로그인한 사용자가 없어 AuditorAware가 채울 수 없다.
-        // 조직을 만든 소유자 자신이 생성 주체이므로 직접 지정한다.
-        organization.assignCreatedBy(owner.getId());
         organizationRepository.save(organization);
 
         Member ownerMembership = Member.builder()
@@ -77,7 +64,6 @@ public class OrganizationService {
                 .status(MemberStatus.ACTIVE)
                 .joinedAt(LocalDateTime.now())
                 .build();
-        ownerMembership.assignCreatedBy(owner.getId());
         memberRepository.save(ownerMembership);
 
         return toOrganizationResponse(organization);

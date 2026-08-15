@@ -117,4 +117,12 @@ public class User extends BaseEntity {
         this.phone = phone;
         this.locale = locale != null ? locale : this.locale;
     }
+
+    /**
+     * 플랫폼 관리자가 회원가입 승인/거절, 계정 비활성화·재활성화를 처리할 때 사용한다
+     * (signstage-docs business/user-organization-design.md 5.1절 (a), platform-admin-member-management.md 4.2절).
+     */
+    public void changeStatus(UserStatus status) {
+        this.status = status;
+    }
 }
