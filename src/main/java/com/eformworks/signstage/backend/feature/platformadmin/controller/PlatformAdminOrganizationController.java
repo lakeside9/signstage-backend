@@ -17,6 +17,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * PLATFORM_SUPPORT 이상만 호출할 수 있다(SecurityConfig에서 /api/platform-admin/** 전체를 게이트).
- * 조회는 전체 등급, 상태 변경(정지/재개)은 PLATFORM_OPS 이상만 서비스에서 한 번 더 검사한다.
+ * 조회는 전체 등급, 생성/상태 변경(정지/재개)은 PLATFORM_OPS 이상만 서비스에서 한 번 더 검사한다.
  * 조직 멤버 강제 조정은 이번 범위 밖(platform-admin-member-management.md 참고).
  */
 @Tag(name = "PlatformAdmin", description = "플랫폼 관리자 조직 조회 API")
@@ -36,6 +37,21 @@ public class PlatformAdminOrganizationController {
 
     private final PlatformAdminOrganizationService platformAdminOrganizationService;
     private final TraceIdProvider traceIdProvider;
+
+    @Operation(
+            summary = "조직 등록",
+            description = "관리자가 조직을 직접 만든다. 계정은 새로 만들지 않고, ownerLoginId로 지정한 기존 사용자를 "
+                    + "OWNER로 붙인다. PLATFORM_OPS 이상만 호출할 수 있다."
+    )
+    @PostMapping
+    public ApiResponse<PlatformAdminOrganizationDto.Response.OrganizationSummary> createOrganization(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @Valid @RequestBody PlatformAdminOrganizationDto.Request.CreateOrganization request
+    ) {
+        PlatformAdminOrganizationDto.Response.OrganizationSummary response = platformAdminOrganizationService
+                .createOrganization(currentUser.userId(), currentUser.platformRole(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
 
     @Operation(
             summary = "조직 목록 조회",

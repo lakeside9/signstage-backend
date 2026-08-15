@@ -2,14 +2,20 @@ package com.eformworks.signstage.backend.feature.platformadmin.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.feature.identity.entity.User;
+import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
+import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
+import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.organization.entity.OrganizationStatus;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminOrganizationDto;
 import com.eformworks.signstage.backend.feature.platformadmin.error.PlatformAdminErrorCode;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import java.time.LocalDateTime;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -34,7 +40,53 @@ public class PlatformAdminOrganizationService {
 
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
+    private final UserRepository userRepository;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
+
+    /**
+     * 관리자가 조직을 직접 만든다. 계정을 새로 만들지 않고 {@code ownerLoginId}로 지정한 기존 사용자를
+     * 그대로 OWNER로 붙인다 — "계정 생성"과 "조직 생성"을 분리한 3단계 가입 흐름
+     * (signstage-docs business/user-organization-design.md 5장)을 관리자 경로에서도 그대로 지킨다.
+     */
+    @Transactional
+    public PlatformAdminOrganizationDto.Response.OrganizationSummary createOrganization(
+            Long actingUserId,
+            String actingPlatformRole,
+            PlatformAdminOrganizationDto.Request.CreateOrganization request
+    ) {
+        if (!ORGANIZATION_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+        if (organizationRepository.existsByCode(request.getCode())) {
+            throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_CODE_DUPLICATE);
+        }
+
+        User owner = userRepository.findByLoginId(request.getOwnerLoginId())
+                .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_USER_NOT_FOUND));
+
+        Organization organization = Organization.builder()
+                .name(request.getOrganizationName())
+                .code(request.getCode())
+                .build();
+        organizationRepository.save(organization);
+
+        Member ownerMembership = Member.builder()
+                .organization(organization)
+                .user(owner)
+                .role(MemberRole.OWNER)
+                .status(MemberStatus.ACTIVE)
+                .joinedAt(LocalDateTime.now())
+                .build();
+        memberRepository.save(ownerMembership);
+
+        // targetUserId 대신 organizationId만 채운다 — 감사 로그 목록에서 "조직: {name}" 링크로
+        // 방금 만든 조직 상세로 바로 이동하는 게 더 유용하다(오너 정보는 detail 텍스트로 남긴다).
+        auditLogRecorder.record(
+                actingUserId, PlatformAdminAction.CREATE_ORGANIZATION, null, organization.getId(),
+                "code=" + organization.getCode() + ", ownerLoginId=" + owner.getLoginId()
+        );
+        return toSummary(organization);
+    }
 
     /**
      * ACTIVE↔SUSPENDED만 이 API로 다룬다. TRIAL은 과금 연동 시점에 별도로 다룬다
