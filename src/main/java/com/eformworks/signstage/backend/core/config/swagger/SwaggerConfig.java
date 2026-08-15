@@ -20,10 +20,9 @@ public class SwaggerConfig {
                         .description("""
                                 SignStage 백엔드 API 문서입니다.
 
-                                각 API 제목의 [인증 불필요]/[인증 필요] 표시로 로그인 여부를 확인할 수 있습니다.
-                                우측 상단 자물쇠 아이콘도 같은 정보를 보여줍니다 — 열린 자물쇠(또는 아이콘 없음)는
-                                인증 없이 호출 가능, 잠긴 자물쇠는 Authorize 버튼으로 Bearer 토큰을 넣어야
-                                호출됩니다.""")
+                                각 API 우측의 자물쇠 아이콘으로 인증 필요 여부를 확인할 수 있습니다.
+                                열린 자물쇠(또는 아이콘 없음)는 인증 없이 호출 가능, 잠긴 자물쇠는
+                                Authorize 버튼으로 Bearer 토큰을 넣어야 호출됩니다.""")
                         .version("0.0.1"))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()

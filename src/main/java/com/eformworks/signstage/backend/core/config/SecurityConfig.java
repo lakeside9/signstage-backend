@@ -8,6 +8,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -20,7 +21,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
  * 인증(Authorization: Bearer)이 필요한 API와 그렇지 않은 API를 여기서 나눈다.
- * 목록은 backend-coding-convention.md 14장의 [인증 불필요] 표기와 항상 같이 맞춘다.
+ * 목록은 각 컨트롤러의 {@code @SecurityRequirements(value = {})} 표기(backend-coding-convention.md
+ * 14.2절)와 항상 같이 맞춘다.
  */
 @Configuration
 @EnableWebSecurity
@@ -38,6 +40,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/identity/login", "/api/identity/force-password-change").permitAll()
+                        // 조직 최초 생성(POST /api/organizations)은 소유자 계정을 함께 만드는 가입 경로라
+                        // 인증 없이 호출한다(signstage-docs business/user-organization-design.md 5.1절 (a)).
+                        .requestMatchers(HttpMethod.POST, "/api/organizations").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )

@@ -28,7 +28,7 @@ public class IdentityController {
     private final IdentityService identityService;
     private final TraceIdProvider traceIdProvider;
 
-    @Operation(summary = "[인증 불필요] 로그인", description = "성공 시 비밀번호 변경이 필요하면 passwordResetToken을, 아니면 accessToken을 반환한다.")
+    @Operation(summary = "로그인", description = "성공 시 비밀번호 변경이 필요하면 passwordResetToken을, 아니면 accessToken을 반환한다.")
     @SecurityRequirements(value = {})
     @PostMapping("/login")
     public ApiResponse<IdentityDto.Response.Login> login(
@@ -43,7 +43,7 @@ public class IdentityController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "[인증 불필요] 강제 비밀번호 변경", description = "로그인 응답의 passwordResetToken으로만 호출할 수 있다.")
+    @Operation(summary = "강제 비밀번호 변경", description = "로그인 응답의 passwordResetToken으로만 호출할 수 있다.")
     @SecurityRequirements(value = {})
     @PostMapping("/force-password-change")
     public ApiResponse<Void> forcePasswordChange(@Valid @RequestBody IdentityDto.Request.ForcePasswordChange request) {
@@ -51,14 +51,14 @@ public class IdentityController {
         return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "[인증 필요] 내 정보 조회")
+    @Operation(summary = "내 정보 조회")
     @GetMapping("/me")
     public ApiResponse<IdentityDto.Response.Me> getMe(@AuthenticationPrincipal CurrentUser currentUser) {
         IdentityDto.Response.Me response = identityService.getMe(currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "[인증 필요] 내 정보 수정", description = "이름/이메일/전화번호/언어를 수정한다. 로그인 아이디는 여기서 바꿀 수 없다.")
+    @Operation(summary = "내 정보 수정", description = "이름/이메일/전화번호/언어를 수정한다. 로그인 아이디는 여기서 바꿀 수 없다.")
     @PutMapping("/me")
     public ApiResponse<IdentityDto.Response.Me> updateMe(
             @AuthenticationPrincipal CurrentUser currentUser,
@@ -68,7 +68,7 @@ public class IdentityController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "[인증 필요] 내 비밀번호 변경", description = "현재 비밀번호 확인 후 변경한다.")
+    @Operation(summary = "내 비밀번호 변경", description = "현재 비밀번호 확인 후 변경한다.")
     @PutMapping("/me/password")
     public ApiResponse<Void> changeMyPassword(
             @AuthenticationPrincipal CurrentUser currentUser,
