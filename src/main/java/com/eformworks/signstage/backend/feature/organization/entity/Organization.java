@@ -57,4 +57,13 @@ public class Organization extends BaseEntity {
     public void changeStatus(OrganizationStatus status) {
         this.status = status;
     }
+
+    /**
+     * OWNER가 조직 정보를 수정할 때 사용한다({@code OrganizationService#updateOrganization}).
+     * code는 조직을 식별하는 값이라 이 경로로 바꾸지 않는다.
+     */
+    public void updateInfo(String name, String defaultLocale) {
+        this.name = name;
+        this.defaultLocale = defaultLocale;
+    }
 }

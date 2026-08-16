@@ -7,6 +7,7 @@ import com.eformworks.signstage.backend.feature.organization.error.OrganizationE
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import java.util.List;
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 조직 조회를 구현한다(signstage-docs business/user-organization-design.md 5장). 조직
+ * 조직 조회 + 정보 수정을 구현한다(signstage-docs business/user-organization-design.md 5장). 조직
  * 생성은 더 이상 이 서비스가 다루지 않는다 — {@code feature.organization.service
  * .OrganizationCreationRequestService}로 요청을 제출하고, 플랫폼 관리자 승인을 거쳐야
  * 조직이 만들어진다(business/organization-creation-approval-review.md). 초대 수락
@@ -31,19 +32,37 @@ public class OrganizationService {
 
     public OrganizationDto.Response.Organization retrieveOrganization(Long organizationId, Long currentUserId) {
         Organization organization = findOrganizationOrThrow(organizationId);
-        checkActiveMember(organizationId, currentUserId);
-        return toOrganizationResponse(organization);
+        Member member = findActiveMemberOrThrow(organizationId, currentUserId);
+        return toOrganizationResponse(organization, member.getRole());
     }
 
     public List<OrganizationDto.Response.Organization> findMyOrganizations(Long currentUserId) {
         return memberRepository.findAllByUserIdAndStatus(currentUserId, MemberStatus.ACTIVE).stream()
-                .map(Member::getOrganization)
-                .map(this::toOrganizationResponse)
+                .map(member -> toOrganizationResponse(member.getOrganization(), member.getRole()))
                 .toList();
     }
 
-    private void checkActiveMember(Long organizationId, Long userId) {
-        memberRepository.findByOrganizationIdAndUserIdAndStatus(organizationId, userId, MemberStatus.ACTIVE)
+    /**
+     * OWNER만 조직 정보(이름/기본 언어)를 수정할 수 있다(screen-composition-plan.md "조직 설정" 항목).
+     * code는 조직 식별자라 이 API로 바꾸지 않는다.
+     */
+    @Transactional
+    public OrganizationDto.Response.Organization updateOrganization(
+            Long organizationId,
+            Long currentUserId,
+            OrganizationDto.Request.UpdateOrganization request
+    ) {
+        Organization organization = findOrganizationOrThrow(organizationId);
+        Member member = findActiveMemberOrThrow(organizationId, currentUserId);
+        if (member.getRole() != MemberRole.OWNER) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+        organization.updateInfo(request.getName(), request.getDefaultLocale());
+        return toOrganizationResponse(organization, member.getRole());
+    }
+
+    private Member findActiveMemberOrThrow(Long organizationId, Long userId) {
+        return memberRepository.findByOrganizationIdAndUserIdAndStatus(organizationId, userId, MemberStatus.ACTIVE)
                 .orElseThrow(() -> new ApplicationException(CommonErrorCode.ACCESS_DENIED));
     }
 
@@ -52,14 +71,15 @@ public class OrganizationService {
                 .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_NOT_FOUND));
     }
 
-    private OrganizationDto.Response.Organization toOrganizationResponse(Organization organization) {
+    private OrganizationDto.Response.Organization toOrganizationResponse(Organization organization, MemberRole myRole) {
         return new OrganizationDto.Response.Organization(
                 organization.getId(),
                 organization.getName(),
                 organization.getCode(),
                 organization.getStatus().name(),
                 organization.getDefaultLocale(),
-                organization.getCreatedAt()
+                organization.getCreatedAt(),
+                myRole.name()
         );
     }
 }

@@ -7,16 +7,19 @@ import com.eformworks.signstage.backend.feature.organization.dto.OrganizationDto
 import com.eformworks.signstage.backend.feature.organization.service.OrganizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 조직 조회 전용이다. 생성은 더 이상 이 컨트롤러가 다루지 않는다 — {@code OrganizationCreationRequestController}로
+ * 조직 조회 + 정보 수정을 다룬다. 생성은 더 이상 이 컨트롤러가 다루지 않는다 — {@code OrganizationCreationRequestController}로
  * 요청을 제출하고 플랫폼 관리자 승인을 거쳐야 조직이 만들어진다(signstage-docs
  * business/organization-creation-approval-review.md).
  */
@@ -46,6 +49,18 @@ public class OrganizationController {
     ) {
         OrganizationDto.Response.Organization response =
                 organizationService.retrieveOrganization(organizationId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "조직 정보 수정", description = "호출자가 해당 조직의 OWNER여야 한다. 코드는 이 API로 바꿀 수 없다.")
+    @PutMapping("/{organizationId}")
+    public ApiResponse<OrganizationDto.Response.Organization> updateOrganization(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @Valid @RequestBody OrganizationDto.Request.UpdateOrganization request
+    ) {
+        OrganizationDto.Response.Organization response =
+                organizationService.updateOrganization(organizationId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }
