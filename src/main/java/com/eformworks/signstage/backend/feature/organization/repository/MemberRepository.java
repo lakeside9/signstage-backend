@@ -7,7 +7,11 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface MemberRepository extends JpaRepository<Member, Long> {
+/**
+ * 동적 검색 조건(조직 없는 사용자 검색)은 {@link MemberRepositoryCustom}(QueryDSL 구현은
+ * {@link MemberRepositoryImpl})에 있다.
+ */
+public interface MemberRepository extends JpaRepository<Member, Long>, MemberRepositoryCustom {
 
     Optional<Member> findByOrganizationIdAndUserIdAndStatus(Long organizationId, Long userId, MemberStatus status);
 

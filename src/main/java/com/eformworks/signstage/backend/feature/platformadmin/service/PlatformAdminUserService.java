@@ -95,21 +95,23 @@ public class PlatformAdminUserService {
     /**
      * loginId/name/email은 부분 일치 검색이다. 빈 문자열은 "조건 없음"으로 취급해 null로 바꿔 넘긴다
      * ({@link UserRepository#search}는 null인 조건만 무시한다).
+     *
+     * <p>{@code withoutOrganization=true}면 어느 조직에도 ACTIVE로 속하지 않은 ACTIVE 사용자만
+     * 반환한다 — 관리자 콘솔의 "조직 멤버 강제 추가" 화면에서 후보를 고를 때 쓴다(1인 1조직
+     * 제한, 2026-08-16 결정 — 이미 조직이 있는 사용자는 애초에 후보가 아니다). 이때 {@code status}는
+     * 무시된다(항상 ACTIVE로 고정).
      */
     public Page<PlatformAdminUserDto.Response.UserSummary> findUsers(
             String loginId,
             String name,
             String email,
             UserStatus status,
+            boolean withoutOrganization,
             Pageable pageable
     ) {
-        Page<User> users = userRepository.search(
-                blankToNull(loginId),
-                blankToNull(name),
-                blankToNull(email),
-                status,
-                pageable
-        );
+        Page<User> users = withoutOrganization
+                ? memberRepository.searchUsersWithoutOrganization(blankToNull(loginId), blankToNull(name), blankToNull(email), pageable)
+                : userRepository.search(blankToNull(loginId), blankToNull(name), blankToNull(email), status, pageable);
         return users.map(this::toUserSummary);
     }
 

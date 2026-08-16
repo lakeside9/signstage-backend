@@ -60,7 +60,9 @@ public class PlatformAdminUserController {
 
     @Operation(
             summary = "회원 목록 조회",
-            description = "loginId/name/email은 부분 일치 검색, status는 정확히 일치(예: PENDING으로 승인 대기 목록 조회). 전부 생략하면 전체 목록이다."
+            description = "loginId/name/email은 부분 일치 검색, status는 정확히 일치(예: PENDING으로 승인 대기 목록 조회). "
+                    + "전부 생략하면 전체 목록이다. withoutOrganization=true면 어느 조직에도 속하지 않은 ACTIVE 사용자만 "
+                    + "반환한다(조직 멤버 강제 추가 후보 검색용) — 이때 status는 무시된다."
     )
     @GetMapping
     public ApiResponse<PageResponse<PlatformAdminUserDto.Response.UserSummary>> findUsers(
@@ -68,10 +70,11 @@ public class PlatformAdminUserController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String email,
             @RequestParam(required = false) UserStatus status,
+            @RequestParam(required = false, defaultValue = "false") boolean withoutOrganization,
             @PageableDefault(size = 20) Pageable pageable
     ) {
         Page<PlatformAdminUserDto.Response.UserSummary> result =
-                platformAdminUserService.findUsers(loginId, name, email, status, pageable);
+                platformAdminUserService.findUsers(loginId, name, email, status, withoutOrganization, pageable);
         return ApiResponse.success(PageResponse.from(result), traceIdProvider.getTraceId());
     }
 
