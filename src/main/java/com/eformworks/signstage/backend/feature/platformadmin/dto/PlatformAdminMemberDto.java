@@ -23,6 +23,23 @@ public final class PlatformAdminMemberDto {
         private Request() {
         }
 
+        /**
+         * 호출자가 그 조직의 멤버일 필요가 없다 — {@code MemberDto.Request.AddMember}와 달리
+         * OWNER 지정 제한도 없다(관리자는 조직 내부 위계를 우회한다).
+         */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class AddMember {
+
+            @NotBlank
+            private String loginId;
+
+            @NotBlank
+            private String role;
+        }
+
         @Getter
         @Setter
         @NoArgsConstructor

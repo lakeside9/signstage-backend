@@ -2,14 +2,19 @@ package com.eformworks.signstage.backend.feature.platformadmin.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.feature.identity.entity.User;
+import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
+import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
+import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminMemberDto;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.error.PlatformAdminErrorCode;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -36,12 +41,56 @@ public class PlatformAdminMemberService {
     private static final Set<String> MEMBER_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
 
     private final MemberRepository memberRepository;
+    private final OrganizationRepository organizationRepository;
+    private final UserRepository userRepository;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
 
     public List<PlatformAdminMemberDto.Response.MemberSummary> findMembers(Long organizationId) {
         return memberRepository.findAllByOrganizationIdAndStatusNot(organizationId, MemberStatus.REMOVED).stream()
                 .map(this::toMemberSummary)
                 .toList();
+    }
+
+    /**
+     * 호출자가 그 조직의 멤버일 필요가 없고, OWNER 지정 제한도 없다 — 관리자는 조직 내부 위계를
+     * 우회한다({@code feature.organization.service.MemberService#addMember}와 다른 점).
+     * 1인 1조직 제한(2026-08-16 결정)은 그대로 적용한다.
+     */
+    @Transactional
+    public PlatformAdminMemberDto.Response.MemberSummary forceAddMember(
+            Long organizationId,
+            Long actingUserId,
+            String actingPlatformRole,
+            PlatformAdminMemberDto.Request.AddMember request
+    ) {
+        checkCanManage(actingPlatformRole);
+        Organization organization = findOrganizationOrThrow(organizationId);
+        MemberRole role = parseRole(request.getRole());
+
+        User user = userRepository.findByLoginId(request.getLoginId())
+                .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_USER_NOT_FOUND));
+
+        if (memberRepository.existsByOrganizationIdAndUserId(organizationId, user.getId())) {
+            throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_ALREADY_EXISTS);
+        }
+        if (memberRepository.existsByUserIdAndStatus(user.getId(), MemberStatus.ACTIVE)) {
+            throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_SINGLE_MEMBERSHIP_LIMIT);
+        }
+
+        Member member = Member.builder()
+                .organization(organization)
+                .user(user)
+                .role(role)
+                .status(MemberStatus.ACTIVE)
+                .joinedAt(LocalDateTime.now())
+                .build();
+        memberRepository.save(member);
+
+        auditLogRecorder.record(
+                actingUserId, PlatformAdminAction.FORCE_ADD_MEMBER, user.getId(), organizationId,
+                "loginId=" + user.getLoginId() + ", role=" + role
+        );
+        return toMemberSummary(member);
     }
 
     @Transactional
@@ -113,6 +162,11 @@ public class PlatformAdminMemberService {
         } catch (IllegalArgumentException e) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
+    }
+
+    private Organization findOrganizationOrThrow(Long organizationId) {
+        return organizationRepository.findById(organizationId)
+                .orElseThrow(() -> new ApplicationException(PlatformAdminErrorCode.ORGANIZATION_NOT_FOUND));
     }
 
     private Member findMemberInOrganizationOrThrow(Long organizationId, Long memberId) {

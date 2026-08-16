@@ -14,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 플랫폼 관리자의 조직 멤버 강제 조정 API다(signstage-docs
  * business/platform-admin-member-management.md 4.2절). 조회는 PLATFORM_SUPPORT 이상,
- * 역할 강제 변경/강제 제거는 PLATFORM_OPS 이상만 서비스에서 한 번 더 검사한다. 호출자가
+ * 추가/역할 강제 변경/강제 제거는 PLATFORM_OPS 이상만 서비스에서 한 번 더 검사한다. 호출자가
  * 그 조직의 멤버일 필요가 없다 — 조직 스코핑을 우회해 접근한다(6장).
  */
 @Tag(name = "PlatformAdmin", description = "플랫폼 관리자의 조직 멤버 강제 조정 API")
@@ -40,6 +41,24 @@ public class PlatformAdminMemberController {
             @PathVariable Long organizationId
     ) {
         List<PlatformAdminMemberDto.Response.MemberSummary> response = platformAdminMemberService.findMembers(organizationId);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "조직 멤버 강제 추가",
+            description = "호출자가 그 조직의 멤버가 아니어도 된다. PLATFORM_OPS 이상만 호출할 수 있고, "
+                    + "role=OWNER 지정 제한이 없다(관리자는 조직 내부 위계를 우회한다). loginId는 이미 "
+                    + "가입된 사용자여야 한다. 1인 1조직 제한은 그대로 적용된다."
+    )
+    @PostMapping
+    public ApiResponse<PlatformAdminMemberDto.Response.MemberSummary> forceAddMember(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @Valid @RequestBody PlatformAdminMemberDto.Request.AddMember request
+    ) {
+        PlatformAdminMemberDto.Response.MemberSummary response = platformAdminMemberService.forceAddMember(
+                organizationId, currentUser.userId(), currentUser.platformRole(), request
+        );
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
