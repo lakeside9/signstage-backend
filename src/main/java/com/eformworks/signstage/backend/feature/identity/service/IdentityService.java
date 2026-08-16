@@ -139,12 +139,21 @@ public class IdentityService {
         return toMeResponse(findUserOrThrow(userId));
     }
 
+    /**
+     * 일반 사용자는 이메일을 바꿀 수 없다(2026-08-16 결정) — 회원가입/회원 생성 시점에 이메일을
+     * loginId로도 저장하기 때문에, 여기서 이메일을 자유롭게 바꾸게 두면 "로그인 아이디로 안내한
+     * 값"과 실제 로그인 아이디가 어긋나 보이는 혼란이 생긴다. 플랫폼 관리자는 loginId가 이메일과
+     * 무관하게 별도로 관리돼(관리자 계정 생성은 이 정책에 포함되지 않음) 이 제약을 받지 않는다.
+     */
     @Transactional
     public IdentityDto.Response.Me updateMe(Long userId, IdentityDto.Request.UpdateMe request) {
         User user = findUserOrThrow(userId);
+        boolean emailChanged = !user.getEmail().equals(request.getEmail());
 
-        if (!user.getEmail().equals(request.getEmail())
-                && userRepository.existsByEmailAndIdNot(request.getEmail(), userId)) {
+        if (emailChanged && user.getPlatformRole() == null) {
+            throw new ApplicationException(IdentityErrorCode.EMAIL_CHANGE_NOT_ALLOWED);
+        }
+        if (emailChanged && userRepository.existsByEmailAndIdNot(request.getEmail(), userId)) {
             throw new ApplicationException(IdentityErrorCode.DUPLICATE_EMAIL);
         }
 

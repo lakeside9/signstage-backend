@@ -70,7 +70,11 @@ public class IdentityController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "내 정보 수정", description = "이름/이메일/전화번호/언어를 수정한다. 로그인 아이디는 여기서 바꿀 수 없다.")
+    @Operation(
+            summary = "내 정보 수정",
+            description = "이름/이메일/전화번호/언어를 수정한다. 로그인 아이디는 여기서 바꿀 수 없다. "
+                    + "일반 사용자는 이메일도 바꿀 수 없다(로그인 아이디로도 쓰이기 때문) — 플랫폼 관리자만 예외."
+    )
     @PutMapping("/me")
     public ApiResponse<IdentityDto.Response.Me> updateMe(
             @AuthenticationPrincipal CurrentUser currentUser,
