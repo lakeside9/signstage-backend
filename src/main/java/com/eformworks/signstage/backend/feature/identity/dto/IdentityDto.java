@@ -76,14 +76,15 @@ public final class IdentityDto {
             private String newPassword;
         }
 
+        /**
+         * loginId는 이 요청에서 받지 않는다 — 이메일을 그대로 loginId로 쓴다
+         * (signstage-docs business/user-organization-design.md 5.1절, 2026-08-16 결정).
+         */
         @Getter
         @Setter
         @NoArgsConstructor
         @AllArgsConstructor
         public static class Signup {
-
-            @NotBlank
-            private String loginId;
 
             @NotBlank
             private String password;

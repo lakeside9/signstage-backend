@@ -28,7 +28,11 @@ public class IdentityController {
     private final IdentityService identityService;
     private final TraceIdProvider traceIdProvider;
 
-    @Operation(summary = "회원가입", description = "가입 직후 승인 대기(PENDING) 상태이며, 관리자 승인 전까지는 로그인할 수 없다.")
+    @Operation(
+            summary = "회원가입",
+            description = "가입 직후 승인 대기(PENDING) 상태이며, 관리자 승인 전까지는 로그인할 수 없다. "
+                    + "loginId는 별도로 받지 않는다 — 이메일을 그대로 로그인 아이디로 쓴다."
+    )
     @SecurityRequirements(value = {})
     @PostMapping("/signup")
     public ApiResponse<IdentityDto.Response.Signup> signup(@Valid @RequestBody IdentityDto.Request.Signup request) {

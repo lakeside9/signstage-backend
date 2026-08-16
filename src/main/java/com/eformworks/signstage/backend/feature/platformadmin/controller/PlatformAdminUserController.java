@@ -45,7 +45,8 @@ public class PlatformAdminUserController {
             description = "관리자가 직접 회원 계정을 만든다. 임시 비밀번호는 서버가 생성해 응답에 한 번만 담아 반환하며 "
                     + "저장하지 않으므로, 이 응답을 놓치면 다시 조회할 수 없다(강제 비밀번호 재설정으로 새로 발급해야 한다). "
                     + "승인 절차 없이 즉시 ACTIVE로 생성된다(관리자가 만든다는 것 자체가 승인). "
-                    + "PLATFORM_OPS 이상만 호출할 수 있고, platform_role은 이 API로 설정할 수 없다."
+                    + "PLATFORM_OPS 이상만 호출할 수 있고, platform_role은 이 API로 설정할 수 없다. "
+                    + "loginId는 별도로 받지 않는다 — 이메일을 그대로 로그인 아이디로 쓴다."
     )
     @PostMapping
     public ApiResponse<PlatformAdminUserDto.Response.CreatedUser> createUser(

@@ -95,11 +95,12 @@ public class IdentityService {
     /**
      * 일반 사용자 가입. status=PENDING으로 생성되며, 관리자 승인(PENDING→ACTIVE) 전까지는
      * 로그인할 수 없다(signstage-docs business/user-organization-design.md 5.1절 (a)).
-     * platform_role은 이 경로로 절대 설정되지 않는다.
+     * platform_role은 이 경로로 절대 설정되지 않는다. loginId는 요청으로 받지 않고 이메일을
+     * 그대로 쓴다(2026-08-16 결정) — 중복 검사도 그 값 하나로 두 컬럼(loginId/email)을 각각 본다.
      */
     @Transactional
     public IdentityDto.Response.Signup signup(IdentityDto.Request.Signup request) {
-        if (userRepository.existsByLoginId(request.getLoginId())) {
+        if (userRepository.existsByLoginId(request.getEmail())) {
             throw new ApplicationException(IdentityErrorCode.DUPLICATE_LOGIN_ID);
         }
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -107,7 +108,7 @@ public class IdentityService {
         }
 
         User user = User.builder()
-                .loginId(request.getLoginId())
+                .loginId(request.getEmail())
                 .name(request.getName())
                 .email(request.getEmail())
                 .phone(request.getPhone())

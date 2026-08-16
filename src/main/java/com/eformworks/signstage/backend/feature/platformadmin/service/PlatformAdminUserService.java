@@ -57,6 +57,7 @@ public class PlatformAdminUserService {
      * 관리자가 만든다는 행위 자체가 승인이라 즉시 ACTIVE로 생성한다. 비밀번호는 서버가
      * 임시로 생성하고, 다음 로그인 시 변경을 강제한다(5.3절과 같은 원칙 — 관리자는
      * 비밀번호를 직접 정하지 않는다). platform_role은 이 경로로 설정하지 않는다(7.2절).
+     * loginId는 요청으로 받지 않고 이메일을 그대로 쓴다(2026-08-16 결정).
      */
     @Transactional
     public PlatformAdminUserDto.Response.CreatedUser createUser(
@@ -67,7 +68,7 @@ public class PlatformAdminUserService {
         if (!MEMBER_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
-        if (userRepository.existsByLoginId(request.getLoginId())) {
+        if (userRepository.existsByLoginId(request.getEmail())) {
             throw new ApplicationException(IdentityErrorCode.DUPLICATE_LOGIN_ID);
         }
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -76,7 +77,7 @@ public class PlatformAdminUserService {
 
         String temporaryPassword = temporaryPasswordGenerator.generate();
         User user = User.builder()
-                .loginId(request.getLoginId())
+                .loginId(request.getEmail())
                 .name(request.getName())
                 .email(request.getEmail())
                 .phone(request.getPhone())
