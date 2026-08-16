@@ -8,7 +8,9 @@ import com.eformworks.signstage.backend.feature.identity.repository.UserReposito
 import com.eformworks.signstage.backend.feature.organization.dto.OrganizationCreationRequestDto;
 import com.eformworks.signstage.backend.feature.organization.entity.OrganizationCreationRequest;
 import com.eformworks.signstage.backend.feature.organization.entity.OrganizationCreationRequestStatus;
+import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
+import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationCreationRequestRepository;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -38,8 +40,12 @@ public class OrganizationCreationRequestService {
 
     private final OrganizationCreationRequestRepository requestRepository;
     private final UserRepository userRepository;
+    private final MemberRepository memberRepository;
 
     /**
+     * 1인 1조직 제한(2026-08-16 결정)에 걸리면 승인 시점까지 갈 것도 없이 요청 제출 자체를
+     * 막는다 — 어차피 승인 시점({@code PlatformAdminOrganizationRequestService#approve})에서도
+     * 같은 검사를 하지만, 여기서 먼저 막아야 사용자가 며칠을 기다렸다가 반려당하는 일이 없다.
      * 동시 PENDING 요청은 1건만 허용하고(3.4절), 재신청은 최초 요청을 포함해 최대 5회까지만
      * 허용한다(승인되면 리셋, 취소도 카운트 포함 — 7.2절).
      */
@@ -48,6 +54,9 @@ public class OrganizationCreationRequestService {
             Long currentUserId,
             OrganizationCreationRequestDto.Request.Create request
     ) {
+        if (memberRepository.existsByUserIdAndStatus(currentUserId, MemberStatus.ACTIVE)) {
+            throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_SINGLE_MEMBERSHIP_LIMIT);
+        }
         if (requestRepository.existsByRequestedByIdAndStatus(currentUserId, OrganizationCreationRequestStatus.PENDING)) {
             throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_REQUEST_ALREADY_PENDING);
         }

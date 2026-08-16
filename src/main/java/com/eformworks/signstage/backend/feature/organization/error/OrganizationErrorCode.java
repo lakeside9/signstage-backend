@@ -60,6 +60,11 @@ public enum OrganizationErrorCode implements ErrorCode {
             "ORGANIZATION_OWNER_LIMIT_EXCEEDED",
             HttpStatus.CONFLICT,
             "한 사용자가 OWNER로 보유할 수 있는 조직은 최대 10개입니다."
+    ),
+    ORGANIZATION_SINGLE_MEMBERSHIP_LIMIT(
+            "ORGANIZATION_SINGLE_MEMBERSHIP_LIMIT",
+            HttpStatus.CONFLICT,
+            "한 사용자는 동시에 하나의 조직에만 속할 수 있습니다."
     );
 
     private final String code;

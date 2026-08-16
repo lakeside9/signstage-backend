@@ -73,6 +73,7 @@ public class PlatformAdminOrganizationService {
 
         User owner = userRepository.findByLoginId(request.getOwnerLoginId())
                 .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_USER_NOT_FOUND));
+        checkSingleOrganizationLimit(owner);
         checkOwnerLimit(owner);
 
         Organization organization = saveOrganizationWithOwner(request.getOrganizationName(), request.getCode(), owner);
@@ -122,6 +123,18 @@ public class PlatformAdminOrganizationService {
         long ownedCount = memberRepository.countByUserIdAndRoleAndStatus(owner.getId(), MemberRole.OWNER, MemberStatus.ACTIVE);
         if (ownedCount >= MAX_OWNED_ORGANIZATIONS) {
             throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_OWNER_LIMIT_EXCEEDED);
+        }
+    }
+
+    /**
+     * 1인 1조직 제한(2026-08-16 결정) — 역할과 무관하게 이미 다른 조직에 ACTIVE로 속해 있으면
+     * 새 조직 소속을 막는다. {@link #checkOwnerLimit}보다 먼저 걸리는 더 강한 제약이라
+     * checkOwnerLimit은 그대로 두고 이 검사만 추가했다 — 나중에 다중 조직을 허용하기로 하면
+     * 이 메서드 호출부만 지우면 된다(스키마/JWT는 원래부터 다중 조직을 전제로 돼 있다).
+     */
+    void checkSingleOrganizationLimit(User owner) {
+        if (memberRepository.existsByUserIdAndStatus(owner.getId(), MemberStatus.ACTIVE)) {
+            throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_SINGLE_MEMBERSHIP_LIMIT);
         }
     }
 
