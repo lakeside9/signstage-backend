@@ -4,8 +4,10 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
+import com.eformworks.signstage.backend.feature.organization.entity.OrganizationCreationRequest;
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
+import com.eformworks.signstage.backend.feature.organization.repository.OrganizationCreationRequestRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
@@ -38,15 +40,23 @@ public class PlatformAdminOrganizationService {
 
     private static final Set<String> ORGANIZATION_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
 
+    /** 한 사용자가 OWNER로 보유할 수 있는 ACTIVE 조직 최대 개수(organization-creation-approval-review.md 7.3절). */
+    static final int MAX_OWNED_ORGANIZATIONS = 10;
+
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final UserRepository userRepository;
+    private final OrganizationCreationRequestRepository organizationCreationRequestRepository;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
 
     /**
      * 관리자가 조직을 직접 만든다. 계정을 새로 만들지 않고 {@code ownerLoginId}로 지정한 기존 사용자를
      * 그대로 OWNER로 붙인다 — "계정 생성"과 "조직 생성"을 분리한 3단계 가입 흐름
      * (signstage-docs business/user-organization-design.md 5장)을 관리자 경로에서도 그대로 지킨다.
+     *
+     * <p>요청 없이 만드는 경로지만, 내부적으로는 "관리자가 요청을 대신 접수하고 즉시 승인한" 것으로
+     * 취급해 {@link OrganizationCreationRequest}를 APPROVED 상태로 함께 남긴다 — 조직이 어떤 경위로
+     * 만들어졌는지 항상 요청 레코드 하나로 추적하기 위해서다(organization-creation-approval-review.md 3.1절).
      */
     @Transactional
     public PlatformAdminOrganizationDto.Response.OrganizationSummary createOrganization(
@@ -63,10 +73,35 @@ public class PlatformAdminOrganizationService {
 
         User owner = userRepository.findByLoginId(request.getOwnerLoginId())
                 .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_USER_NOT_FOUND));
+        checkOwnerLimit(owner);
 
+        Organization organization = saveOrganizationWithOwner(request.getOrganizationName(), request.getCode(), owner);
+
+        OrganizationCreationRequest autoApprovedRequest = OrganizationCreationRequest.builder()
+                .requestedBy(owner)
+                .organizationName(organization.getName())
+                .build();
+        autoApprovedRequest.approve(actingUserId, organization);
+        organizationCreationRequestRepository.save(autoApprovedRequest);
+
+        // targetUserId 대신 organizationId만 채운다 — 감사 로그 목록에서 "조직: {name}" 링크로
+        // 방금 만든 조직 상세로 바로 이동하는 게 더 유용하다(오너 정보는 detail 텍스트로 남긴다).
+        auditLogRecorder.record(
+                actingUserId, PlatformAdminAction.CREATE_ORGANIZATION, null, organization.getId(),
+                "code=" + organization.getCode() + ", ownerLoginId=" + owner.getLoginId()
+        );
+        return toSummary(organization);
+    }
+
+    /**
+     * 조직 + OWNER 멤버십 저장 로직. 관리자 대행 등록({@link #createOrganization})과 조직 생성 요청
+     * 승인({@code PlatformAdminOrganizationRequestService})이 이 메서드를 공유한다
+     * (organization-creation-approval-review.md 3.1절 "저장 방식 결정됨").
+     */
+    Organization saveOrganizationWithOwner(String name, String code, User owner) {
         Organization organization = Organization.builder()
-                .name(request.getOrganizationName())
-                .code(request.getCode())
+                .name(name)
+                .code(code)
                 .build();
         organizationRepository.save(organization);
 
@@ -79,13 +114,15 @@ public class PlatformAdminOrganizationService {
                 .build();
         memberRepository.save(ownerMembership);
 
-        // targetUserId 대신 organizationId만 채운다 — 감사 로그 목록에서 "조직: {name}" 링크로
-        // 방금 만든 조직 상세로 바로 이동하는 게 더 유용하다(오너 정보는 detail 텍스트로 남긴다).
-        auditLogRecorder.record(
-                actingUserId, PlatformAdminAction.CREATE_ORGANIZATION, null, organization.getId(),
-                "code=" + organization.getCode() + ", ownerLoginId=" + owner.getLoginId()
-        );
-        return toSummary(organization);
+        return organization;
+    }
+
+    /** 보유 조직 개수 제한(최대 10개, 7.3절)을 검사한다. 승인 경로 전부가 공유한다. */
+    void checkOwnerLimit(User owner) {
+        long ownedCount = memberRepository.countByUserIdAndRoleAndStatus(owner.getId(), MemberRole.OWNER, MemberStatus.ACTIVE);
+        if (ownedCount >= MAX_OWNED_ORGANIZATIONS) {
+            throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_OWNER_LIMIT_EXCEEDED);
+        }
     }
 
     /**

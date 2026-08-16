@@ -35,6 +35,31 @@ public enum OrganizationErrorCode implements ErrorCode {
             "ORGANIZATION_LAST_OWNER_REQUIRED",
             HttpStatus.CONFLICT,
             "조직에는 항상 최소 1명의 OWNER가 있어야 합니다."
+    ),
+    ORGANIZATION_REQUEST_NOT_FOUND(
+            "ORGANIZATION_REQUEST_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "조직 생성 요청을 찾을 수 없습니다."
+    ),
+    ORGANIZATION_REQUEST_ALREADY_PENDING(
+            "ORGANIZATION_REQUEST_ALREADY_PENDING",
+            HttpStatus.CONFLICT,
+            "이미 심사 대기 중인 조직 생성 요청이 있습니다."
+    ),
+    ORGANIZATION_REQUEST_LIMIT_EXCEEDED(
+            "ORGANIZATION_REQUEST_LIMIT_EXCEEDED",
+            HttpStatus.CONFLICT,
+            "조직 생성 요청은 최대 5회까지 제출할 수 있습니다."
+    ),
+    ORGANIZATION_REQUEST_NOT_PENDING(
+            "ORGANIZATION_REQUEST_NOT_PENDING",
+            HttpStatus.CONFLICT,
+            "심사 대기 중인 요청만 처리할 수 있습니다."
+    ),
+    ORGANIZATION_OWNER_LIMIT_EXCEEDED(
+            "ORGANIZATION_OWNER_LIMIT_EXCEEDED",
+            HttpStatus.CONFLICT,
+            "한 사용자가 OWNER로 보유할 수 있는 조직은 최대 10개입니다."
     );
 
     private final String code;

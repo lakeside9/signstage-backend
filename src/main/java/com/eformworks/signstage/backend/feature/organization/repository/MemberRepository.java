@@ -22,4 +22,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
     long countByOrganizationIdAndRoleAndStatus(Long organizationId, MemberRole role, MemberStatus status);
 
     long countByOrganizationIdAndStatus(Long organizationId, MemberStatus status);
+
+    /** 보유 조직 개수 제한(최대 10개, organization-creation-approval-review.md 7.3절)에 쓴다. */
+    long countByUserIdAndRoleAndStatus(Long userId, MemberRole role, MemberStatus status);
 }
