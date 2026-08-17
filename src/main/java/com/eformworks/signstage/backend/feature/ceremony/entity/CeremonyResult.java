@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -59,6 +60,12 @@ public class CeremonyResult extends BaseEntity {
     @Column(nullable = false, length = 64)
     private String checksum;
 
+    @Column(name = "is_verified", nullable = false)
+    private Boolean isVerified;
+
+    @Column(name = "verification_at")
+    private LocalDateTime verificationAt;
+
     @Builder
     private CeremonyResult(
             CeremonyEvent ceremonyEvent,
@@ -78,5 +85,15 @@ public class CeremonyResult extends BaseEntity {
         this.storedFilename = storedFilename;
         this.fileSize = fileSize;
         this.checksum = checksum;
+        this.isVerified = false;
+    }
+
+    /**
+     * 위변조 검증 성공 시 호출한다. "몇 번 검증됐는지"가 아니라 "마지막으로 언제 검증됐는지"만
+     * 남긴다(재검증 포함, 매번 최신 시각으로 갱신).
+     */
+    public void markVerified() {
+        this.isVerified = true;
+        this.verificationAt = LocalDateTime.now();
     }
 }
