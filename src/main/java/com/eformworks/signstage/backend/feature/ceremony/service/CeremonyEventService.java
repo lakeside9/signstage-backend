@@ -3,9 +3,13 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
+import com.eformworks.signstage.backend.feature.ceremony.entity.ActorType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventAction;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventLog;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventOptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
@@ -15,6 +19,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
@@ -50,6 +55,7 @@ public class CeremonyEventService {
     private final CeremonyTemplateRepository ceremonyTemplateRepository;
     private final TemplateRepository templateRepository;
     private final TemplateFieldRepository templateFieldRepository;
+    private final CeremonyEventLogRepository ceremonyEventLogRepository;
     private final CeremonyService ceremonyService;
 
     @Transactional
@@ -255,8 +261,97 @@ public class CeremonyEventService {
         }
 
         event.transitionToStarted();
+        recordLog(event, ActorType.ADMIN, currentUserId, CeremonyEventAction.START_EVENT);
 
         return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
+    }
+
+    /**
+     * STARTED→FINISHED 전이. 관리자가 명시적으로 호출한다(마지막 서명 완료 시 자동 전이하지
+     * 않는다 — 레거시와 동일). READY 검증에서 이미 계산한 필수 서명자 집합 전원이
+     * SIGNATURE_COMPLETE 로그를 가져야 한다.
+     */
+    @Transactional
+    public CeremonyEventDto.Response.CeremonyEventSummary transitionToFinish(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        if (event.getStatus() != CeremonyEventStatus.STARTED) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_INVALID_STATUS_TRANSITION);
+        }
+
+        validateFinishConditions(event);
+
+        event.transitionToFinished();
+        recordLog(event, ActorType.ADMIN, currentUserId, CeremonyEventAction.FINISH_EVENT);
+
+        return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
+    }
+
+    public List<CeremonyEventLogDto.Response.CeremonyEventLogSummary> findEventLogs(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        findEventInCeremonyOrThrow(ceremonyId, eventId);
+        return ceremonyEventLogRepository.findAllByCeremonyEventId(eventId).stream()
+                .map(this::toLogSummary)
+                .toList();
+    }
+
+    private void validateFinishConditions(CeremonyEvent event) {
+        List<CeremonyTemplate> contractMappings = ceremonyTemplateRepository
+                .findAllByCeremonyEventIdAndDocumentRole(event.getId(), TemplateDocumentRole.CONTRACT);
+        List<CeremonyTemplate> exhibitionMappings = ceremonyTemplateRepository
+                .findAllByCeremonyEventIdAndDocumentRole(event.getId(), TemplateDocumentRole.EXHIBITION);
+
+        Set<Long> requiredSignerIds = new HashSet<>(collectRequiredSignerIds(contractMappings));
+        requiredSignerIds.addAll(collectRequiredSignerIds(exhibitionMappings));
+        requiredSignerIds.remove(null);
+
+        for (Long signerId : requiredSignerIds) {
+            boolean completed = ceremonyEventLogRepository.existsByCeremonyEventIdAndActorTypeAndActorIdAndEventAction(
+                    event.getId(), ActorType.SIGNER, signerId, CeremonyEventAction.SIGNATURE_COMPLETE
+            );
+            if (!completed) {
+                throw new ApplicationException(CeremonyErrorCode.EVENT_FINISH_CONDITION_NOT_MET);
+            }
+        }
+    }
+
+    private void recordLog(CeremonyEvent event, ActorType actorType, Long actorId, CeremonyEventAction action) {
+        ceremonyEventLogRepository.save(
+                CeremonyEventLog.builder()
+                        .ceremonyEvent(event)
+                        .actorType(actorType)
+                        .actorId(actorId)
+                        .eventAction(action)
+                        .build()
+        );
+    }
+
+    private CeremonyEventLogDto.Response.CeremonyEventLogSummary toLogSummary(CeremonyEventLog log) {
+        return new CeremonyEventLogDto.Response.CeremonyEventLogSummary(
+                log.getId(),
+                log.getCeremonyEvent().getId(),
+                log.getActorType().name(),
+                log.getActorId(),
+                log.getEventAction().name(),
+                log.getMessage(),
+                log.getCreatedAt()
+        );
     }
 
     private void checkEventNotLocked(CeremonyEvent event) {

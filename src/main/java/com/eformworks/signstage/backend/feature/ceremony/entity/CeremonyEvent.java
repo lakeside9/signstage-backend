@@ -101,4 +101,9 @@ public class CeremonyEvent extends BaseEntity {
         this.status = CeremonyEventStatus.STARTED;
         this.actualStartAt = LocalDateTime.now();
     }
+
+    public void transitionToFinished() {
+        this.status = CeremonyEventStatus.FINISHED;
+        this.actualEndAt = LocalDateTime.now();
+    }
 }

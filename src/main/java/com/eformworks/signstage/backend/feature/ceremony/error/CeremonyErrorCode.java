@@ -87,6 +87,33 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_EVENT_SIGNER_MAPPING_MISMATCH",
             HttpStatus.CONFLICT,
             "CONTRACT와 EXHIBITION 문서의 필수 서명자 구성이 일치하지 않습니다."
+    ),
+    PORTAL_EVENT_NOT_FOUND("CEREMONY_PORTAL_EVENT_NOT_FOUND", HttpStatus.NOT_FOUND, "행사 접속 정보를 찾을 수 없습니다."),
+    PORTAL_SIGNER_NOT_FOUND("CEREMONY_PORTAL_SIGNER_NOT_FOUND", HttpStatus.NOT_FOUND, "서명자 접속 정보를 찾을 수 없습니다."),
+    PORTAL_FIELD_NOT_MAPPED_TO_EVENT(
+            "CEREMONY_PORTAL_FIELD_NOT_MAPPED_TO_EVENT",
+            HttpStatus.CONFLICT,
+            "이 서명란의 문서는 이 하위 행사에 매핑돼 있지 않습니다."
+    ),
+    PORTAL_FIELD_NOT_ASSIGNED_TO_SIGNER(
+            "CEREMONY_PORTAL_FIELD_NOT_ASSIGNED_TO_SIGNER",
+            HttpStatus.FORBIDDEN,
+            "본인에게 배정되지 않은 서명란입니다."
+    ),
+    SIGNATURE_INCOMPLETE(
+            "CEREMONY_SIGNATURE_INCOMPLETE",
+            HttpStatus.CONFLICT,
+            "아직 서명하지 않은 필수 서명란이 있습니다."
+    ),
+    SIGNATURE_ALREADY_COMPLETED(
+            "CEREMONY_SIGNATURE_ALREADY_COMPLETED",
+            HttpStatus.CONFLICT,
+            "이미 서명을 완료했습니다."
+    ),
+    EVENT_FINISH_CONDITION_NOT_MET(
+            "CEREMONY_EVENT_FINISH_CONDITION_NOT_MET",
+            HttpStatus.CONFLICT,
+            "아직 서명을 완료하지 않은 서명자가 있습니다."
     );
 
     private final String code;

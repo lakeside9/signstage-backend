@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyEventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -142,6 +143,36 @@ public class CeremonyEventController {
     ) {
         CeremonyEventDto.Response.CeremonyEventSummary response = ceremonyEventService
                 .transitionToStart(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "FINISH 전이",
+            description = "STARTED 상태여야 하고, 필수 서명자 전원이 서명을 완료해야 한다. "
+                    + "관리자가 명시적으로 호출한다(자동 전이 없음)."
+    )
+    @PostMapping("/{eventId}/finish")
+    public ApiResponse<CeremonyEventDto.Response.CeremonyEventSummary> transitionToFinish(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        CeremonyEventDto.Response.CeremonyEventSummary response = ceremonyEventService
+                .transitionToFinish(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "감사 로그 조회")
+    @GetMapping("/{eventId}/logs")
+    public ApiResponse<List<CeremonyEventLogDto.Response.CeremonyEventLogSummary>> findEventLogs(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        List<CeremonyEventLogDto.Response.CeremonyEventLogSummary> response = ceremonyEventService
+                .findEventLogs(organizationId, ceremonyId, eventId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }
