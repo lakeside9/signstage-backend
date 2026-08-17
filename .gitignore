@@ -36,3 +36,6 @@ out/
 ### VS Code ###
 .vscode/
 .DS_Store
+
+### 로컬 파일 저장소 (storage.local.base-dir 기본값) ###
+/data/uploads/

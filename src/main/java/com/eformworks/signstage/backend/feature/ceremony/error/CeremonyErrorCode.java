@@ -34,6 +34,24 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_OPTIONAL_FEATURE_ALREADY_PURCHASED",
             HttpStatus.CONFLICT,
             "이미 구매한 선택옵션입니다."
+    ),
+    SIGNER_NOT_FOUND("CEREMONY_SIGNER_NOT_FOUND", HttpStatus.NOT_FOUND, "서명자를 찾을 수 없습니다."),
+    CEREMONY_SIGNER_LIMIT_EXCEEDED(
+            "CEREMONY_SIGNER_LIMIT_EXCEEDED",
+            HttpStatus.CONFLICT,
+            "서명자 등록 한도를 초과했습니다. 플랜을 올리거나 용량을 추가구매해주세요."
+    ),
+    TEMPLATE_NOT_FOUND("CEREMONY_TEMPLATE_NOT_FOUND", HttpStatus.NOT_FOUND, "템플릿을 찾을 수 없습니다."),
+    CEREMONY_TEMPLATE_LIMIT_EXCEEDED(
+            "CEREMONY_TEMPLATE_LIMIT_EXCEEDED",
+            HttpStatus.CONFLICT,
+            "템플릿 업로드 한도를 초과했습니다. 플랜을 올리거나 용량을 추가구매해주세요."
+    ),
+    TEMPLATE_FIELD_NOT_FOUND("CEREMONY_TEMPLATE_FIELD_NOT_FOUND", HttpStatus.NOT_FOUND, "서명란을 찾을 수 없습니다."),
+    TEMPLATE_STORAGE_FAILED(
+            "CEREMONY_TEMPLATE_STORAGE_FAILED",
+            HttpStatus.BAD_GATEWAY,
+            "문서 파일 저장에 실패했습니다."
     );
 
     private final String code;
