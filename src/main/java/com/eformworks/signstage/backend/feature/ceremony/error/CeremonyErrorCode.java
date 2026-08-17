@@ -4,9 +4,9 @@ import com.eformworks.signstage.backend.core.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 
 /**
- * feature.ceremony 업무 오류. 1라운드(과금 카탈로그)에서 실제로 쓰는 코드만 우선 정의하고,
- * 2라운드(Ceremony/CeremonyEvent 본체)에서 CEREMONY_NOT_FOUND, CEREMONY_PLAN_REQUIRED,
- * CEREMONY_*_LIMIT_EXCEEDED 등을 추가한다.
+ * feature.ceremony 업무 오류. 1라운드(과금 카탈로그) 코드에 2라운드(Ceremony/CeremonyEvent 본체)
+ * 코드를 추가했다. 접근 권한 실패는 별도 코드를 두지 않고 기존 MemberService 관례대로
+ * {@code CommonErrorCode.ACCESS_DENIED}를 재사용한다.
  */
 public enum CeremonyErrorCode implements ErrorCode {
 
@@ -17,6 +17,23 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_OPTIONAL_FEATURE_CODE_DUPLICATE",
             HttpStatus.CONFLICT,
             "이미 등록된 선택옵션 코드입니다."
+    ),
+    CEREMONY_NOT_FOUND("CEREMONY_NOT_FOUND", HttpStatus.NOT_FOUND, "행사를 찾을 수 없습니다."),
+    CEREMONY_EVENT_NOT_FOUND("CEREMONY_EVENT_NOT_FOUND", HttpStatus.NOT_FOUND, "하위 행사를 찾을 수 없습니다."),
+    CEREMONY_EVENT_LIMIT_EXCEEDED(
+            "CEREMONY_EVENT_LIMIT_EXCEEDED",
+            HttpStatus.CONFLICT,
+            "이 유형의 하위 행사 생성 한도를 초과했습니다. 플랜을 올리거나 용량을 추가구매해주세요."
+    ),
+    OPTIONAL_FEATURE_NOT_PURCHASED(
+            "CEREMONY_OPTIONAL_FEATURE_NOT_PURCHASED",
+            HttpStatus.CONFLICT,
+            "구매하지 않은 선택옵션은 하위 행사에 적용할 수 없습니다."
+    ),
+    OPTIONAL_FEATURE_ALREADY_PURCHASED(
+            "CEREMONY_OPTIONAL_FEATURE_ALREADY_PURCHASED",
+            HttpStatus.CONFLICT,
+            "이미 구매한 선택옵션입니다."
     );
 
     private final String code;
