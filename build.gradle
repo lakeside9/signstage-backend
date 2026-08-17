@@ -34,6 +34,10 @@ dependencies {
 	implementation 'org.flywaydb:flyway-mysql'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 
+	// 행사 결과 PDF 생성(서명 획을 원본 템플릿 위에 직접 그림) — 외부 바이너리 없는 순수 Java
+	// 라이브러리(ceremony-feature-migration-review.md §5.1 결정).
+	implementation 'org.apache.pdfbox:pdfbox:3.0.3'
+
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'

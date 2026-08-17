@@ -416,7 +416,8 @@ public class CeremonyEventService {
         );
     }
 
-    private CeremonyEvent findEventInCeremonyOrThrow(Long ceremonyId, Long eventId) {
+    /** {@link CeremonyResultService}도 같은 패키지에서 공유한다(4라운드부터의 관례). */
+    CeremonyEvent findEventInCeremonyOrThrow(Long ceremonyId, Long eventId) {
         CeremonyEvent event = ceremonyEventRepository.findById(eventId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_NOT_FOUND));
         if (!event.getCeremony().getId().equals(ceremonyId)) {

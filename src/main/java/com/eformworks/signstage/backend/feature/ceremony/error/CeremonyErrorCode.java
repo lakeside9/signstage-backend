@@ -114,6 +114,22 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_EVENT_FINISH_CONDITION_NOT_MET",
             HttpStatus.CONFLICT,
             "아직 서명을 완료하지 않은 서명자가 있습니다."
+    ),
+    EVENT_NOT_FINISHED(
+            "CEREMONY_EVENT_NOT_FINISHED",
+            HttpStatus.CONFLICT,
+            "종료(FINISHED)된 하위 행사만 결과물을 생성할 수 있습니다."
+    ),
+    RESULTS_ALREADY_GENERATED(
+            "CEREMONY_RESULTS_ALREADY_GENERATED",
+            HttpStatus.CONFLICT,
+            "이미 결과물이 생성됐습니다."
+    ),
+    RESULT_NOT_FOUND("CEREMONY_RESULT_NOT_FOUND", HttpStatus.NOT_FOUND, "결과물을 찾을 수 없습니다."),
+    RESULT_GENERATION_FAILED(
+            "CEREMONY_RESULT_GENERATION_FAILED",
+            HttpStatus.BAD_GATEWAY,
+            "결과물 생성에 실패했습니다."
     );
 
     private final String code;

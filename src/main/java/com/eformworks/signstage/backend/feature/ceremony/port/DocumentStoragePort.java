@@ -13,5 +13,8 @@ public interface DocumentStoragePort {
 
     StoredFile store(String directory, MultipartFile file);
 
+    /** 업로드 파일이 아니라 메모리상의 바이트 배열(예: 생성된 결과 PDF)을 저장할 때 쓴다. */
+    StoredFile store(String directory, String filename, byte[] content);
+
     Resource loadAsResource(String storageKey);
 }

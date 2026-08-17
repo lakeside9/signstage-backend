@@ -48,6 +48,25 @@ public class LocalDiskStorageAdapter implements DocumentStoragePort {
     }
 
     @Override
+    public StoredFile store(String directory, String filename, byte[] content) {
+        try {
+            String extension = resolveExtension(filename);
+            String storedFilename = UUID.randomUUID() + extension;
+
+            Path targetDir = baseDir.resolve(directory);
+            Files.createDirectories(targetDir);
+
+            Path targetPath = targetDir.resolve(storedFilename);
+            Files.write(targetPath, content);
+
+            String storageKey = directory + "/" + storedFilename;
+            return new StoredFile(storageKey, storedFilename);
+        } catch (IOException e) {
+            throw new StorageException("파일 저장에 실패했습니다.", e);
+        }
+    }
+
+    @Override
     public Resource loadAsResource(String storageKey) {
         Path path = baseDir.resolve(storageKey);
         if (!Files.exists(path)) {

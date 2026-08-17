@@ -5,12 +5,20 @@ import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyResultDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyEventService;
+import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyResultService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CeremonyEventController {
 
     private final CeremonyEventService ceremonyEventService;
+    private final CeremonyResultService ceremonyResultService;
     private final TraceIdProvider traceIdProvider;
 
     @Operation(summary = "하위 행사 생성", description = "eventType은 TEST/MAIN. 플랜 한도를 넘으면 거부된다.")
@@ -174,5 +183,57 @@ public class CeremonyEventController {
         List<CeremonyEventLogDto.Response.CeremonyEventLogSummary> response = ceremonyEventService
                 .findEventLogs(organizationId, ceremonyId, eventId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "결과물 생성",
+            description = "FINISHED 상태여야 하고, 이벤트당 1회만 생성할 수 있다. "
+                    + "매핑된 CONTRACT/EXHIBITION 문서마다 서명이 그려진 PDF를 만든다."
+    )
+    @PostMapping("/{eventId}/results")
+    public ApiResponse<List<CeremonyResultDto.Response.CeremonyResultSummary>> generateResults(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        List<CeremonyResultDto.Response.CeremonyResultSummary> response = ceremonyResultService
+                .generateResults(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "결과물 목록 조회")
+    @GetMapping("/{eventId}/results")
+    public ApiResponse<List<CeremonyResultDto.Response.CeremonyResultSummary>> findResults(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        List<CeremonyResultDto.Response.CeremonyResultSummary> response = ceremonyResultService
+                .findResults(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "결과물 파일 다운로드",
+            description = "관리자 콘솔 전용 경로다(JWT+조직 소속 검증) — 서명자 포털용 다운로드는 없다."
+    )
+    @GetMapping("/{eventId}/results/{resultId}/file")
+    public ResponseEntity<Resource> downloadResultFile(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId,
+            @PathVariable Long resultId
+    ) {
+        CeremonyResultService.DownloadedResult downloaded = ceremonyResultService
+                .downloadResultFile(organizationId, ceremonyId, eventId, resultId, currentUser.userId());
+
+        String encodedFilename = URLEncoder.encode(downloaded.originalFilename(), StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedFilename)
+                .body(downloaded.resource());
     }
 }
