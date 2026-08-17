@@ -40,6 +40,7 @@ public class SignerPortalService {
     private final TemplateFieldRepository templateFieldRepository;
     private final StrokeDataRepository strokeDataRepository;
     private final CeremonyEventLogRepository ceremonyEventLogRepository;
+    private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
 
     public SignerPortalDto.Response.PortalContext retrievePortalContext(String eventAccessKey, String signerAccessKey) {
         PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
@@ -128,6 +129,10 @@ public class SignerPortalService {
                         .actorId(context.signer().getId())
                         .eventAction(CeremonyEventAction.SIGNATURE_COMPLETE)
                         .build()
+        );
+
+        ceremonyRealtimeNotifier.notifySignatureCompleted(
+                context.event().getId(), context.signer().getId(), context.signer().getName()
         );
     }
 

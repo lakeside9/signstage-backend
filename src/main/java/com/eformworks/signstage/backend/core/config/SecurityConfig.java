@@ -46,6 +46,9 @@ public class SecurityConfig {
                         // 접근하고, 짝이 맞는지는 서비스 레이어(SignerPortalService)가 매 요청 검증한다
                         // (signstage-docs business/ceremony-feature-migration-review.md 2.3/4.5절 결정).
                         .requestMatchers("/api/portal/**").permitAll()
+                        // WebSocket 핸드셰이크(HTTP Upgrade) 자체는 JWT를 요구하지 않는다 — 실제
+                        // 구독 인가는 STOMP SUBSCRIBE 단계에서 CeremonyTopicAuthInterceptor가 한다.
+                        .requestMatchers("/ws-signstage/**").permitAll()
                         // platform_role 보유자만 통과. 등급별 세부 권한(예: 회원 상태 변경은 PLATFORM_OPS 이상)은
                         // 서비스 레이어에서 CurrentUser.platformRole()로 한 번 더 검사한다
                         // (signstage-docs backend/signup-approval-implementation-plan.md 4.2절).

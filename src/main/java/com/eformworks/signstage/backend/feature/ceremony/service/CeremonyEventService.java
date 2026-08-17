@@ -56,6 +56,7 @@ public class CeremonyEventService {
     private final TemplateRepository templateRepository;
     private final TemplateFieldRepository templateFieldRepository;
     private final CeremonyEventLogRepository ceremonyEventLogRepository;
+    private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
     private final CeremonyService ceremonyService;
 
     @Transactional
@@ -239,6 +240,7 @@ public class CeremonyEventService {
 
         validateReadyConditions(event);
         event.transitionToReady();
+        ceremonyRealtimeNotifier.notifyStatusChanged(event.getId(), CeremonyEventStatus.DRAFT, CeremonyEventStatus.READY);
 
         return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
     }
@@ -262,6 +264,7 @@ public class CeremonyEventService {
 
         event.transitionToStarted();
         recordLog(event, ActorType.ADMIN, currentUserId, CeremonyEventAction.START_EVENT);
+        ceremonyRealtimeNotifier.notifyStatusChanged(event.getId(), CeremonyEventStatus.READY, CeremonyEventStatus.STARTED);
 
         return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
     }
@@ -291,6 +294,7 @@ public class CeremonyEventService {
 
         event.transitionToFinished();
         recordLog(event, ActorType.ADMIN, currentUserId, CeremonyEventAction.FINISH_EVENT);
+        ceremonyRealtimeNotifier.notifyStatusChanged(event.getId(), CeremonyEventStatus.STARTED, CeremonyEventStatus.FINISHED);
 
         return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
     }
