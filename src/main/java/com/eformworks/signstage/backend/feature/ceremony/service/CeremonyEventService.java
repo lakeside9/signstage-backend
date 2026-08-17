@@ -7,14 +7,24 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventOptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyTemplate;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -37,6 +47,9 @@ public class CeremonyEventService {
     private final CeremonyEventRepository ceremonyEventRepository;
     private final CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
     private final OptionalFeatureRepository optionalFeatureRepository;
+    private final CeremonyTemplateRepository ceremonyTemplateRepository;
+    private final TemplateRepository templateRepository;
+    private final TemplateFieldRepository templateFieldRepository;
     private final CeremonyService ceremonyService;
 
     @Transactional
@@ -141,6 +154,167 @@ public class CeremonyEventService {
         }
 
         return toSummary(event, requestedIds);
+    }
+
+    /**
+     * 문서를 이벤트에 매핑한다. {@code DRAFT}/{@code READY}일 때만 가능하다 — {@code STARTED}/
+     * {@code FINISHED}는 잠긴 상태다(레거시 LOCKED_EVENT_STATUSES).
+     */
+    @Transactional
+    public CeremonyEventDto.Response.CeremonyTemplateSummary mapTemplate(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId,
+            CeremonyEventDto.Request.MapTemplate request
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        checkEventNotLocked(event);
+
+        Template template = templateRepository.findById(request.getTemplateId())
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.TEMPLATE_NOT_FOUND));
+        if (!template.getCeremony().getId().equals(ceremonyId)) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_NOT_IN_CEREMONY);
+        }
+        if (ceremonyTemplateRepository.existsByCeremonyEventIdAndTemplateId(eventId, template.getId())) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_ALREADY_MAPPED);
+        }
+
+        CeremonyTemplate mapping = CeremonyTemplate.builder()
+                .ceremonyEvent(event)
+                .template(template)
+                .documentRole(parseDocumentRole(request.getDocumentRole()))
+                .build();
+        ceremonyTemplateRepository.save(mapping);
+
+        return toMappingSummary(mapping);
+    }
+
+    public List<CeremonyEventDto.Response.CeremonyTemplateSummary> findMappedTemplates(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        findEventInCeremonyOrThrow(ceremonyId, eventId);
+        return ceremonyTemplateRepository.findAllByCeremonyEventId(eventId).stream()
+                .map(this::toMappingSummary)
+                .toList();
+    }
+
+    /**
+     * DRAFT→READY 전이. 레거시 {@code validateEventConfiguration()}/
+     * {@code validateSignerMappingConsistency()}를 그대로 이식했다 — CONTRACT/EXHIBITION 각 1개
+     * 이상 매핑, 필수 필드 전원 서명자 배정, CONTRACT/EXHIBITION 필수 서명자 구성 일치.
+     */
+    @Transactional
+    public CeremonyEventDto.Response.CeremonyEventSummary transitionToReady(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        if (event.getStatus() != CeremonyEventStatus.DRAFT) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_INVALID_STATUS_TRANSITION);
+        }
+
+        validateReadyConditions(event);
+        event.transitionToReady();
+
+        return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
+    }
+
+    /** READY→STARTED 전이. 레거시에 READY 상태 확인 외 추가 조건이 없다. */
+    @Transactional
+    public CeremonyEventDto.Response.CeremonyEventSummary transitionToStart(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        if (event.getStatus() != CeremonyEventStatus.READY) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_INVALID_STATUS_TRANSITION);
+        }
+
+        event.transitionToStarted();
+
+        return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
+    }
+
+    private void checkEventNotLocked(CeremonyEvent event) {
+        if (event.getStatus() == CeremonyEventStatus.STARTED || event.getStatus() == CeremonyEventStatus.FINISHED) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_LOCKED);
+        }
+    }
+
+    private void validateReadyConditions(CeremonyEvent event) {
+        List<CeremonyTemplate> contractMappings = ceremonyTemplateRepository
+                .findAllByCeremonyEventIdAndDocumentRole(event.getId(), TemplateDocumentRole.CONTRACT);
+        List<CeremonyTemplate> exhibitionMappings = ceremonyTemplateRepository
+                .findAllByCeremonyEventIdAndDocumentRole(event.getId(), TemplateDocumentRole.EXHIBITION);
+        if (contractMappings.isEmpty() || exhibitionMappings.isEmpty()) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_MISSING_DOCUMENT_ROLE);
+        }
+
+        Set<Long> contractRequiredSignerIds = collectRequiredSignerIds(contractMappings);
+        Set<Long> exhibitionRequiredSignerIds = collectRequiredSignerIds(exhibitionMappings);
+
+        if (contractRequiredSignerIds.contains(null) || exhibitionRequiredSignerIds.contains(null)) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_REQUIRED_FIELD_UNASSIGNED);
+        }
+        if (!contractRequiredSignerIds.equals(exhibitionRequiredSignerIds)) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_SIGNER_MAPPING_MISMATCH);
+        }
+    }
+
+    /** 매핑된 템플릿들의 필수 서명란에 배정된 signerId 집합. 미배정 필드가 있으면 {@code null}을 포함한다. */
+    private Set<Long> collectRequiredSignerIds(List<CeremonyTemplate> mappings) {
+        Set<Long> signerIds = new HashSet<>();
+        for (CeremonyTemplate mapping : mappings) {
+            List<TemplateField> fields = templateFieldRepository.findAllByTemplateId(mapping.getTemplate().getId());
+            for (TemplateField field : fields) {
+                if (Boolean.TRUE.equals(field.getIsRequired())) {
+                    signerIds.add(field.getSigner() != null ? field.getSigner().getId() : null);
+                }
+            }
+        }
+        return signerIds;
+    }
+
+    private TemplateDocumentRole parseDocumentRole(String documentRole) {
+        try {
+            return TemplateDocumentRole.valueOf(documentRole);
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    private CeremonyEventDto.Response.CeremonyTemplateSummary toMappingSummary(CeremonyTemplate mapping) {
+        return new CeremonyEventDto.Response.CeremonyTemplateSummary(
+                mapping.getId(),
+                mapping.getCeremonyEvent().getId(),
+                mapping.getTemplate().getId(),
+                mapping.getDocumentRole().name(),
+                mapping.getCreatedAt()
+        );
     }
 
     private CeremonyEvent findEventInCeremonyOrThrow(Long ceremonyId, Long eventId) {

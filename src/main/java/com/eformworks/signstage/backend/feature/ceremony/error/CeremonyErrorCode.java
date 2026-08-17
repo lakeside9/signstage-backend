@@ -52,6 +52,41 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_TEMPLATE_STORAGE_FAILED",
             HttpStatus.BAD_GATEWAY,
             "문서 파일 저장에 실패했습니다."
+    ),
+    TEMPLATE_NOT_IN_CEREMONY(
+            "CEREMONY_TEMPLATE_NOT_IN_CEREMONY",
+            HttpStatus.CONFLICT,
+            "이 행사에 속하지 않은 템플릿은 매핑할 수 없습니다."
+    ),
+    TEMPLATE_ALREADY_MAPPED(
+            "CEREMONY_TEMPLATE_ALREADY_MAPPED",
+            HttpStatus.CONFLICT,
+            "이미 이 하위 행사에 매핑된 템플릿입니다."
+    ),
+    EVENT_LOCKED(
+            "CEREMONY_EVENT_LOCKED",
+            HttpStatus.CONFLICT,
+            "시작되었거나 종료된 하위 행사는 문서 매핑을 바꿀 수 없습니다."
+    ),
+    EVENT_INVALID_STATUS_TRANSITION(
+            "CEREMONY_EVENT_INVALID_STATUS_TRANSITION",
+            HttpStatus.CONFLICT,
+            "지금 상태에서는 이 전이를 할 수 없습니다."
+    ),
+    EVENT_MISSING_DOCUMENT_ROLE(
+            "CEREMONY_EVENT_MISSING_DOCUMENT_ROLE",
+            HttpStatus.CONFLICT,
+            "CONTRACT/EXHIBITION 문서가 각각 1개 이상 매핑돼야 합니다."
+    ),
+    EVENT_REQUIRED_FIELD_UNASSIGNED(
+            "CEREMONY_EVENT_REQUIRED_FIELD_UNASSIGNED",
+            HttpStatus.CONFLICT,
+            "필수 서명란에 서명자가 배정되지 않았습니다."
+    ),
+    EVENT_SIGNER_MAPPING_MISMATCH(
+            "CEREMONY_EVENT_SIGNER_MAPPING_MISMATCH",
+            HttpStatus.CONFLICT,
+            "CONTRACT와 EXHIBITION 문서의 필수 서명자 구성이 일치하지 않습니다."
     );
 
     private final String code;

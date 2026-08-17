@@ -91,4 +91,14 @@ public class CeremonyEvent extends BaseEntity {
         this.accessKey = accessKey;
         this.description = description;
     }
+
+    /** 조건 검증은 서비스(CeremonyEventService)가 하고, 이 메서드는 상태만 바꾼다. */
+    public void transitionToReady() {
+        this.status = CeremonyEventStatus.READY;
+    }
+
+    public void transitionToStarted() {
+        this.status = CeremonyEventStatus.STARTED;
+        this.actualStartAt = LocalDateTime.now();
+    }
 }

@@ -87,4 +87,61 @@ public class CeremonyEventController {
                 .updateOptionalFeatures(organizationId, ceremonyId, eventId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
+
+    @Operation(summary = "문서 매핑", description = "DRAFT/READY일 때만 가능하다. STARTED/FINISHED는 잠긴 상태다.")
+    @PostMapping("/{eventId}/templates")
+    public ApiResponse<CeremonyEventDto.Response.CeremonyTemplateSummary> mapTemplate(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId,
+            @Valid @RequestBody CeremonyEventDto.Request.MapTemplate request
+    ) {
+        CeremonyEventDto.Response.CeremonyTemplateSummary response = ceremonyEventService
+                .mapTemplate(organizationId, ceremonyId, eventId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "매핑된 문서 목록 조회")
+    @GetMapping("/{eventId}/templates")
+    public ApiResponse<List<CeremonyEventDto.Response.CeremonyTemplateSummary>> findMappedTemplates(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        List<CeremonyEventDto.Response.CeremonyTemplateSummary> response = ceremonyEventService
+                .findMappedTemplates(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "READY 전이",
+            description = "CONTRACT/EXHIBITION 각 1개 이상 매핑, 필수 서명란 전원 배정, "
+                    + "CONTRACT/EXHIBITION 필수 서명자 구성 일치가 조건이다."
+    )
+    @PostMapping("/{eventId}/ready")
+    public ApiResponse<CeremonyEventDto.Response.CeremonyEventSummary> transitionToReady(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        CeremonyEventDto.Response.CeremonyEventSummary response = ceremonyEventService
+                .transitionToReady(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "START 전이", description = "READY 상태여야 한다.")
+    @PostMapping("/{eventId}/start")
+    public ApiResponse<CeremonyEventDto.Response.CeremonyEventSummary> transitionToStart(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        CeremonyEventDto.Response.CeremonyEventSummary response = ceremonyEventService
+                .transitionToStart(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
 }

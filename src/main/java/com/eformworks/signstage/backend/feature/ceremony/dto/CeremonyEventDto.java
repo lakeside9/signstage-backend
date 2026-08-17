@@ -51,6 +51,20 @@ public final class CeremonyEventDto {
             @NotNull
             private List<Long> optionalFeatureIds;
         }
+
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class MapTemplate {
+
+            @NotNull
+            private Long templateId;
+
+            /** CONTRACT / EXHIBITION. */
+            @NotBlank
+            private String documentRole;
+        }
     }
 
     public static final class Response {
@@ -75,6 +89,17 @@ public final class CeremonyEventDto {
             private final String accessKey;
             private final String description;
             private final List<Long> optionalFeatureIds;
+            private final LocalDateTime createdAt;
+        }
+
+        @Getter
+        @AllArgsConstructor
+        public static class CeremonyTemplateSummary {
+
+            private final Long id;
+            private final Long ceremonyEventId;
+            private final Long templateId;
+            private final String documentRole;
             private final LocalDateTime createdAt;
         }
     }
