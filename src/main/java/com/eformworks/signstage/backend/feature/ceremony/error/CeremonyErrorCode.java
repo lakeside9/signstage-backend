@@ -130,6 +130,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_RESULT_GENERATION_FAILED",
             HttpStatus.BAD_GATEWAY,
             "결과물 생성에 실패했습니다."
+    ),
+    EVENT_NOT_IN_PROGRESS(
+            "CEREMONY_EVENT_NOT_IN_PROGRESS",
+            HttpStatus.CONFLICT,
+            "서명 진행 중(STARTED)인 하위 행사에서만 가능합니다."
     );
 
     private final String code;

@@ -34,6 +34,20 @@ public class CeremonyRealtimeNotifier {
         ));
     }
 
+    public void notifySignatureCleared(Long eventId, Long signerId, Long templateFieldId) {
+        send(eventId, "SIGNATURE_CLEARED", Map.of(
+                "signerId", signerId,
+                "templateFieldId", templateFieldId
+        ));
+    }
+
+    public void notifySignatureReplaced(Long eventId, Long signerId, String signerName) {
+        send(eventId, "SIGNATURE_REPLACED", Map.of(
+                "signerId", signerId,
+                "signerName", signerName
+        ));
+    }
+
     private void send(Long eventId, String type, Map<String, Object> payload) {
         RealtimeEventDto event = new RealtimeEventDto(type, eventId, LocalDateTime.now(), payload);
         messagingTemplate.convertAndSend("/topic/events/" + eventId + "/state", event);

@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.ActorType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventAction;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventLog;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyTemplate;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
 import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
@@ -116,9 +117,7 @@ public class SignerPortalService {
             throw new ApplicationException(CeremonyErrorCode.SIGNATURE_INCOMPLETE);
         }
 
-        if (ceremonyEventLogRepository.existsByCeremonyEventIdAndActorTypeAndActorIdAndEventAction(
-                context.event().getId(), ActorType.SIGNER, context.signer().getId(), CeremonyEventAction.SIGNATURE_COMPLETE
-        )) {
+        if (isSignerSignatureComplete(context.event().getId(), context.signer().getId())) {
             throw new ApplicationException(CeremonyErrorCode.SIGNATURE_ALREADY_COMPLETED);
         }
 
@@ -128,12 +127,71 @@ public class SignerPortalService {
                         .actorType(ActorType.SIGNER)
                         .actorId(context.signer().getId())
                         .eventAction(CeremonyEventAction.SIGNATURE_COMPLETE)
+                        .targetSigner(context.signer())
                         .build()
         );
 
         ceremonyRealtimeNotifier.notifySignatureCompleted(
                 context.event().getId(), context.signer().getId(), context.signer().getName()
         );
+    }
+
+    /**
+     * SIGNATURE_CLEAR — 서명 진행 중(STARTED)이고 아직 완료 전인 서명자가 자기 서명란 하나를
+     * 지우고 다시 그린다. 이미 완료한 뒤에는 self-serve로 지울 수 없다 — 관리자의 REPLACE
+     * ({@code CeremonyEventService.replaceSignerSignature})를 거쳐야 한다.
+     */
+    @Transactional
+    public void clearFieldStroke(String eventAccessKey, String signerAccessKey, Long templateFieldId) {
+        PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
+
+        TemplateField field = templateFieldRepository.findById(templateFieldId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.TEMPLATE_FIELD_NOT_FOUND));
+        checkFieldMappedToEvent(context.event(), field);
+        if (field.getSigner() == null || !field.getSigner().getId().equals(context.signer().getId())) {
+            throw new ApplicationException(CeremonyErrorCode.PORTAL_FIELD_NOT_ASSIGNED_TO_SIGNER);
+        }
+
+        if (context.event().getStatus() != CeremonyEventStatus.STARTED) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_NOT_IN_PROGRESS);
+        }
+        if (isSignerSignatureComplete(context.event().getId(), context.signer().getId())) {
+            throw new ApplicationException(CeremonyErrorCode.SIGNATURE_ALREADY_COMPLETED);
+        }
+
+        strokeDataRepository.deleteAllByCeremonyEventIdAndSignerIdAndTemplateFieldId(
+                context.event().getId(), context.signer().getId(), field.getId()
+        );
+
+        ceremonyEventLogRepository.save(
+                CeremonyEventLog.builder()
+                        .ceremonyEvent(context.event())
+                        .actorType(ActorType.SIGNER)
+                        .actorId(context.signer().getId())
+                        .eventAction(CeremonyEventAction.SIGNATURE_CLEAR)
+                        .targetSigner(context.signer())
+                        .message("templateFieldId=" + field.getId())
+                        .build()
+        );
+
+        ceremonyRealtimeNotifier.notifySignatureCleared(context.event().getId(), context.signer().getId(), field.getId());
+    }
+
+    /**
+     * {@code SIGNATURE_COMPLETE}/{@code SIGNATURE_REPLACE} 중 이 서명자의 가장 최근 로그가
+     * {@code SIGNATURE_COMPLETE}인지로 "지금 완료 상태인가"를 판정한다 — 단순
+     * {@code existsBy(...SIGNATURE_COMPLETE)}는 REPLACE 이후에도 예전 완료 로그가 남아있어
+     * "완료 취소"를 반영하지 못한다(레거시가 못 고친 결함).
+     */
+    private boolean isSignerSignatureComplete(Long eventId, Long signerId) {
+        return ceremonyEventLogRepository
+                .findTopByCeremonyEventIdAndTargetSignerIdAndEventActionInOrderByCreatedAtDesc(
+                        eventId,
+                        signerId,
+                        List.of(CeremonyEventAction.SIGNATURE_COMPLETE, CeremonyEventAction.SIGNATURE_REPLACE)
+                )
+                .map(log -> log.getEventAction() == CeremonyEventAction.SIGNATURE_COMPLETE)
+                .orElse(false);
     }
 
     private PortalContext resolvePortalContext(String eventAccessKey, String signerAccessKey) {

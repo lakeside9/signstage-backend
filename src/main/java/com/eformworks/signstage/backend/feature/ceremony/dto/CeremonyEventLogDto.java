@@ -23,6 +23,7 @@ public final class CeremonyEventLogDto {
             private final String actorType;
             private final Long actorId;
             private final String eventAction;
+            private final Long targetSignerId;
             private final String message;
             private final LocalDateTime createdAt;
         }

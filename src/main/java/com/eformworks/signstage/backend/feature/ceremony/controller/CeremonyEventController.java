@@ -172,6 +172,22 @@ public class CeremonyEventController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
+    @Operation(
+            summary = "서명 재요청(REPLACE)",
+            description = "관리자가 한 서명자의 이 이벤트 서명 진행 상황 전체를 초기화한다(완료 여부와 무관). STARTED 상태여야 한다."
+    )
+    @PostMapping("/{eventId}/signers/{signerId}/replace-signature")
+    public ApiResponse<Void> replaceSignerSignature(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId,
+            @PathVariable Long signerId
+    ) {
+        ceremonyEventService.replaceSignerSignature(organizationId, ceremonyId, eventId, signerId, currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
     @Operation(summary = "감사 로그 조회")
     @GetMapping("/{eventId}/logs")
     public ApiResponse<List<CeremonyEventLogDto.Response.CeremonyEventLogSummary>> findEventLogs(

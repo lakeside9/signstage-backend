@@ -15,6 +15,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventSta
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyTemplate;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
@@ -24,6 +25,8 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEven
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.SignerRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
@@ -56,6 +59,8 @@ public class CeremonyEventService {
     private final TemplateRepository templateRepository;
     private final TemplateFieldRepository templateFieldRepository;
     private final CeremonyEventLogRepository ceremonyEventLogRepository;
+    private final StrokeDataRepository strokeDataRepository;
+    private final SignerRepository signerRepository;
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
     private final CeremonyService ceremonyService;
 
@@ -299,6 +304,51 @@ public class CeremonyEventService {
         return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
     }
 
+    /**
+     * SIGNATURE_REPLACE — 관리자가 한 서명자의 이 이벤트 서명 진행 상황 전체(배정된 모든
+     * 서명란의 스트로크)를 초기화한다. STARTED 상태에서만 가능하고, 완료 여부와 무관하게
+     * 항상 허용한다("다시 서명하게 하기"가 목적). 스트로크가 지워지면 배정된 모든 필드의
+     * hasStroke가 자동으로 false가 되므로 completeSignature의 필수 필드 체크는 그대로 쓴다.
+     */
+    @Transactional
+    public void replaceSignerSignature(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long signerId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        if (event.getStatus() != CeremonyEventStatus.STARTED) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_NOT_IN_PROGRESS);
+        }
+
+        Signer signer = signerRepository.findById(signerId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.SIGNER_NOT_FOUND));
+        if (!signer.getCeremony().getId().equals(ceremonyId)) {
+            throw new ApplicationException(CeremonyErrorCode.SIGNER_NOT_FOUND);
+        }
+
+        strokeDataRepository.deleteAllByCeremonyEventIdAndSignerId(eventId, signerId);
+
+        ceremonyEventLogRepository.save(
+                CeremonyEventLog.builder()
+                        .ceremonyEvent(event)
+                        .actorType(ActorType.ADMIN)
+                        .actorId(currentUserId)
+                        .eventAction(CeremonyEventAction.SIGNATURE_REPLACE)
+                        .targetSigner(signer)
+                        .message("signerId=" + signerId)
+                        .build()
+        );
+
+        ceremonyRealtimeNotifier.notifySignatureReplaced(eventId, signerId, signer.getName());
+    }
+
     public List<CeremonyEventLogDto.Response.CeremonyEventLogSummary> findEventLogs(
             Long organizationId,
             Long ceremonyId,
@@ -326,13 +376,27 @@ public class CeremonyEventService {
         requiredSignerIds.remove(null);
 
         for (Long signerId : requiredSignerIds) {
-            boolean completed = ceremonyEventLogRepository.existsByCeremonyEventIdAndActorTypeAndActorIdAndEventAction(
-                    event.getId(), ActorType.SIGNER, signerId, CeremonyEventAction.SIGNATURE_COMPLETE
-            );
-            if (!completed) {
+            if (!isSignerSignatureComplete(event.getId(), signerId)) {
                 throw new ApplicationException(CeremonyErrorCode.EVENT_FINISH_CONDITION_NOT_MET);
             }
         }
+    }
+
+    /**
+     * {@code SIGNATURE_COMPLETE}/{@code SIGNATURE_REPLACE} 중 이 서명자의 가장 최근 로그가
+     * {@code SIGNATURE_COMPLETE}인지로 "지금 완료 상태인가"를 판정한다 — {@link
+     * SignerPortalService}의 같은 이름 메서드와 동일한 판정이지만, 두 서비스가 서로 다른
+     * 인가 모델(조직 스코프 vs JWT-free 포털)이라 헬퍼를 공유하지 않는 기존 관례를 따른다.
+     */
+    private boolean isSignerSignatureComplete(Long eventId, Long signerId) {
+        return ceremonyEventLogRepository
+                .findTopByCeremonyEventIdAndTargetSignerIdAndEventActionInOrderByCreatedAtDesc(
+                        eventId,
+                        signerId,
+                        List.of(CeremonyEventAction.SIGNATURE_COMPLETE, CeremonyEventAction.SIGNATURE_REPLACE)
+                )
+                .map(log -> log.getEventAction() == CeremonyEventAction.SIGNATURE_COMPLETE)
+                .orElse(false);
     }
 
     private void recordLog(CeremonyEvent event, ActorType actorType, Long actorId, CeremonyEventAction action) {
@@ -353,6 +417,7 @@ public class CeremonyEventService {
                 log.getActorType().name(),
                 log.getActorId(),
                 log.getEventAction().name(),
+                log.getTargetSigner() != null ? log.getTargetSigner().getId() : null,
                 log.getMessage(),
                 log.getCreatedAt()
         );

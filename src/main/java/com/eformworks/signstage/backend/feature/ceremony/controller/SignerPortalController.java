@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -63,6 +64,22 @@ public class SignerPortalController {
             @PathVariable String signerAccessKey
     ) {
         signerPortalService.completeSignature(eventAccessKey, signerAccessKey);
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "서명란 지우기(재서명)",
+            description = "행사 진행 중(STARTED)이고 아직 완료 전인 서명자만 자기 서명란을 지우고 다시 그릴 수 있다. "
+                    + "완료 후에는 관리자의 재서명 요청(REPLACE)을 거쳐야 한다."
+    )
+    @SecurityRequirements(value = {})
+    @DeleteMapping("/fields/{templateFieldId}/strokes")
+    public ApiResponse<Void> clearFieldStroke(
+            @PathVariable String eventAccessKey,
+            @PathVariable String signerAccessKey,
+            @PathVariable Long templateFieldId
+    ) {
+        signerPortalService.clearFieldStroke(eventAccessKey, signerAccessKey, templateFieldId);
         return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 }

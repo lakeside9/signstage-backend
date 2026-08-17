@@ -18,11 +18,16 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 하위 행사 append-only 감사 로그. 서명 완료 판정("이 서명자가 이 이벤트에서
- * SIGNATURE_COMPLETE 로그를 가졌는가")의 유일한 근거다. 변경 메서드가 없다 — 한 번 쓰면
- * 끝이다. {@code actorId}는 FK가 아니라 순수 컬럼이다 — {@code actorType}에 따라
+ * 하위 행사 append-only 감사 로그. 서명 완료 판정("이 서명자의 SIGNATURE_COMPLETE/
+ * SIGNATURE_REPLACE 중 가장 최근 로그가 어느 쪽인가")의 유일한 근거다. 변경 메서드가 없다 —
+ * 한 번 쓰면 끝이다. {@code actorId}는 FK가 아니라 순수 컬럼이다 — {@code actorType}에 따라
  * {@code User.id}(ADMIN) 또는 {@code Signer.id}(SIGNER) 중 하나를 가리키는 다형적
  * 참조라 단일 FK로 표현할 수 없다.
+ *
+ * <p>{@code targetSigner}는 actor와 별개다 — SIGNATURE_REPLACE는 관리자가 실행하므로
+ * actor는 그 관리자를 가리켜야 감사 기록이 정확하지만, "어느 서명자의 서명 상태가 바뀌었나"는
+ * 항상 알아야 한다. SIGNATURE_COMPLETE/CLEAR/REPLACE 셋 다 이 필드를 채워, 서명자 상태
+ * 조회가 actor 폴리모피즘에 기대지 않게 한다.
  */
 @Entity
 @Table(name = "ceremony_event_logs")
@@ -49,6 +54,10 @@ public class CeremonyEventLog extends BaseEntity {
     @Column(name = "event_action", nullable = false, length = 30)
     private CeremonyEventAction eventAction;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_signer_id")
+    private Signer targetSigner;
+
     @Column(length = 1000)
     private String message;
 
@@ -68,6 +77,7 @@ public class CeremonyEventLog extends BaseEntity {
             ActorType actorType,
             Long actorId,
             CeremonyEventAction eventAction,
+            Signer targetSigner,
             String message,
             String ipAddress,
             String userAgent,
@@ -77,6 +87,7 @@ public class CeremonyEventLog extends BaseEntity {
         this.actorType = actorType;
         this.actorId = actorId;
         this.eventAction = eventAction;
+        this.targetSigner = targetSigner;
         this.message = message;
         this.ipAddress = ipAddress;
         this.userAgent = userAgent;

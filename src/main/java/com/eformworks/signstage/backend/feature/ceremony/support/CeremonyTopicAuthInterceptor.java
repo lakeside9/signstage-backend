@@ -1,5 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.support;
 
+import com.eformworks.signstage.backend.core.config.RemoteAddressHandshakeInterceptor;
+import com.eformworks.signstage.backend.core.web.RateLimiter;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import java.util.regex.Matcher;
@@ -31,6 +33,7 @@ public class CeremonyTopicAuthInterceptor implements ChannelInterceptor {
     private static final String ACCESS_KEY_HEADER = "eventAccessKey";
 
     private final CeremonyEventRepository ceremonyEventRepository;
+    private final RateLimiter rateLimiter;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -43,6 +46,15 @@ public class CeremonyTopicAuthInterceptor implements ChannelInterceptor {
         Matcher matcher = destination != null ? EVENT_STATE_TOPIC_PATTERN.matcher(destination) : null;
         if (matcher == null || !matcher.matches()) {
             return message;
+        }
+
+        // accessKey 짐작 시도는 SUBSCRIBE 반복이 주 경로라, 키 일치 검사보다 먼저 IP 기준으로
+        // 막는다(핸드셰이크 IP는 RemoteAddressHandshakeInterceptor가 세션에 넣어둔다).
+        Object remoteAddr = accessor.getSessionAttributes() != null
+                ? accessor.getSessionAttributes().get(RemoteAddressHandshakeInterceptor.REMOTE_ADDR_ATTRIBUTE)
+                : null;
+        if (remoteAddr != null && !rateLimiter.tryAcquire(remoteAddr.toString())) {
+            throw new MessagingException("요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
         }
 
         Long eventId = Long.valueOf(matcher.group(1));
