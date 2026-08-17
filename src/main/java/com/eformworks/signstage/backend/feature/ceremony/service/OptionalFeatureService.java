@@ -1,0 +1,92 @@
+package com.eformworks.signstage.backend.feature.ceremony.service;
+
+import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
+import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
+import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import java.util.List;
+import java.util.Set;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 선택옵션 카탈로그(서명확대/폭죽/화상참석 등). signstage-docs
+ * business/ceremony-billing-options-review.md 4.6/4.7절 참고. 등록은 플랫폼 관리자 전용,
+ * 조회는 인증된 사용자 누구나 가능하다(행사 생성 화면에서 옵션을 고를 때 필요).
+ */
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class OptionalFeatureService {
+
+    private static final Set<String> CATALOG_MANAGE_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
+
+    private final OptionalFeatureRepository optionalFeatureRepository;
+
+    @Transactional
+    public OptionalFeatureDto.Response.OptionalFeatureSummary createOptionalFeature(
+            String actingPlatformRole,
+            OptionalFeatureDto.Request.CreateOptionalFeature request
+    ) {
+        if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+
+        OptionalFeatureCode code = parseCode(request.getCode());
+        if (optionalFeatureRepository.existsByCode(code)) {
+            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_CODE_DUPLICATE);
+        }
+
+        OptionalFeature optionalFeature = OptionalFeature.builder()
+                .code(code)
+                .name(request.getName())
+                .supplyPrice(request.getSupplyPrice())
+                .salePrice(request.getSalePrice())
+                .discountType(parseDiscountType(request.getDiscountType()))
+                .discountValue(request.getDiscountValue())
+                .build();
+        optionalFeatureRepository.save(optionalFeature);
+
+        return toSummary(optionalFeature);
+    }
+
+    public List<OptionalFeatureDto.Response.OptionalFeatureSummary> findOptionalFeatures() {
+        return optionalFeatureRepository.findAll().stream()
+                .map(this::toSummary)
+                .toList();
+    }
+
+    private OptionalFeatureCode parseCode(String code) {
+        try {
+            return OptionalFeatureCode.valueOf(code);
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    private DiscountType parseDiscountType(String discountType) {
+        try {
+            return DiscountType.valueOf(discountType);
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    private OptionalFeatureDto.Response.OptionalFeatureSummary toSummary(OptionalFeature optionalFeature) {
+        return new OptionalFeatureDto.Response.OptionalFeatureSummary(
+                optionalFeature.getId(),
+                optionalFeature.getCode().name(),
+                optionalFeature.getName(),
+                optionalFeature.getSupplyPrice(),
+                optionalFeature.getSalePrice(),
+                optionalFeature.getDiscountType().name(),
+                optionalFeature.getDiscountValue(),
+                optionalFeature.getCreatedAt()
+        );
+    }
+}
