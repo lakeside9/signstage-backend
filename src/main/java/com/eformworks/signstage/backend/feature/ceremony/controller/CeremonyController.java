@@ -82,7 +82,8 @@ public class CeremonyController {
 
     @Operation(
             summary = "행사 정보 수정",
-            description = "이름/설명만 바꾼다. 플랜은 생성 시점에 고정이라 여기서 바꿀 수 없다. 완료된 행사는 수정할 수 없다."
+            description = "이름/설명, 주관 기관/부서, 담당자 정보를 바꾼다. 플랜은 생성 시점에 고정이라 여기서 바꿀 수 없다. "
+                    + "완료된 행사는 수정할 수 없다."
     )
     @PutMapping("/{ceremonyId}")
     public ApiResponse<CeremonyDto.Response.CeremonySummary> updateCeremony(

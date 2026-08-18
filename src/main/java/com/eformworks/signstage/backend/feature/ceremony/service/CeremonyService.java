@@ -144,7 +144,16 @@ public class CeremonyService {
         checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         checkCeremonyEditable(ceremony);
 
-        ceremony.updateInfo(request.getTitle(), request.getDescription());
+        ceremony.updateInfo(
+                request.getTitle(),
+                request.getDescription(),
+                request.getOrganizingInstitution(),
+                request.getOrganizingDepartment(),
+                request.getContactName(),
+                request.getContactTitle(),
+                request.getContactPhone(),
+                request.getContactEmail()
+        );
         return toSummary(ceremony);
     }
 
@@ -537,6 +546,12 @@ public class CeremonyService {
                 ceremony.getTitle(),
                 ceremony.getDescription(),
                 ceremony.getStatus().name(),
+                ceremony.getOrganizingInstitution(),
+                ceremony.getOrganizingDepartment(),
+                ceremony.getContactName(),
+                ceremony.getContactTitle(),
+                ceremony.getContactPhone(),
+                ceremony.getContactEmail(),
                 ceremony.getCreatedBy(),
                 ceremony.getCreatedAt()
         );

@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.ceremony.dto;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -34,7 +35,10 @@ public final class CeremonyDto {
             private String title;
         }
 
-        /** 행사 수정 화면에서 이름/설명을 바꿀 때 쓴다. 플랜은 여기서 바꾸지 않는다(생성 시점에 고정). */
+        /**
+         * 행사 수정 화면에서 기본 정보를 바꿀 때 쓴다. 플랜은 여기서 바꾸지 않는다(생성 시점에 고정).
+         * title 외에는 전부 선택 입력이다 — 빈 문자열/null 모두 "입력 없음"으로 저장한다.
+         */
         @Getter
         @Setter
         @NoArgsConstructor
@@ -44,8 +48,20 @@ public final class CeremonyDto {
             @NotBlank
             private String title;
 
-            /** 선택 입력 — 빈 문자열/null 모두 "설명 없음"으로 저장한다. */
             private String description;
+
+            private String organizingInstitution;
+
+            private String organizingDepartment;
+
+            private String contactName;
+
+            private String contactTitle;
+
+            private String contactPhone;
+
+            @Email
+            private String contactEmail;
         }
 
         @Getter
@@ -99,6 +115,12 @@ public final class CeremonyDto {
             private final String title;
             private final String description;
             private final String status;
+            private final String organizingInstitution;
+            private final String organizingDepartment;
+            private final String contactName;
+            private final String contactTitle;
+            private final String contactPhone;
+            private final String contactEmail;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }

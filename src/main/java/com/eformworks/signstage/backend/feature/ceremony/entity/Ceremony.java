@@ -60,6 +60,25 @@ public class Ceremony extends BaseEntity {
     @Column(nullable = false, length = 20)
     private CeremonyStatus status;
 
+    /** 아래 6개 필드는 전부 description과 같은 이유로 nullable이다(생성 시엔 안 받고 수정 화면에서만 채운다). */
+    @Column(name = "organizing_institution", length = 200)
+    private String organizingInstitution;
+
+    @Column(name = "organizing_department", length = 200)
+    private String organizingDepartment;
+
+    @Column(name = "contact_name", length = 100)
+    private String contactName;
+
+    @Column(name = "contact_title", length = 100)
+    private String contactTitle;
+
+    @Column(name = "contact_phone", length = 20)
+    private String contactPhone;
+
+    @Column(name = "contact_email", length = 255)
+    private String contactEmail;
+
     @Builder
     private Ceremony(Organization organization, BillingPlan billingPlan, String title) {
         this.organization = organization;
@@ -68,10 +87,28 @@ public class Ceremony extends BaseEntity {
         this.status = CeremonyStatus.IN_PROGRESS;
     }
 
-    /** 행사 수정 화면에서 이름/설명을 바꿀 때 쓴다. 플랜은 여기서 바꾸지 않는다(생성 시점에 고정). */
-    public void updateInfo(String title, String description) {
+    /**
+     * 행사 수정 화면에서 기본 정보를 바꿀 때 쓴다. 플랜은 여기서 바꾸지 않는다(생성 시점에 고정).
+     * 주관 기관/부서, 담당자 정보는 전부 선택 입력이라 null을 그대로 허용한다.
+     */
+    public void updateInfo(
+            String title,
+            String description,
+            String organizingInstitution,
+            String organizingDepartment,
+            String contactName,
+            String contactTitle,
+            String contactPhone,
+            String contactEmail
+    ) {
         this.title = title;
         this.description = description;
+        this.organizingInstitution = organizingInstitution;
+        this.organizingDepartment = organizingDepartment;
+        this.contactName = contactName;
+        this.contactTitle = contactTitle;
+        this.contactPhone = contactPhone;
+        this.contactEmail = contactEmail;
     }
 
     /**
