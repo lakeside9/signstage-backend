@@ -5,6 +5,7 @@ import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -157,6 +158,22 @@ public class CeremonyController {
     ) {
         List<CeremonyDto.Response.OptionalFeaturePurchaseSummary> response =
                 ceremonyService.findOptionalFeaturePurchases(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "적용 가능한 선택옵션 조회",
+            description = "이 행사가 실제로 하위 행사에 적용할 수 있는 선택옵션(플랜 포함분 + 승인된 추가구매)만 "
+                    + "필터링해 돌려준다. 하위 행사 등록/수정/상세 화면이 이 목록으로 체크박스를 채운다."
+    )
+    @GetMapping("/{ceremonyId}/available-optional-features")
+    public ApiResponse<List<OptionalFeatureDto.Response.OptionalFeatureSummary>> findAvailableOptionalFeatures(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        List<OptionalFeatureDto.Response.OptionalFeatureSummary> response =
+                ceremonyService.retrieveAvailableOptionalFeatures(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }

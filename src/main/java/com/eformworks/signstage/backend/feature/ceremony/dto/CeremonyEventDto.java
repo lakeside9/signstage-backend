@@ -39,6 +39,13 @@ public final class CeremonyEventDto {
             private LocalDateTime scheduledEndAt;
 
             private String description;
+
+            /**
+             * 등록 시점에 바로 적용할 선택옵션. null이면(필드 자체를 안 보내면) 아무것도
+             * 적용하지 않는다(기존 동작 유지) — 상세 화면의 "적용 선택옵션 저장"과 같은
+             * 검증(구매한 옵션의 부분집합)을 거친다.
+             */
+            private List<Long> optionalFeatureIds;
         }
 
         /** 이름/장소/일정/설명만 바꾼다. 구분(TEST/MAIN)은 한도 계산과 얽혀 있어 여기서 바꾸지 않는다. */
@@ -58,6 +65,12 @@ public final class CeremonyEventDto {
             private LocalDateTime scheduledEndAt;
 
             private String description;
+
+            /**
+             * 수정 시점에 함께 바꿀 선택옵션. null이면(필드 자체를 안 보내면) 기존 적용 목록을
+             * 그대로 둔다. 빈 리스트를 명시적으로 보내면 전부 해제한다.
+             */
+            private List<Long> optionalFeatureIds;
         }
 
         @Getter

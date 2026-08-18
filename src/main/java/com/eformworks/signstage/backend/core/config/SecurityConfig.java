@@ -46,6 +46,9 @@ public class SecurityConfig {
                         // 접근하고, 짝이 맞는지는 서비스 레이어(SignerPortalService)가 매 요청 검증한다
                         // (signstage-docs business/ceremony-feature-migration-review.md 2.3/4.5절 결정).
                         .requestMatchers("/api/portal/**").permitAll()
+                        // 공개 프로젝터 화면(전시용 화면)도 서명자 포털과 같은 이유로 JWT를 쓰지
+                        // 않는다 — eventAccessKey 소지만으로 접근한다(ProjectorService가 검증).
+                        .requestMatchers("/api/projector/**").permitAll()
                         // WebSocket 핸드셰이크(HTTP Upgrade) 자체는 JWT를 요구하지 않는다 — 실제
                         // 구독 인가는 STOMP SUBSCRIBE 단계에서 CeremonyTopicAuthInterceptor가 한다.
                         .requestMatchers("/ws-signstage/**").permitAll()

@@ -133,18 +133,7 @@ public class TemplateService {
         ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
-        try (PDDocument document = Loader.loadPDF(readTemplateBytes(template))) {
-            Float width = null;
-            Float height = null;
-            if (document.getNumberOfPages() > 0) {
-                PDRectangle mediaBox = document.getPage(0).getMediaBox();
-                width = mediaBox.getWidth();
-                height = mediaBox.getHeight();
-            }
-            return new TemplateDto.Response.TemplateInfo(document.getNumberOfPages(), width, height);
-        } catch (IOException e) {
-            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
-        }
+        return buildTemplateInfo(template);
     }
 
     /** 지정한 페이지를 PNG로 렌더링한다. scale이 클수록 더 선명하지만 응답이 커진다. */
@@ -161,6 +150,31 @@ public class TemplateService {
         ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        return renderPage(template, pageIndex, scale);
+    }
+
+    /**
+     * accessKey 기반 공개 경로(프로젝터)가 JWT+조직 소속 검사 없이 재사용하는 핵심 로직 —
+     * {@link ProjectorService}가 이미 조회해 둔 {@link Template}을 그대로 넘긴다. 두 public
+     * 메서드 위와 코드 복제 없이 로직 하나만 공유한다.
+     */
+    TemplateDto.Response.TemplateInfo buildTemplateInfo(Template template) {
+        try (PDDocument document = Loader.loadPDF(readTemplateBytes(template))) {
+            Float width = null;
+            Float height = null;
+            if (document.getNumberOfPages() > 0) {
+                PDRectangle mediaBox = document.getPage(0).getMediaBox();
+                width = mediaBox.getWidth();
+                height = mediaBox.getHeight();
+            }
+            return new TemplateDto.Response.TemplateInfo(document.getNumberOfPages(), width, height);
+        } catch (IOException e) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
+        }
+    }
+
+    /** {@link #buildTemplateInfo(Template)}와 같은 이유로 package-private. */
+    byte[] renderPage(Template template, int pageIndex, float scale) {
         try (PDDocument document = Loader.loadPDF(readTemplateBytes(template))) {
             if (pageIndex < 0 || pageIndex >= document.getNumberOfPages()) {
                 throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);

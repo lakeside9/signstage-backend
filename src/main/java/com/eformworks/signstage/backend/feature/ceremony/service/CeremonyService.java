@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
@@ -246,6 +247,39 @@ public class CeremonyService {
 
         return ceremonyOptionalFeaturePurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
                 .map(this::toOptionalFeatureSummary)
+                .toList();
+    }
+
+    /**
+     * 이 Ceremony가 하위 행사에 실제로 적용할 수 있는 선택옵션(플랜 포함분 + 승인된 추가구매)
+     * 카탈로그만 필터링해 돌려준다 — {@link #retrievePurchasedOptionalFeatureIds}와 같은 계산을
+     * 쓴다. 하위 행사 등록/수정/상세 세 화면이 전부 이 목록으로 체크박스를 채운다(구매 안 한
+     * 옵션을 보여줬다가 저장 시점에야 실패를 아는 예전 방식의 한계를 없앤다).
+     */
+    public List<OptionalFeatureDto.Response.OptionalFeatureSummary> retrieveAvailableOptionalFeatures(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        List<Long> availableIds = retrievePurchasedOptionalFeatureIds(ceremony);
+        if (availableIds.isEmpty()) {
+            return List.of();
+        }
+        return optionalFeatureRepository.findAllById(availableIds).stream()
+                .map(feature -> new OptionalFeatureDto.Response.OptionalFeatureSummary(
+                        feature.getId(),
+                        feature.getCode().name(),
+                        feature.getName(),
+                        feature.getSupplyPrice(),
+                        feature.getSalePrice(),
+                        feature.getDiscountType().name(),
+                        feature.getDiscountValue(),
+                        feature.getCreatedAt()
+                ))
                 .toList();
     }
 

@@ -24,6 +24,12 @@ public interface StrokeDataRepository extends JpaRepository<StrokeData, Long> {
             Long templateFieldId
     );
 
+    /**
+     * 행사제어/프로젝터 화면이 늦게 들어와도 이미 그려진 획을 캐치업하려고 쓴다 — 필드별
+     * 순서(strokeSeq)까지는 상관없고, 화면이 필드별로 다시 묶어 그린다.
+     */
+    List<StrokeData> findAllByCeremonyEventId(Long ceremonyEventId);
+
     /** SIGNATURE_CLEAR — 서명자 본인이 서명란 하나를 지우고 다시 그릴 때. */
     void deleteAllByCeremonyEventIdAndSignerIdAndTemplateFieldId(
             Long ceremonyEventId,

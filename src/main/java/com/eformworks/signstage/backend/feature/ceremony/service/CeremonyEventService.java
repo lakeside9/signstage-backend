@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.ActorType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
@@ -16,6 +17,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventTyp
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyTemplate;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
+import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
@@ -100,7 +102,13 @@ public class CeremonyEventService {
                 .build();
         ceremonyEventRepository.save(event);
 
-        return toSummary(event, List.of());
+        // 등록 화면에서도 적용 선택옵션을 바로 켤 수 있게 한다 — null이면(요청에 필드 자체가
+        // 없으면) 예전처럼 아무것도 적용하지 않는다.
+        List<Long> appliedIds = request.getOptionalFeatureIds() == null
+                ? List.of()
+                : applyOptionalFeatures(ceremony, event, request.getOptionalFeatureIds());
+
+        return toSummary(event, appliedIds);
     }
 
     public List<CeremonyEventDto.Response.CeremonyEventSummary> findCeremonyEvents(
@@ -155,7 +163,14 @@ public class CeremonyEventService {
                 request.getName(), request.getVenue(), request.getScheduledStartAt(), request.getScheduledEndAt(),
                 request.getDescription()
         );
-        return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
+
+        // 수정 화면에서도 적용 선택옵션을 바꿀 수 있게 한다 — null이면(요청에 필드 자체가
+        // 없으면) 기존 적용 목록을 그대로 둔다. 빈 리스트를 명시적으로 보내면 전부 해제한다.
+        List<Long> optionalFeatureIds = request.getOptionalFeatureIds() == null
+                ? retrieveAppliedOptionalFeatureIds(event)
+                : applyOptionalFeatures(ceremony, event, request.getOptionalFeatureIds());
+
+        return toSummary(event, optionalFeatureIds);
     }
 
     /**
@@ -199,6 +214,18 @@ public class CeremonyEventService {
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
 
         List<Long> requestedIds = request.getOptionalFeatureIds() == null ? List.of() : request.getOptionalFeatureIds();
+        List<Long> appliedIds = applyOptionalFeatures(ceremony, event, requestedIds);
+
+        return toSummary(event, appliedIds);
+    }
+
+    /**
+     * 이벤트에 적용할 선택옵션을 전체 교체한다. 요청 목록은 그 Ceremony가 "구매한"(플랜 포함분+
+     * 승인된 추가구매) 집합의 부분집합이어야 한다(4.11절) — 아니면
+     * {@code OPTIONAL_FEATURE_NOT_PURCHASED}. 등록/수정/적용옵션 교체 세 경로가 전부 이
+     * 검증·저장 로직을 공유한다.
+     */
+    private List<Long> applyOptionalFeatures(Ceremony ceremony, CeremonyEvent event, List<Long> requestedIds) {
         List<Long> purchasedIds = ceremonyService.retrievePurchasedOptionalFeatureIds(ceremony);
         if (!purchasedIds.containsAll(requestedIds)) {
             throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_PURCHASED);
@@ -208,14 +235,14 @@ public class CeremonyEventService {
                 ? List.of()
                 : optionalFeatureRepository.findAllByIdIn(requestedIds);
 
-        ceremonyEventOptionalFeatureRepository.deleteAllByCeremonyEventId(eventId);
+        ceremonyEventOptionalFeatureRepository.deleteAllByCeremonyEventId(event.getId());
         for (OptionalFeature feature : features) {
             ceremonyEventOptionalFeatureRepository.save(
                     CeremonyEventOptionalFeature.builder().ceremonyEvent(event).optionalFeature(feature).build()
             );
         }
 
-        return toSummary(event, requestedIds);
+        return requestedIds;
     }
 
     /**
@@ -418,6 +445,38 @@ public class CeremonyEventService {
         return ceremonyEventLogRepository.findAllByCeremonyEventId(eventId).stream()
                 .map(this::toLogSummary)
                 .toList();
+    }
+
+    /**
+     * 행사제어 화면이 늦게 들어와도 이미 그려진 획을 캐치업하는 용도 — 실시간 브로드캐스트
+     * ({@code SIGNATURE_STROKE_SUBMITTED})는 그 시점 이후의 획만 잡아내므로, 화면 진입 시
+     * 이 목록을 먼저 불러온 뒤 WebSocket으로 이어그린다.
+     */
+    public List<StrokeDataDto.Response.StrokeSummary> findStrokes(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        findEventInCeremonyOrThrow(ceremonyId, eventId);
+        return strokeDataRepository.findAllByCeremonyEventId(eventId).stream()
+                .map(this::toStrokeSummary)
+                .toList();
+    }
+
+    private StrokeDataDto.Response.StrokeSummary toStrokeSummary(StrokeData stroke) {
+        return new StrokeDataDto.Response.StrokeSummary(
+                stroke.getId(),
+                stroke.getSigner().getId(),
+                stroke.getTemplateField().getId(),
+                stroke.getStrokeSeq(),
+                stroke.getRawData(),
+                stroke.getCreatedAt()
+        );
     }
 
     private void validateFinishConditions(CeremonyEvent event) {

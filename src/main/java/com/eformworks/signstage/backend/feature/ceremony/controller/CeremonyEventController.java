@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyResultDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyEventService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyResultService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -262,6 +263,23 @@ public class CeremonyEventController {
     ) {
         List<CeremonyResultDto.Response.CeremonyResultSummary> response = ceremonyResultService
                 .findResults(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "실시간 스트로크 캐치업 조회",
+            description = "행사제어 화면이 늦게 들어와도 이미 그려진 획을 이어서 볼 수 있게 한다. "
+                    + "그 이후의 획은 WebSocket(SIGNATURE_STROKE_SUBMITTED)으로 이어받는다."
+    )
+    @GetMapping("/{eventId}/strokes")
+    public ApiResponse<List<StrokeDataDto.Response.StrokeSummary>> findStrokes(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        List<StrokeDataDto.Response.StrokeSummary> response = ceremonyEventService
+                .findStrokes(organizationId, ceremonyId, eventId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

@@ -95,6 +95,10 @@ public class SignerPortalService {
                 .build();
         strokeDataRepository.save(stroke);
 
+        ceremonyRealtimeNotifier.notifyStrokeSubmitted(
+                context.event().getId(), context.signer().getId(), field.getId(), stroke.getStrokeSeq(), stroke.getRawData()
+        );
+
         return new SignerPortalDto.Response.StrokeSubmitted(
                 stroke.getId(), field.getId(), stroke.getStrokeSeq(), stroke.getCreatedAt()
         );
