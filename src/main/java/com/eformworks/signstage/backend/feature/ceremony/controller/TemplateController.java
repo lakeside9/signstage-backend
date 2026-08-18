@@ -85,6 +85,50 @@ public class TemplateController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
+    @Operation(summary = "문서 양식 페이지 정보 조회", description = "총 페이지 수, 첫 페이지 크기(pt)를 반환한다.")
+    @GetMapping("/{templateId}/info")
+    public ApiResponse<TemplateDto.Response.TemplateInfo> retrieveTemplateInfo(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long templateId
+    ) {
+        TemplateDto.Response.TemplateInfo response =
+                templateService.retrieveTemplateInfo(organizationId, ceremonyId, templateId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "문서 양식 페이지 이미지 렌더링", description = "지정한 페이지를 PNG로 렌더링해 돌려준다.")
+    @GetMapping("/{templateId}/pages/{pageIndex}")
+    public ResponseEntity<byte[]> renderTemplatePage(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long templateId,
+            @PathVariable int pageIndex,
+            @RequestParam(defaultValue = "1.5") float scale
+    ) {
+        byte[] png = templateService
+                .renderTemplatePage(organizationId, ceremonyId, templateId, currentUser.userId(), pageIndex, scale);
+        return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(png);
+    }
+
+    @Operation(
+            summary = "문서 양식 설정 완료",
+            description = "서명란이 1개 이상이어야 한다. 완료되면 이후 서명란을 더 이상 바꿀 수 없다(되돌릴 수 없음)."
+    )
+    @PostMapping("/{templateId}/complete")
+    public ApiResponse<TemplateDto.Response.TemplateSummary> completeTemplate(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long templateId
+    ) {
+        TemplateDto.Response.TemplateSummary response =
+                templateService.completeTemplate(organizationId, ceremonyId, templateId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
     @Operation(
             summary = "문서 양식 수정",
             description = "제목/문서유형만 바꾼다. PDF 파일 자체는 여기서 바꾸지 않는다(서명란 좌표가 깨지기 때문)."

@@ -93,6 +93,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "이미 하위 행사에 매핑된 문서 양식은 삭제할 수 없습니다."
     ),
+    TEMPLATE_LOCKED(
+            "CEREMONY_TEMPLATE_LOCKED",
+            HttpStatus.CONFLICT,
+            "설정 완료된 문서 양식은 서명란을 수정할 수 없습니다."
+    ),
     EVENT_LOCKED(
             "CEREMONY_EVENT_LOCKED",
             HttpStatus.CONFLICT,

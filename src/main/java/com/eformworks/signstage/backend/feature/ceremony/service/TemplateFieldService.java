@@ -1,22 +1,27 @@
 package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.TemplateFieldDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 페이지 내 서명란 좌표(TemplateField). 필드 수는 과금 대상이 아니라 한도 검사가 없다.
+ * 설정 완료(COMPLETED)된 문서 양식은 서명란을 더 이상 바꿀 수 없다({@link CeremonyErrorCode#TEMPLATE_LOCKED}).
  */
 @Service
 @RequiredArgsConstructor
@@ -42,6 +47,7 @@ public class TemplateFieldService {
         ceremonyService.checkCeremonyEditable(ceremony);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        checkNotLocked(template);
         Signer signer = request.getSignerId() == null
                 ? null
                 : signerService.findSignerInCeremonyOrThrow(ceremonyId, request.getSignerId());
@@ -64,6 +70,66 @@ public class TemplateFieldService {
         templateFieldRepository.save(field);
 
         return toSummary(field);
+    }
+
+    /**
+     * 서명란 배치 화면의 "저장" — 항상 현재 전체 필드 배열을 통째로 받는다(diff 없음). 기존
+     * 필드를 전부 지우고 받은 배열로 다시 채운다(legacy TemplateService.setFields와 같은 규약
+     * — signstage-docs 참고용 legacy 소스 feature/template/service/TemplateService.java:198).
+     */
+    @Transactional
+    public List<TemplateFieldDto.Response.TemplateFieldSummary> setFields(
+            Long organizationId,
+            Long ceremonyId,
+            Long templateId,
+            Long currentUserId,
+            TemplateFieldDto.Request.SetFields request
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        checkNotLocked(template);
+
+        List<TemplateFieldDto.Request.CreateTemplateField> requestedFields = request.getFields();
+        Set<Integer> fieldIndexes = new HashSet<>();
+        for (TemplateFieldDto.Request.CreateTemplateField field : requestedFields) {
+            if (!fieldIndexes.add(field.getFieldIndex())) {
+                throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+            }
+        }
+
+        templateFieldRepository.deleteAllByTemplateId(templateId);
+        List<TemplateField> saved = requestedFields.stream()
+                .map(field -> TemplateField.builder()
+                        .template(template)
+                        .signer(field.getSignerId() == null
+                                ? null
+                                : signerService.findSignerInCeremonyOrThrow(ceremonyId, field.getSignerId()))
+                        .fieldKey(field.getFieldKey())
+                        .pageIndex(field.getPageIndex())
+                        .fieldIndex(field.getFieldIndex())
+                        .fieldName(field.getFieldName())
+                        .roleCode(field.getRoleCode())
+                        .signOrder(field.getSignOrder())
+                        .isRequired(field.getIsRequired())
+                        .xRatio(field.getXRatio())
+                        .yRatio(field.getYRatio())
+                        .widthRatio(field.getWidthRatio())
+                        .heightRatio(field.getHeightRatio())
+                        .build())
+                .toList();
+        templateFieldRepository.saveAll(saved);
+
+        return saved.stream().map(this::toSummary).toList();
+    }
+
+    private void checkNotLocked(Template template) {
+        if (template.getStatus() == TemplateStatus.COMPLETED) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_LOCKED);
+        }
     }
 
     public List<TemplateFieldDto.Response.TemplateFieldSummary> findTemplateFields(

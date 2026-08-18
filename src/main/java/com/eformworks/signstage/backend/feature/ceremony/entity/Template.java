@@ -83,4 +83,12 @@ public class Template extends BaseEntity {
         this.title = title;
         this.documentRole = documentRole;
     }
+
+    /**
+     * 서명란 배치 화면의 "설정 완료" — 이후로는 서명란을 더 이상 바꿀 수 없다(TemplateService/
+     * TemplateFieldService가 COMPLETED 상태를 확인해 막는다). 되돌리는 API는 없다.
+     */
+    public void complete() {
+        this.status = TemplateStatus.COMPLETED;
+    }
 }

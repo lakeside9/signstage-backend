@@ -14,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,6 +40,24 @@ public class TemplateFieldController {
     ) {
         TemplateFieldDto.Response.TemplateFieldSummary response = templateFieldService
                 .createTemplateField(organizationId, ceremonyId, templateId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "서명란 일괄 저장",
+            description = "현재 전체 서명란 배열을 통째로 보낸다(diff 없음) — 기존 서명란을 전부 지우고 다시 채운다. "
+                    + "설정 완료(COMPLETED)된 문서 양식은 호출할 수 없다."
+    )
+    @PutMapping
+    public ApiResponse<List<TemplateFieldDto.Response.TemplateFieldSummary>> setTemplateFields(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long templateId,
+            @Valid @RequestBody TemplateFieldDto.Request.SetFields request
+    ) {
+        List<TemplateFieldDto.Response.TemplateFieldSummary> response = templateFieldService
+                .setFields(organizationId, ceremonyId, templateId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

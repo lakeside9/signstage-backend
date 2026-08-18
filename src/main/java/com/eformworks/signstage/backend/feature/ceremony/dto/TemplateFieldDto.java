@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -57,6 +58,21 @@ public final class TemplateFieldDto {
 
             @NotNull
             private BigDecimal heightRatio;
+        }
+
+        /**
+         * 서명란 배치 화면의 "저장" — 항상 현재 전체 필드 배열을 통째로 보낸다(diff 없음).
+         * 서버도 기존 필드를 전부 지우고 이 배열로 다시 채운다(legacy TemplateService.setFields와
+         * 같은 규약).
+         */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class SetFields {
+
+            @NotNull
+            private List<CreateTemplateField> fields;
         }
     }
 

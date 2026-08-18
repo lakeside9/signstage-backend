@@ -55,5 +55,15 @@ public final class TemplateDto {
             private final long fieldCount;
             private final LocalDateTime createdAt;
         }
+
+        /** 서명란 배치 화면이 캔버스 크기를 잡는 데 쓴다(PDF 첫 페이지 크기 기준, pt 단위). */
+        @Getter
+        @AllArgsConstructor
+        public static class TemplateInfo {
+
+            private final int pageCount;
+            private final Float width;
+            private final Float height;
+        }
     }
 }

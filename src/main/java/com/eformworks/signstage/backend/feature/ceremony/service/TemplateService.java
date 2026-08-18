@@ -7,7 +7,6 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
-import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.model.StoredFile;
 import com.eformworks.signstage.backend.feature.ceremony.port.DocumentStoragePort;
@@ -16,10 +15,17 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFiel
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.integration.storage.common.error.StorageException;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import javax.imageio.ImageIO;
 import lombok.RequiredArgsConstructor;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,11 +35,12 @@ import org.springframework.web.multipart.MultipartFile;
  * 문서 양식(Template). {@code Ceremony} 직속이다(signstage-docs
  * business/ceremony-feature-migration-review.md 4.2절).
  *
- * <p>{@code status}는 DB에 저장된 값을 그대로 내려주지 않는다 — 서명란(TemplateField)이
- * 하나라도 있으면 COMPLETED("설정 완료"), 없으면 DRAFT("설정 필요")로 응답 조립 시점에
- * 매번 계산한다. 엔티티의 {@code status} 컬럼 자체는 항상 DRAFT로 남아 있고 아무 데서도
- * 읽지 않는다(예전에 "다음 라운드에 추가"라던 매핑 연동 COMPLETED 전환은 결국 만들어지지
- * 않았다) — 그래서 마이그레이션 없이 이 방식으로 재정의했다.
+ * <p>{@code status}는 엔티티에 저장된 값을 그대로 내려준다 — 서명란 배치 화면에서 "설정
+ * 완료"를 눌러야({@link #completeTemplate}) COMPLETED로 바뀐다({@link Template#complete()}).
+ * 완료되면 {@link TemplateFieldService}가 이후 서명란 변경을 막는다(읽기 전용). 한때 서명란
+ * 개수로 상태를 매번 계산하는 방식으로 바꿨었지만, 진짜 완료(잠금) 개념이 생기면서 원래
+ * 컬럼을 다시 쓰는 쪽으로 되돌렸다 — 컬럼은 처음부터 있었고 지금까지 항상 DRAFT였을 뿐이라
+ * 마이그레이션은 필요 없다.
  */
 @Service
 @RequiredArgsConstructor
@@ -108,6 +115,96 @@ public class TemplateService {
         ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         return toSummary(findTemplateInCeremonyOrThrow(ceremonyId, templateId));
+    }
+
+    /**
+     * PDF 페이지 수/첫 페이지 크기(pt) — 서명란 배치 화면이 캔버스 크기를 잡는 데 쓴다.
+     * PDFBox로 원본을 직접 읽는다({@link com.eformworks.signstage.backend.feature.ceremony.support.SignatureOverlayRenderer}와
+     * 같은 라이브러리, 새 의존성 아님).
+     */
+    public TemplateDto.Response.TemplateInfo retrieveTemplateInfo(
+            Long organizationId,
+            Long ceremonyId,
+            Long templateId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        try (PDDocument document = Loader.loadPDF(readTemplateBytes(template))) {
+            Float width = null;
+            Float height = null;
+            if (document.getNumberOfPages() > 0) {
+                PDRectangle mediaBox = document.getPage(0).getMediaBox();
+                width = mediaBox.getWidth();
+                height = mediaBox.getHeight();
+            }
+            return new TemplateDto.Response.TemplateInfo(document.getNumberOfPages(), width, height);
+        } catch (IOException e) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
+        }
+    }
+
+    /** 지정한 페이지를 PNG로 렌더링한다. scale이 클수록 더 선명하지만 응답이 커진다. */
+    public byte[] renderTemplatePage(
+            Long organizationId,
+            Long ceremonyId,
+            Long templateId,
+            Long currentUserId,
+            int pageIndex,
+            float scale
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        try (PDDocument document = Loader.loadPDF(readTemplateBytes(template))) {
+            if (pageIndex < 0 || pageIndex >= document.getNumberOfPages()) {
+                throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+            }
+            PDFRenderer pdfRenderer = new PDFRenderer(document);
+            BufferedImage image = pdfRenderer.renderImage(pageIndex, scale);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
+        }
+    }
+
+    private byte[] readTemplateBytes(Template template) {
+        try {
+            return documentStoragePort.loadAsResource(template.getStorageKey()).getContentAsByteArray();
+        } catch (StorageException | IOException e) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
+        }
+    }
+
+    /**
+     * 서명란 배치 화면의 "설정 완료" — 서명란이 1개 이상이어야 하고, 완료하면 이후
+     * TemplateFieldService가 이 템플릿의 서명란 변경을 막는다(되돌리는 API는 없다).
+     */
+    @Transactional
+    public TemplateDto.Response.TemplateSummary completeTemplate(
+            Long organizationId,
+            Long ceremonyId,
+            Long templateId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        if (templateFieldRepository.countByTemplateId(templateId) == 0) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+        template.complete();
+        return toSummary(template);
     }
 
     /** 제목/문서유형만 바꾼다. PDF 파일 자체는 여기서 바꾸지 않는다(서명란 좌표가 깨지기 때문). */
@@ -248,14 +345,13 @@ public class TemplateService {
 
     private TemplateDto.Response.TemplateSummary toSummary(Template template) {
         long fieldCount = templateFieldRepository.countByTemplateId(template.getId());
-        TemplateStatus status = fieldCount > 0 ? TemplateStatus.COMPLETED : TemplateStatus.DRAFT;
         return new TemplateDto.Response.TemplateSummary(
                 template.getId(),
                 template.getCeremony().getId(),
                 template.getTitle(),
                 template.getDocumentRole().name(),
                 template.getOriginalFilename(),
-                status.name(),
+                template.getStatus().name(),
                 fieldCount,
                 template.getCreatedAt()
         );
