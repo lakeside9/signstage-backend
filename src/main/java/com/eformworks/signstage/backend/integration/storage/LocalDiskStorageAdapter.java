@@ -75,6 +75,15 @@ public class LocalDiskStorageAdapter implements DocumentStoragePort {
         return new FileSystemResource(path);
     }
 
+    @Override
+    public void delete(String storageKey) {
+        try {
+            Files.deleteIfExists(baseDir.resolve(storageKey));
+        } catch (IOException e) {
+            throw new StorageException("파일 삭제에 실패했습니다.", e);
+        }
+    }
+
     private String resolveExtension(String originalFilename) {
         if (originalFilename == null) {
             return "";

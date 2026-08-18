@@ -83,6 +83,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "이미 이 하위 행사에 매핑된 템플릿입니다."
     ),
+    TEMPLATE_IN_USE(
+            "CEREMONY_TEMPLATE_IN_USE",
+            HttpStatus.CONFLICT,
+            "이미 하위 행사에 매핑된 문서 양식은 삭제할 수 없습니다."
+    ),
     EVENT_LOCKED(
             "CEREMONY_EVENT_LOCKED",
             HttpStatus.CONFLICT,

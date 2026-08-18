@@ -74,4 +74,13 @@ public class Template extends BaseEntity {
         this.storedFilename = storedFilename;
         this.status = TemplateStatus.DRAFT;
     }
+
+    /**
+     * 문서 양식 수정 화면에서 제목/문서유형만 바꿀 때 쓴다. PDF 파일 자체는 여기서 바꾸지
+     * 않는다 — 이미 찍어둔 서명란(TemplateField) 좌표가 파일이 바뀌면 깨지기 때문이다.
+     */
+    public void updateInfo(String title, TemplateDocumentRole documentRole) {
+        this.title = title;
+        this.documentRole = documentRole;
+    }
 }

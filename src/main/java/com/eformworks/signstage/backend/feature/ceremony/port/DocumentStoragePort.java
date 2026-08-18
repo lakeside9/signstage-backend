@@ -17,4 +17,7 @@ public interface DocumentStoragePort {
     StoredFile store(String directory, String filename, byte[] content);
 
     Resource loadAsResource(String storageKey);
+
+    /** 문서 양식 삭제 시 쓴다. 이미 없는 파일이어도 에러를 내지 않는다(삭제는 멱등이어야 한다). */
+    void delete(String storageKey);
 }

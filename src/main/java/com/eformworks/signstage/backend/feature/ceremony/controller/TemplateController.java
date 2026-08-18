@@ -7,6 +7,7 @@ import com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.TemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -16,9 +17,12 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -78,6 +82,54 @@ public class TemplateController {
     ) {
         TemplateDto.Response.TemplateSummary response =
                 templateService.retrieveTemplate(organizationId, ceremonyId, templateId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "문서 양식 수정",
+            description = "제목/문서유형만 바꾼다. PDF 파일 자체는 여기서 바꾸지 않는다(서명란 좌표가 깨지기 때문)."
+    )
+    @PutMapping("/{templateId}")
+    public ApiResponse<TemplateDto.Response.TemplateSummary> updateTemplate(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long templateId,
+            @Valid @RequestBody TemplateDto.Request.UpdateTemplate request
+    ) {
+        TemplateDto.Response.TemplateSummary response = templateService
+                .updateTemplate(organizationId, ceremonyId, templateId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "문서 양식 삭제",
+            description = "이미 하위 행사에 매핑된 문서 양식은 삭제할 수 없다."
+    )
+    @DeleteMapping("/{templateId}")
+    public ApiResponse<Void> deleteTemplate(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long templateId
+    ) {
+        templateService.deleteTemplate(organizationId, ceremonyId, templateId, currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "문서 양식 복제",
+            description = "원본 파일을 그대로 복사해 새 문서 양식을 만든다. 서명란은 복제하지 않는다."
+    )
+    @PostMapping("/{templateId}/duplicate")
+    public ApiResponse<TemplateDto.Response.TemplateSummary> duplicateTemplate(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long templateId
+    ) {
+        TemplateDto.Response.TemplateSummary response =
+                templateService.duplicateTemplate(organizationId, ceremonyId, templateId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

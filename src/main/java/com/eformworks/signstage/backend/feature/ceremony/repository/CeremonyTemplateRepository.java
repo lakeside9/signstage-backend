@@ -12,4 +12,7 @@ public interface CeremonyTemplateRepository extends JpaRepository<CeremonyTempla
     List<CeremonyTemplate> findAllByCeremonyEventIdAndDocumentRole(Long ceremonyEventId, TemplateDocumentRole documentRole);
 
     boolean existsByCeremonyEventIdAndTemplateId(Long ceremonyEventId, Long templateId);
+
+    /** 문서 양식 삭제 전 "이미 하위 행사에 매핑됐는지" 확인용. */
+    boolean existsByTemplateId(Long templateId);
 }

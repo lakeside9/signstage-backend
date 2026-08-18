@@ -1,16 +1,39 @@
 package com.eformworks.signstage.backend.feature.ceremony.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 업로드는 multipart(title/documentRole/file)라 별도 Request DTO 없이 컨트롤러에서
- * {@code @RequestParam}으로 받는다(파일 업로드 표준 패턴).
+ * {@code @RequestParam}으로 받는다(파일 업로드 표준 패턴). 수정은 JSON이라 별도 DTO를 둔다.
  */
 public final class TemplateDto {
 
     private TemplateDto() {
+    }
+
+    public static final class Request {
+
+        private Request() {
+        }
+
+        /** 제목/문서유형만 바꾼다. PDF 파일은 여기서 바꾸지 않는다(서명란 좌표가 깨지기 때문). */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateTemplate {
+
+            @NotBlank
+            private String title;
+
+            @NotBlank
+            private String documentRole;
+        }
     }
 
     public static final class Response {
@@ -28,6 +51,8 @@ public final class TemplateDto {
             private final String documentRole;
             private final String originalFilename;
             private final String status;
+            /** 서명란(TemplateField) 개수 — status 계산과 목록 화면 "서명란" 컬럼에 쓴다. */
+            private final long fieldCount;
             private final LocalDateTime createdAt;
         }
     }
