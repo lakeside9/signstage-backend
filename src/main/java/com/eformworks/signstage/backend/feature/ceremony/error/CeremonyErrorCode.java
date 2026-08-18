@@ -91,7 +91,7 @@ public enum CeremonyErrorCode implements ErrorCode {
     EVENT_LOCKED(
             "CEREMONY_EVENT_LOCKED",
             HttpStatus.CONFLICT,
-            "시작되었거나 종료된 하위 행사는 문서 매핑을 바꿀 수 없습니다."
+            "시작되었거나 종료된 하위 행사는 문서 매핑/기본 정보를 바꾸거나 삭제할 수 없습니다."
     ),
     EVENT_INVALID_STATUS_TRANSITION(
             "CEREMONY_EVENT_INVALID_STATUS_TRANSITION",

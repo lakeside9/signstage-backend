@@ -92,6 +92,18 @@ public class CeremonyEvent extends BaseEntity {
         this.description = description;
     }
 
+    /**
+     * 하위 행사 수정 화면에서 기본 정보를 바꿀 때 쓴다. 구분(eventType)은 한도 계산과 얽혀 있어
+     * 여기서 바꾸지 않는다(생성 시점에 고정).
+     */
+    public void updateInfo(String name, String venue, LocalDateTime scheduledStartAt, LocalDateTime scheduledEndAt, String description) {
+        this.name = name;
+        this.venue = venue;
+        this.scheduledStartAt = scheduledStartAt;
+        this.scheduledEndAt = scheduledEndAt;
+        this.description = description;
+    }
+
     /** 조건 검증은 서비스(CeremonyEventService)가 하고, 이 메서드는 상태만 바꾼다. */
     public void transitionToReady() {
         this.status = CeremonyEventStatus.READY;

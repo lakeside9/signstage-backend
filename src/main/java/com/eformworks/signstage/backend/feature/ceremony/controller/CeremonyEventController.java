@@ -20,6 +20,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -79,6 +80,39 @@ public class CeremonyEventController {
         CeremonyEventDto.Response.CeremonyEventSummary response = ceremonyEventService
                 .retrieveCeremonyEvent(organizationId, ceremonyId, eventId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "하위 행사 수정",
+            description = "이름/장소/일정/설명만 바꾼다. 구분(TEST/MAIN)은 여기서 바꿀 수 없다. "
+                    + "시작되었거나 종료된 하위 행사는 수정할 수 없다."
+    )
+    @PutMapping("/{eventId}")
+    public ApiResponse<CeremonyEventDto.Response.CeremonyEventSummary> updateCeremonyEvent(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId,
+            @Valid @RequestBody CeremonyEventDto.Request.UpdateCeremonyEvent request
+    ) {
+        CeremonyEventDto.Response.CeremonyEventSummary response = ceremonyEventService
+                .updateCeremonyEvent(organizationId, ceremonyId, eventId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "하위 행사 삭제",
+            description = "시작되었거나 종료된 하위 행사는 삭제할 수 없다."
+    )
+    @DeleteMapping("/{eventId}")
+    public ApiResponse<Void> deleteCeremonyEvent(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        ceremonyEventService.deleteCeremonyEvent(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 
     @Operation(

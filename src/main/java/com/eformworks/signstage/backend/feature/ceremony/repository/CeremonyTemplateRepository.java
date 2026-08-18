@@ -15,4 +15,7 @@ public interface CeremonyTemplateRepository extends JpaRepository<CeremonyTempla
 
     /** 문서 양식 삭제 전 "이미 하위 행사에 매핑됐는지" 확인용. */
     boolean existsByTemplateId(Long templateId);
+
+    /** 하위 행사 삭제 시 먼저 지운다 — CeremonyEvent 삭제 전 FK 정리. */
+    void deleteAllByCeremonyEventId(Long ceremonyEventId);
 }

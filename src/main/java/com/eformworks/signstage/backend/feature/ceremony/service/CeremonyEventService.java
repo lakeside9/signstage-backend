@@ -132,6 +132,54 @@ public class CeremonyEventService {
     }
 
     /**
+     * 이름/장소/일정/설명만 바꾼다. {@code STARTED}/{@code FINISHED}는 잠긴 상태라 바꿀 수 없다
+     * (문서 매핑과 같은 규칙 — {@link #checkEventNotLocked}).
+     */
+    @Transactional
+    public CeremonyEventDto.Response.CeremonyEventSummary updateCeremonyEvent(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId,
+            CeremonyEventDto.Request.UpdateCeremonyEvent request
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        checkEventNotLocked(event);
+
+        event.updateInfo(
+                request.getName(), request.getVenue(), request.getScheduledStartAt(), request.getScheduledEndAt(),
+                request.getDescription()
+        );
+        return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
+    }
+
+    /**
+     * {@code STARTED}/{@code FINISHED}는 잠긴 상태라 삭제할 수 없다 — 서명이 실제로 진행됐거나
+     * 끝난 이벤트를 지우면 결과물/로그와 정합이 깨진다. {@code DRAFT}/{@code READY}는 아직
+     * 서명이 시작되지 않아 매핑된 문서(ceremony_templates)/적용 선택옵션
+     * (ceremony_event_optional_features)만 정리하면 된다.
+     */
+    @Transactional
+    public void deleteCeremonyEvent(Long organizationId, Long ceremonyId, Long eventId, Long currentUserId) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        checkEventNotLocked(event);
+
+        ceremonyTemplateRepository.deleteAllByCeremonyEventId(eventId);
+        ceremonyEventOptionalFeatureRepository.deleteAllByCeremonyEventId(eventId);
+        ceremonyEventRepository.delete(event);
+    }
+
+    /**
      * 이벤트에 적용할 선택옵션을 전체 교체한다. 요청 목록은 그 Ceremony가 "구매한" 집합의
      * 부분집합이어야 한다(4.11절) — 아니면 {@code OPTIONAL_FEATURE_NOT_PURCHASED}.
      */
