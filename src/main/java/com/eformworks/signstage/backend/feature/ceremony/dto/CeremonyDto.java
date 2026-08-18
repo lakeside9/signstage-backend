@@ -114,6 +114,9 @@ public final class CeremonyDto {
             private final BigDecimal purchasedSalePrice;
             private final String purchasedDiscountType;
             private final BigDecimal purchasedDiscountValue;
+            private final String status;
+            private final String rejectionReason;
+            private final LocalDateTime reviewedAt;
             private final LocalDateTime createdAt;
         }
 
@@ -127,6 +130,9 @@ public final class CeremonyDto {
             private final BigDecimal purchasedSalePrice;
             private final String purchasedDiscountType;
             private final BigDecimal purchasedDiscountValue;
+            private final String status;
+            private final String rejectionReason;
+            private final LocalDateTime reviewedAt;
             private final LocalDateTime createdAt;
         }
     }

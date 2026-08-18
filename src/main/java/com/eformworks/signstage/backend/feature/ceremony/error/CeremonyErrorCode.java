@@ -33,7 +33,27 @@ public enum CeremonyErrorCode implements ErrorCode {
     OPTIONAL_FEATURE_ALREADY_PURCHASED(
             "CEREMONY_OPTIONAL_FEATURE_ALREADY_PURCHASED",
             HttpStatus.CONFLICT,
-            "이미 구매한 선택옵션입니다."
+            "이미 구매를 요청했거나 승인된 선택옵션입니다."
+    ),
+    CAPACITY_PURCHASE_NOT_FOUND(
+            "CEREMONY_CAPACITY_PURCHASE_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "용량 추가구매 요청을 찾을 수 없습니다."
+    ),
+    CAPACITY_PURCHASE_NOT_PENDING(
+            "CEREMONY_CAPACITY_PURCHASE_NOT_PENDING",
+            HttpStatus.CONFLICT,
+            "이미 처리된 용량 추가구매 요청입니다."
+    ),
+    OPTIONAL_FEATURE_PURCHASE_NOT_FOUND(
+            "CEREMONY_OPTIONAL_FEATURE_PURCHASE_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "선택옵션 추가구매 요청을 찾을 수 없습니다."
+    ),
+    OPTIONAL_FEATURE_PURCHASE_NOT_PENDING(
+            "CEREMONY_OPTIONAL_FEATURE_PURCHASE_NOT_PENDING",
+            HttpStatus.CONFLICT,
+            "이미 처리된 선택옵션 추가구매 요청입니다."
     ),
     SIGNER_NOT_FOUND("CEREMONY_SIGNER_NOT_FOUND", HttpStatus.NOT_FOUND, "서명자를 찾을 수 없습니다."),
     CEREMONY_SIGNER_LIMIT_EXCEEDED(

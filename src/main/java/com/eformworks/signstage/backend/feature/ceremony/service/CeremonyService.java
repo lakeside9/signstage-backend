@@ -12,6 +12,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyCapacity
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOptionalFeaturePurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
@@ -30,10 +31,14 @@ import com.eformworks.signstage.backend.feature.organization.entity.Organization
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
+import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminCeremonyPurchaseDto;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -55,6 +60,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CeremonyService {
 
     private static final Set<String> CEREMONY_STATUS_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
+    private static final Set<String> PURCHASE_APPROVAL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
 
     private final CeremonyRepository ceremonyRepository;
     private final CeremonyAssignmentRepository ceremonyAssignmentRepository;
@@ -170,6 +176,21 @@ public class CeremonyService {
         return toCapacitySummary(purchase);
     }
 
+    /** 요청자 본인 이력 조회 — 대기중/승인됨/반려됨 전부 보여준다. */
+    public List<CeremonyDto.Response.CapacityPurchaseSummary> findCapacityPurchases(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        return ceremonyCapacityPurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
+                .map(this::toCapacitySummary)
+                .toList();
+    }
+
     @Transactional
     public CeremonyDto.Response.OptionalFeaturePurchaseSummary purchaseOptionalFeature(
             Long organizationId,
@@ -185,7 +206,10 @@ public class CeremonyService {
         OptionalFeature feature = optionalFeatureRepository.findById(request.getOptionalFeatureId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND));
 
-        if (ceremonyOptionalFeaturePurchaseRepository.existsByCeremonyIdAndOptionalFeatureId(ceremonyId, feature.getId())) {
+        boolean alreadyRequested = ceremonyOptionalFeaturePurchaseRepository.existsByCeremonyIdAndOptionalFeatureIdAndStatusIn(
+                ceremonyId, feature.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
+        );
+        if (alreadyRequested) {
             throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_ALREADY_PURCHASED);
         }
 
@@ -199,6 +223,21 @@ public class CeremonyService {
         ceremonyOptionalFeaturePurchaseRepository.save(purchase);
 
         return toOptionalFeatureSummary(purchase);
+    }
+
+    /** 요청자 본인 이력 조회 — 대기중/승인됨/반려됨 전부 보여준다. */
+    public List<CeremonyDto.Response.OptionalFeaturePurchaseSummary> findOptionalFeaturePurchases(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        return ceremonyOptionalFeaturePurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
+                .map(this::toOptionalFeatureSummary)
+                .toList();
     }
 
     /**
@@ -238,6 +277,145 @@ public class CeremonyService {
         } catch (IllegalArgumentException e) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
+    }
+
+    // ---- 플랫폼 관리자 — 용량/선택옵션 추가구매 승인 대기열 ----
+    // feature.platformadmin.service에 별도 래퍼를 두지 않고 여기 직접 붙인다(위 updateStatusByPlatformAdmin과 같은 이유).
+
+    /** status를 생략하면(null) 전체 상태를 최신순으로 돌려준다(조직 생성 요청 목록과 같은 규약). */
+    public Page<PlatformAdminCeremonyPurchaseDto.Response.CapacityPurchaseRequestSummary> findCapacityPurchaseRequests(
+            PurchaseStatus status,
+            Pageable pageable
+    ) {
+        Page<CeremonyCapacityPurchase> purchases = status != null
+                ? ceremonyCapacityPurchaseRepository.findAllByStatus(status, pageable)
+                : ceremonyCapacityPurchaseRepository.findAll(pageable);
+        Map<Long, String> loginIdsByUserId = resolveUserLoginIds(
+                purchases.getContent().stream().flatMap(purchase -> Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy()))
+        );
+        return purchases.map(purchase -> toCapacityRequestSummary(purchase, loginIdsByUserId));
+    }
+
+    @Transactional
+    public PlatformAdminCeremonyPurchaseDto.Response.CapacityPurchaseRequestSummary approveCapacityPurchase(
+            Long purchaseId,
+            Long adminUserId,
+            String actingPlatformRole
+    ) {
+        if (!PURCHASE_APPROVAL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+        CeremonyCapacityPurchase purchase = findPendingCapacityPurchaseOrThrow(purchaseId);
+        purchase.approve(adminUserId);
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.APPROVE_CAPACITY_PURCHASE, null,
+                purchase.getCeremony().getOrganization().getId(),
+                "purchaseId=" + purchaseId + ", ceremonyId=" + purchase.getCeremony().getId()
+        );
+        return toCapacityRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
+    }
+
+    @Transactional
+    public PlatformAdminCeremonyPurchaseDto.Response.CapacityPurchaseRequestSummary rejectCapacityPurchase(
+            Long purchaseId,
+            Long adminUserId,
+            String actingPlatformRole,
+            PlatformAdminCeremonyPurchaseDto.Request.Reject request
+    ) {
+        if (!PURCHASE_APPROVAL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+        CeremonyCapacityPurchase purchase = findPendingCapacityPurchaseOrThrow(purchaseId);
+        purchase.reject(adminUserId, request.getRejectionReason());
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.REJECT_CAPACITY_PURCHASE, null,
+                purchase.getCeremony().getOrganization().getId(),
+                "purchaseId=" + purchaseId + ", reason=" + request.getRejectionReason()
+        );
+        return toCapacityRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
+    }
+
+    public Page<PlatformAdminCeremonyPurchaseDto.Response.OptionalFeaturePurchaseRequestSummary> findOptionalFeaturePurchaseRequests(
+            PurchaseStatus status,
+            Pageable pageable
+    ) {
+        Page<CeremonyOptionalFeaturePurchase> purchases = status != null
+                ? ceremonyOptionalFeaturePurchaseRepository.findAllByStatus(status, pageable)
+                : ceremonyOptionalFeaturePurchaseRepository.findAll(pageable);
+        Map<Long, String> loginIdsByUserId = resolveUserLoginIds(
+                purchases.getContent().stream().flatMap(purchase -> Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy()))
+        );
+        return purchases.map(purchase -> toOptionalFeatureRequestSummary(purchase, loginIdsByUserId));
+    }
+
+    @Transactional
+    public PlatformAdminCeremonyPurchaseDto.Response.OptionalFeaturePurchaseRequestSummary approveOptionalFeaturePurchase(
+            Long purchaseId,
+            Long adminUserId,
+            String actingPlatformRole
+    ) {
+        if (!PURCHASE_APPROVAL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+        CeremonyOptionalFeaturePurchase purchase = findPendingOptionalFeaturePurchaseOrThrow(purchaseId);
+        purchase.approve(adminUserId);
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.APPROVE_OPTIONAL_FEATURE_PURCHASE, null,
+                purchase.getCeremony().getOrganization().getId(),
+                "purchaseId=" + purchaseId + ", ceremonyId=" + purchase.getCeremony().getId()
+        );
+        return toOptionalFeatureRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
+    }
+
+    @Transactional
+    public PlatformAdminCeremonyPurchaseDto.Response.OptionalFeaturePurchaseRequestSummary rejectOptionalFeaturePurchase(
+            Long purchaseId,
+            Long adminUserId,
+            String actingPlatformRole,
+            PlatformAdminCeremonyPurchaseDto.Request.Reject request
+    ) {
+        if (!PURCHASE_APPROVAL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+        CeremonyOptionalFeaturePurchase purchase = findPendingOptionalFeaturePurchaseOrThrow(purchaseId);
+        purchase.reject(adminUserId, request.getRejectionReason());
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.REJECT_OPTIONAL_FEATURE_PURCHASE, null,
+                purchase.getCeremony().getOrganization().getId(),
+                "purchaseId=" + purchaseId + ", reason=" + request.getRejectionReason()
+        );
+        return toOptionalFeatureRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
+    }
+
+    private CeremonyCapacityPurchase findPendingCapacityPurchaseOrThrow(Long purchaseId) {
+        CeremonyCapacityPurchase purchase = ceremonyCapacityPurchaseRepository.findById(purchaseId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_PURCHASE_NOT_FOUND));
+        if (purchase.getStatus() != PurchaseStatus.PENDING) {
+            throw new ApplicationException(CeremonyErrorCode.CAPACITY_PURCHASE_NOT_PENDING);
+        }
+        return purchase;
+    }
+
+    private CeremonyOptionalFeaturePurchase findPendingOptionalFeaturePurchaseOrThrow(Long purchaseId) {
+        CeremonyOptionalFeaturePurchase purchase = ceremonyOptionalFeaturePurchaseRepository.findById(purchaseId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_PURCHASE_NOT_FOUND));
+        if (purchase.getStatus() != PurchaseStatus.PENDING) {
+            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_PURCHASE_NOT_PENDING);
+        }
+        return purchase;
+    }
+
+    private Map<Long, String> resolveUserLoginIds(Stream<Long> userIds) {
+        List<Long> ids = userIds.filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return userRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(User::getId, User::getLoginId));
     }
 
     // ---- CeremonyEventService와 공유하는 package-private 헬퍼 ----
@@ -305,17 +483,23 @@ public class CeremonyService {
             case MAIN_EVENTS -> plan.getMaxMainEvents();
         };
 
+        // 승인(APPROVED)된 요청만 한도에 반영한다 — 대기중/반려된 요청은 아직/영영 쓸 수 없다.
         int purchasedAmount = ceremonyCapacityPurchaseRepository
-                .findAllByCeremonyIdAndCapacityAddOn_CapacityType(ceremony.getId(), capacityType).stream()
+                .findAllByCeremonyIdAndCapacityAddOn_CapacityTypeAndStatus(ceremony.getId(), capacityType, PurchaseStatus.APPROVED)
+                .stream()
                 .mapToInt(purchase -> purchase.getQuantity() * purchase.getCapacityAddOn().getUnitAmount())
                 .sum();
 
         return baseValue + purchasedAmount;
     }
 
-    /** Ceremony가 "구매한"(플랜 기본 포함 또는 추가구매) 선택옵션 id 집합(4.11절). */
+    /**
+     * Ceremony가 "구매한"(플랜 기본 포함 또는 추가구매) 선택옵션 id 집합(4.11절). 추가구매 쪽은
+     * 승인(APPROVED)된 요청만 포함한다 — 대기중/반려된 요청은 아직/영영 적용할 수 없다.
+     */
     List<Long> retrievePurchasedOptionalFeatureIds(Ceremony ceremony) {
-        List<Long> purchased = ceremonyOptionalFeaturePurchaseRepository.findAllByCeremonyId(ceremony.getId()).stream()
+        List<Long> purchased = ceremonyOptionalFeaturePurchaseRepository
+                .findAllByCeremonyIdAndStatus(ceremony.getId(), PurchaseStatus.APPROVED).stream()
                 .map(purchase -> purchase.getOptionalFeature().getId())
                 .toList();
         if (ceremony.getBillingPlan() == null) {
@@ -367,6 +551,9 @@ public class CeremonyService {
                 purchase.getPurchasedSalePrice(),
                 purchase.getPurchasedDiscountType().name(),
                 purchase.getPurchasedDiscountValue(),
+                purchase.getStatus().name(),
+                purchase.getRejectionReason(),
+                purchase.getReviewedAt(),
                 purchase.getCreatedAt()
         );
     }
@@ -381,6 +568,52 @@ public class CeremonyService {
                 purchase.getPurchasedSalePrice(),
                 purchase.getPurchasedDiscountType().name(),
                 purchase.getPurchasedDiscountValue(),
+                purchase.getStatus().name(),
+                purchase.getRejectionReason(),
+                purchase.getReviewedAt(),
+                purchase.getCreatedAt()
+        );
+    }
+
+    private PlatformAdminCeremonyPurchaseDto.Response.CapacityPurchaseRequestSummary toCapacityRequestSummary(
+            CeremonyCapacityPurchase purchase,
+            Map<Long, String> loginIdsByUserId
+    ) {
+        return new PlatformAdminCeremonyPurchaseDto.Response.CapacityPurchaseRequestSummary(
+                purchase.getId(),
+                purchase.getCreatedBy(),
+                loginIdsByUserId.get(purchase.getCreatedBy()),
+                purchase.getCeremony().getOrganization().getId(),
+                purchase.getCeremony().getId(),
+                purchase.getCeremony().getTitle(),
+                purchase.getCapacityAddOn().getId(),
+                purchase.getQuantity(),
+                purchase.getPurchasedSalePrice(),
+                purchase.getStatus().name(),
+                purchase.getRejectionReason(),
+                purchase.getReviewedBy() != null ? loginIdsByUserId.get(purchase.getReviewedBy()) : null,
+                purchase.getReviewedAt(),
+                purchase.getCreatedAt()
+        );
+    }
+
+    private PlatformAdminCeremonyPurchaseDto.Response.OptionalFeaturePurchaseRequestSummary toOptionalFeatureRequestSummary(
+            CeremonyOptionalFeaturePurchase purchase,
+            Map<Long, String> loginIdsByUserId
+    ) {
+        return new PlatformAdminCeremonyPurchaseDto.Response.OptionalFeaturePurchaseRequestSummary(
+                purchase.getId(),
+                purchase.getCreatedBy(),
+                loginIdsByUserId.get(purchase.getCreatedBy()),
+                purchase.getCeremony().getOrganization().getId(),
+                purchase.getCeremony().getId(),
+                purchase.getCeremony().getTitle(),
+                purchase.getOptionalFeature().getId(),
+                purchase.getPurchasedSalePrice(),
+                purchase.getStatus().name(),
+                purchase.getRejectionReason(),
+                purchase.getReviewedBy() != null ? loginIdsByUserId.get(purchase.getReviewedBy()) : null,
+                purchase.getReviewedAt(),
                 purchase.getCreatedAt()
         );
     }

@@ -10,6 +10,7 @@ import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyService
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -95,7 +96,10 @@ public class CeremonyController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "필수옵션(용량) 추가구매", description = "예: 서명자 +10명. 한 번 구매하면 취소할 수 없다.")
+    @Operation(
+            summary = "필수옵션(용량) 추가구매",
+            description = "예: 서명자 +10명. 요청 즉시 PENDING으로 생기고, 플랫폼 관리자가 승인해야 한도에 반영된다."
+    )
     @PostMapping("/{ceremonyId}/capacity-purchases")
     public ApiResponse<CeremonyDto.Response.CapacityPurchaseSummary> purchaseCapacity(
             @AuthenticationPrincipal CurrentUser currentUser,
@@ -108,7 +112,26 @@ public class CeremonyController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "선택옵션 구매", description = "행사 마스터 단위 구매다. 실제 적용은 이벤트 단위로 별도 선택한다.")
+    @Operation(
+            summary = "용량 추가구매 이력 조회",
+            description = "요청자 본인이 볼 수 있는 이력이다. 대기중(PENDING)/승인됨(APPROVED)/반려됨(REJECTED) 전부 포함한다."
+    )
+    @GetMapping("/{ceremonyId}/capacity-purchases")
+    public ApiResponse<List<CeremonyDto.Response.CapacityPurchaseSummary>> findCapacityPurchases(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        List<CeremonyDto.Response.CapacityPurchaseSummary> response =
+                ceremonyService.findCapacityPurchases(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "선택옵션 구매",
+            description = "행사 마스터 단위 구매다. 실제 적용은 이벤트 단위로 별도 선택한다. 승인 전(PENDING)에는 "
+                    + "적용할 수 없다 — 플랫폼 관리자 승인이 필요하다."
+    )
     @PostMapping("/{ceremonyId}/optional-feature-purchases")
     public ApiResponse<CeremonyDto.Response.OptionalFeaturePurchaseSummary> purchaseOptionalFeature(
             @AuthenticationPrincipal CurrentUser currentUser,
@@ -118,6 +141,21 @@ public class CeremonyController {
     ) {
         CeremonyDto.Response.OptionalFeaturePurchaseSummary response =
                 ceremonyService.purchaseOptionalFeature(organizationId, ceremonyId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "선택옵션 구매 이력 조회",
+            description = "요청자 본인이 볼 수 있는 이력이다. 대기중(PENDING)/승인됨(APPROVED)/반려됨(REJECTED) 전부 포함한다."
+    )
+    @GetMapping("/{ceremonyId}/optional-feature-purchases")
+    public ApiResponse<List<CeremonyDto.Response.OptionalFeaturePurchaseSummary>> findOptionalFeaturePurchases(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        List<CeremonyDto.Response.OptionalFeaturePurchaseSummary> response =
+                ceremonyService.findOptionalFeaturePurchases(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }

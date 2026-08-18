@@ -13,16 +13,18 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 필수옵션(용량 한도) 추가구매 내역. 유효 한도 = 플랜의 기본값 + Σ(quantity × addon.unitAmount)
- * (signstage-docs business/ceremony-billing-options-review.md 3장). {@code purchased*} 3개
- * 필드는 구매 시점 가격 스냅샷이다 — 카탈로그 가격이 나중에 바뀌어도 이미 발생한 구매 내역은
- * 바뀌지 않아야 한다.
+ * 필수옵션(용량 한도) 추가구매 요청. 유효 한도 = 플랜의 기본값 + Σ(APPROVED인 것만, quantity ×
+ * addon.unitAmount)(signstage-docs business/ceremony-billing-options-review.md 3장). 요청 즉시
+ * PENDING으로 생기고, 플랫폼 관리자가 승인해야 한도에 반영된다. {@code purchased*} 3개 필드는
+ * 구매 시점 가격 스냅샷이다 — 카탈로그 가격이 나중에 바뀌어도 이미 발생한 구매 내역은 바뀌지
+ * 않아야 한다.
  */
 @Entity
 @Table(name = "ceremony_capacity_purchases")
@@ -55,6 +57,20 @@ public class CeremonyCapacityPurchase extends BaseEntity {
     @Column(name = "purchased_discount_value", nullable = false, precision = 12, scale = 2)
     private BigDecimal purchasedDiscountValue;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private PurchaseStatus status;
+
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
+    /** {@code platform_admin_audit_log.admin_user_id}와 같은 이유로 FK 없는 순수 행위자 참조다. */
+    @Column(name = "reviewed_by")
+    private Long reviewedBy;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
     @Builder
     private CeremonyCapacityPurchase(
             Ceremony ceremony,
@@ -70,5 +86,19 @@ public class CeremonyCapacityPurchase extends BaseEntity {
         this.purchasedSalePrice = purchasedSalePrice;
         this.purchasedDiscountType = purchasedDiscountType;
         this.purchasedDiscountValue = purchasedDiscountValue;
+        this.status = PurchaseStatus.PENDING;
+    }
+
+    public void approve(Long reviewedBy) {
+        this.status = PurchaseStatus.APPROVED;
+        this.reviewedBy = reviewedBy;
+        this.reviewedAt = LocalDateTime.now();
+    }
+
+    public void reject(Long reviewedBy, String rejectionReason) {
+        this.status = PurchaseStatus.REJECTED;
+        this.reviewedBy = reviewedBy;
+        this.reviewedAt = LocalDateTime.now();
+        this.rejectionReason = rejectionReason;
     }
 }
