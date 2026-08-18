@@ -8,6 +8,8 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -27,10 +29,12 @@ public class OptionalFeatureService {
     private static final Set<String> CATALOG_MANAGE_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
 
     private final OptionalFeatureRepository optionalFeatureRepository;
+    private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     @Transactional
     public OptionalFeatureDto.Response.OptionalFeatureSummary createOptionalFeature(
             String actingPlatformRole,
+            Long adminUserId,
             OptionalFeatureDto.Request.CreateOptionalFeature request
     ) {
         if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
@@ -51,6 +55,46 @@ public class OptionalFeatureService {
                 .discountValue(request.getDiscountValue())
                 .build();
         optionalFeatureRepository.save(optionalFeature);
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId,
+                PlatformAdminAction.CREATE_OPTIONAL_FEATURE,
+                null,
+                null,
+                "optionalFeatureId=" + optionalFeature.getId() + ", code=" + optionalFeature.getCode()
+        );
+
+        return toSummary(optionalFeature);
+    }
+
+    @Transactional
+    public OptionalFeatureDto.Response.OptionalFeatureSummary updateOptionalFeature(
+            Long optionalFeatureId,
+            String actingPlatformRole,
+            Long adminUserId,
+            OptionalFeatureDto.Request.UpdateOptionalFeature request
+    ) {
+        if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+
+        OptionalFeature optionalFeature = optionalFeatureRepository.findById(optionalFeatureId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND));
+
+        String detail = "optionalFeatureId=" + optionalFeatureId
+                + ", salePrice: " + optionalFeature.getSalePrice() + " -> " + request.getSalePrice();
+
+        optionalFeature.updateInfo(
+                request.getName(),
+                request.getSupplyPrice(),
+                request.getSalePrice(),
+                parseDiscountType(request.getDiscountType()),
+                request.getDiscountValue()
+        );
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.UPDATE_OPTIONAL_FEATURE, null, null, detail
+        );
 
         return toSummary(optionalFeature);
     }

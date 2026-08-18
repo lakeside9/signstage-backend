@@ -11,6 +11,8 @@ import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -34,10 +36,12 @@ public class BillingPlanService {
     private final BillingPlanRepository billingPlanRepository;
     private final OptionalFeatureRepository optionalFeatureRepository;
     private final BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
+    private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     @Transactional
     public BillingPlanDto.Response.BillingPlanSummary createPlan(
             String actingPlatformRole,
+            Long adminUserId,
             BillingPlanDto.Request.CreatePlan request
     ) {
         if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
@@ -71,7 +75,49 @@ public class BillingPlanService {
             );
         }
 
+        platformAdminAuditLogRecorder.record(
+                adminUserId,
+                PlatformAdminAction.CREATE_BILLING_PLAN,
+                null,
+                null,
+                "planId=" + plan.getId() + ", name=" + plan.getName()
+        );
+
         return toSummary(plan, optionalFeatureIds);
+    }
+
+    @Transactional
+    public BillingPlanDto.Response.BillingPlanSummary updatePlan(
+            Long planId,
+            String actingPlatformRole,
+            Long adminUserId,
+            BillingPlanDto.Request.UpdatePlan request
+    ) {
+        if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+
+        BillingPlan plan = billingPlanRepository.findById(planId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
+
+        String detail = "planId=" + planId
+                + ", salePrice: " + plan.getSalePrice() + " -> " + request.getSalePrice();
+
+        plan.updateInfo(
+                request.getName(),
+                request.getSupplyPrice(),
+                request.getSalePrice(),
+                parseDiscountType(request.getDiscountType()),
+                request.getDiscountValue(),
+                request.getMaxSigners(),
+                request.getMaxTemplates(),
+                request.getMaxTestEvents(),
+                request.getMaxMainEvents()
+        );
+
+        platformAdminAuditLogRecorder.record(adminUserId, PlatformAdminAction.UPDATE_BILLING_PLAN, null, null, detail);
+
+        return toSummary(plan, retrieveOptionalFeatureIds(plan.getId()));
     }
 
     public List<BillingPlanDto.Response.BillingPlanSummary> findPlans() {

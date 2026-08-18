@@ -81,4 +81,30 @@ public class BillingPlan extends BaseEntity {
         this.maxTestEvents = maxTestEvents;
         this.maxMainEvents = maxMainEvents;
     }
+
+    /**
+     * 플랫폼 관리자 카탈로그 관리 화면의 수정. 이 플랜에 묶인 선택옵션 구성은 생성 시점에만
+     * 정해지고 여기서 바꾸지 않는다(교체하려면 새 플랜을 만든다 — 카탈로그 관리 화면 결정).
+     */
+    public void updateInfo(
+            String name,
+            BigDecimal supplyPrice,
+            BigDecimal salePrice,
+            DiscountType discountType,
+            BigDecimal discountValue,
+            Integer maxSigners,
+            Integer maxTemplates,
+            Integer maxTestEvents,
+            Integer maxMainEvents
+    ) {
+        this.name = name;
+        this.supplyPrice = supplyPrice;
+        this.salePrice = salePrice;
+        this.discountType = discountType;
+        this.discountValue = discountValue;
+        this.maxSigners = maxSigners;
+        this.maxTemplates = maxTemplates;
+        this.maxTestEvents = maxTestEvents;
+        this.maxMainEvents = maxMainEvents;
+    }
 }

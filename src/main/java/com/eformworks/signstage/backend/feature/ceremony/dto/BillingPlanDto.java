@@ -61,6 +61,48 @@ public final class BillingPlanDto {
             /** 이 플랜에 기본으로 포함할 선택옵션 id 목록(생략하면 빈 목록). */
             private List<Long> optionalFeatureIds;
         }
+
+        /**
+         * 선택옵션 구성({@code optionalFeatureIds})은 생성 시점에만 정해지고 이후 불변이라
+         * {@link CreatePlan}과 달리 여기엔 없다 — 플랫폼 관리자 카탈로그 관리 화면 결정.
+         */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdatePlan {
+
+            @NotBlank
+            private String name;
+
+            @NotNull
+            private BigDecimal supplyPrice;
+
+            @NotNull
+            private BigDecimal salePrice;
+
+            @NotBlank
+            private String discountType;
+
+            @NotNull
+            private BigDecimal discountValue;
+
+            @NotNull
+            @Min(0)
+            private Integer maxSigners;
+
+            @NotNull
+            @Min(0)
+            private Integer maxTemplates;
+
+            @NotNull
+            @Min(0)
+            private Integer maxTestEvents;
+
+            @NotNull
+            @Min(0)
+            private Integer maxMainEvents;
+        }
     }
 
     public static final class Response {

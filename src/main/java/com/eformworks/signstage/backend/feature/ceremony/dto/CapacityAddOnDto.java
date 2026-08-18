@@ -45,6 +45,33 @@ public final class CapacityAddOnDto {
             @NotNull
             private BigDecimal discountValue;
         }
+
+        /**
+         * {@code capacityType}은 상품의 종류를 규정하는 값이라 생성 후 불변이라
+         * {@link CreateCapacityAddOn}과 달리 여기엔 없다 — 플랫폼 관리자 카탈로그 관리 화면 결정.
+         */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateCapacityAddOn {
+
+            @NotNull
+            @Min(1)
+            private Integer unitAmount;
+
+            @NotNull
+            private BigDecimal supplyPrice;
+
+            @NotNull
+            private BigDecimal salePrice;
+
+            @NotBlank
+            private String discountType;
+
+            @NotNull
+            private BigDecimal discountValue;
+        }
     }
 
     public static final class Response {

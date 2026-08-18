@@ -43,6 +43,32 @@ public final class OptionalFeatureDto {
             @NotNull
             private BigDecimal discountValue;
         }
+
+        /**
+         * {@code code}는 옵션의 종류를 규정하는 값이라 생성 후 불변이라 {@link CreateOptionalFeature}와
+         * 달리 여기엔 없다 — 플랫폼 관리자 카탈로그 관리 화면 결정.
+         */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateOptionalFeature {
+
+            @NotBlank
+            private String name;
+
+            @NotNull
+            private BigDecimal supplyPrice;
+
+            @NotNull
+            private BigDecimal salePrice;
+
+            @NotBlank
+            private String discountType;
+
+            @NotNull
+            private BigDecimal discountValue;
+        }
     }
 
     public static final class Response {

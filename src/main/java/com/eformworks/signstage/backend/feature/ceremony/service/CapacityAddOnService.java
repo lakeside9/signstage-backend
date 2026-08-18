@@ -6,7 +6,10 @@ import com.eformworks.signstage.backend.feature.ceremony.dto.CapacityAddOnDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
+import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
+import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -26,10 +29,12 @@ public class CapacityAddOnService {
     private static final Set<String> CATALOG_MANAGE_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
 
     private final CapacityAddOnRepository capacityAddOnRepository;
+    private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     @Transactional
     public CapacityAddOnDto.Response.CapacityAddOnSummary createCapacityAddOn(
             String actingPlatformRole,
+            Long adminUserId,
             CapacityAddOnDto.Request.CreateCapacityAddOn request
     ) {
         if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
@@ -45,6 +50,46 @@ public class CapacityAddOnService {
                 .discountValue(request.getDiscountValue())
                 .build();
         capacityAddOnRepository.save(capacityAddOn);
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId,
+                PlatformAdminAction.CREATE_CAPACITY_ADDON,
+                null,
+                null,
+                "capacityAddOnId=" + capacityAddOn.getId() + ", capacityType=" + capacityAddOn.getCapacityType()
+        );
+
+        return toSummary(capacityAddOn);
+    }
+
+    @Transactional
+    public CapacityAddOnDto.Response.CapacityAddOnSummary updateCapacityAddOn(
+            Long capacityAddOnId,
+            String actingPlatformRole,
+            Long adminUserId,
+            CapacityAddOnDto.Request.UpdateCapacityAddOn request
+    ) {
+        if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+
+        CapacityAddOn capacityAddOn = capacityAddOnRepository.findById(capacityAddOnId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND));
+
+        String detail = "capacityAddOnId=" + capacityAddOnId
+                + ", salePrice: " + capacityAddOn.getSalePrice() + " -> " + request.getSalePrice();
+
+        capacityAddOn.updateInfo(
+                request.getUnitAmount(),
+                request.getSupplyPrice(),
+                request.getSalePrice(),
+                parseDiscountType(request.getDiscountType()),
+                request.getDiscountValue()
+        );
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.UPDATE_CAPACITY_ADDON, null, null, detail
+        );
 
         return toSummary(capacityAddOn);
     }

@@ -66,4 +66,22 @@ public class CapacityAddOn extends BaseEntity {
         this.discountType = discountType;
         this.discountValue = discountValue;
     }
+
+    /**
+     * 플랫폼 관리자 카탈로그 관리 화면의 수정. {@code capacityType}은 상품의 종류를 규정하는 값이라
+     * 생성 후 불변이고 여기서 바꾸지 않는다(바꾸려면 새 상품을 만든다).
+     */
+    public void updateInfo(
+            Integer unitAmount,
+            BigDecimal supplyPrice,
+            BigDecimal salePrice,
+            DiscountType discountType,
+            BigDecimal discountValue
+    ) {
+        this.unitAmount = unitAmount;
+        this.supplyPrice = supplyPrice;
+        this.salePrice = salePrice;
+        this.discountType = discountType;
+        this.discountValue = discountValue;
+    }
 }
