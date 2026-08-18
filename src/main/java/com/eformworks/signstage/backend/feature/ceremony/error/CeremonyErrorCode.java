@@ -61,6 +61,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "서명자 등록 한도를 초과했습니다. 플랜을 올리거나 용량을 추가구매해주세요."
     ),
+    SIGNER_IN_USE(
+            "CEREMONY_SIGNER_IN_USE",
+            HttpStatus.CONFLICT,
+            "서명란에 배정됐거나 서명·감사 기록이 남아 있는 서명자는 삭제할 수 없습니다."
+    ),
     TEMPLATE_NOT_FOUND("CEREMONY_TEMPLATE_NOT_FOUND", HttpStatus.NOT_FOUND, "템플릿을 찾을 수 없습니다."),
     CEREMONY_TEMPLATE_LIMIT_EXCEEDED(
             "CEREMONY_TEMPLATE_LIMIT_EXCEEDED",

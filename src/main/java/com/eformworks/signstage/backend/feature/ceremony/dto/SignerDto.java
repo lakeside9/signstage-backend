@@ -32,6 +32,23 @@ public final class SignerDto {
 
             private String roleCode;
         }
+
+        /** accessKey는 여기서 바꾸지 않는다(포털 접속에 쓰이는 값이라 고정). */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateSigner {
+
+            @NotBlank
+            private String name;
+
+            private String position;
+
+            private String affiliation;
+
+            private String roleCode;
+        }
     }
 
     public static final class Response {

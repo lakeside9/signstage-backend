@@ -33,4 +33,7 @@ public interface StrokeDataRepository extends JpaRepository<StrokeData, Long> {
 
     /** SIGNATURE_REPLACE — 관리자가 한 서명자의 이 이벤트 서명 진행 상황 전체를 초기화할 때. */
     void deleteAllByCeremonyEventIdAndSignerId(Long ceremonyEventId, Long signerId);
+
+    /** 서명자 삭제 전 "실제로 서명한 기록이 있는지" 확인용 — 이벤트 구분 없이 전체를 본다. */
+    boolean existsBySignerId(Long signerId);
 }

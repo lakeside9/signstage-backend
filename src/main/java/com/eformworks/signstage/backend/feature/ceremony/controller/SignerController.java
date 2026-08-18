@@ -11,9 +11,11 @@ import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -67,5 +69,34 @@ public class SignerController {
         SignerDto.Response.SignerSummary response =
                 signerService.retrieveSigner(organizationId, ceremonyId, signerId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "서명자 수정", description = "이름/직책/소속/역할코드만 바꾼다. accessKey는 여기서 바꾸지 않는다.")
+    @PutMapping("/{signerId}")
+    public ApiResponse<SignerDto.Response.SignerSummary> updateSigner(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long signerId,
+            @Valid @RequestBody SignerDto.Request.UpdateSigner request
+    ) {
+        SignerDto.Response.SignerSummary response =
+                signerService.updateSigner(organizationId, ceremonyId, signerId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "서명자 삭제",
+            description = "서명란에 배정됐거나 서명·감사 기록이 남아 있는 서명자는 삭제할 수 없다."
+    )
+    @DeleteMapping("/{signerId}")
+    public ApiResponse<Void> deleteSigner(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long signerId
+    ) {
+        signerService.deleteSigner(organizationId, ceremonyId, signerId, currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 }

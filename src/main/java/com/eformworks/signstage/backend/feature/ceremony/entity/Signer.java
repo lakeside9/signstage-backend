@@ -61,4 +61,12 @@ public class Signer extends BaseEntity {
         this.roleCode = roleCode;
         this.accessKey = accessKey;
     }
+
+    /** 서명자 수정 화면에서 기본 정보를 바꿀 때 쓴다. accessKey는 여기서 바꾸지 않는다. */
+    public void updateInfo(String name, String position, String affiliation, String roleCode) {
+        this.name = name;
+        this.position = position;
+        this.affiliation = affiliation;
+        this.roleCode = roleCode;
+    }
 }

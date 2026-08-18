@@ -13,4 +13,7 @@ public interface TemplateFieldRepository extends JpaRepository<TemplateField, Lo
 
     /** 문서 양식 삭제 시 먼저 지운다 — Template 삭제 전 FK 정리. */
     void deleteAllByTemplateId(Long templateId);
+
+    /** 서명자 삭제 전 "서명란에 배정돼 있는지" 확인용. */
+    boolean existsBySignerId(Long signerId);
 }
