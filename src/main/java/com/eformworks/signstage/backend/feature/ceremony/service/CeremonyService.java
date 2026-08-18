@@ -125,6 +125,23 @@ public class CeremonyService {
         return toSummary(ceremony);
     }
 
+    /** 행사 수정 화면에서 이름/설명을 바꾼다. 플랜은 생성 시점에 고정이라 여기서 바꾸지 않는다. */
+    @Transactional
+    public CeremonyDto.Response.CeremonySummary updateCeremony(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId,
+            CeremonyDto.Request.UpdateCeremony request
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        checkCeremonyEditable(ceremony);
+
+        ceremony.updateInfo(request.getTitle(), request.getDescription());
+        return toSummary(ceremony);
+    }
+
     @Transactional
     public CeremonyDto.Response.CapacityPurchaseSummary purchaseCapacity(
             Long organizationId,
@@ -334,6 +351,7 @@ public class CeremonyService {
                 ceremony.getOrganization().getId(),
                 ceremony.getBillingPlan() != null ? ceremony.getBillingPlan().getId() : null,
                 ceremony.getTitle(),
+                ceremony.getDescription(),
                 ceremony.getStatus().name(),
                 ceremony.getCreatedBy(),
                 ceremony.getCreatedAt()

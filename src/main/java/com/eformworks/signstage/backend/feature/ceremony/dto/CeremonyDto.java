@@ -34,6 +34,20 @@ public final class CeremonyDto {
             private String title;
         }
 
+        /** 행사 수정 화면에서 이름/설명을 바꿀 때 쓴다. 플랜은 여기서 바꾸지 않는다(생성 시점에 고정). */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateCeremony {
+
+            @NotBlank
+            private String title;
+
+            /** 선택 입력 — 빈 문자열/null 모두 "설명 없음"으로 저장한다. */
+            private String description;
+        }
+
         @Getter
         @Setter
         @NoArgsConstructor
@@ -83,6 +97,7 @@ public final class CeremonyDto {
             private final Long organizationId;
             private final Long billingPlanId;
             private final String title;
+            private final String description;
             private final String status;
             private final Long createdBy;
             private final LocalDateTime createdAt;

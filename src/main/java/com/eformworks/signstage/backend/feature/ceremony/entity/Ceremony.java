@@ -52,6 +52,10 @@ public class Ceremony extends BaseEntity {
     @Column(nullable = false, length = 200)
     private String title;
 
+    /** 생성 시에는 받지 않고 행사 수정 화면에서만 채운다 — 그래서 nullable이다. */
+    @Column(length = 1000)
+    private String description;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CeremonyStatus status;
@@ -62,6 +66,12 @@ public class Ceremony extends BaseEntity {
         this.billingPlan = billingPlan;
         this.title = title;
         this.status = CeremonyStatus.IN_PROGRESS;
+    }
+
+    /** 행사 수정 화면에서 이름/설명을 바꿀 때 쓴다. 플랜은 여기서 바꾸지 않는다(생성 시점에 고정). */
+    public void updateInfo(String title, String description) {
+        this.title = title;
+        this.description = description;
     }
 
     /**

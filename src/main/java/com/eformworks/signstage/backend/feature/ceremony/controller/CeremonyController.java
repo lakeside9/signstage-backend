@@ -18,6 +18,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -75,6 +76,22 @@ public class CeremonyController {
     ) {
         CeremonyDto.Response.CeremonySummary response =
                 ceremonyService.retrieveCeremony(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "행사 정보 수정",
+            description = "이름/설명만 바꾼다. 플랜은 생성 시점에 고정이라 여기서 바꿀 수 없다. 완료된 행사는 수정할 수 없다."
+    )
+    @PutMapping("/{ceremonyId}")
+    public ApiResponse<CeremonyDto.Response.CeremonySummary> updateCeremony(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @Valid @RequestBody CeremonyDto.Request.UpdateCeremony request
+    ) {
+        CeremonyDto.Response.CeremonySummary response =
+                ceremonyService.updateCeremony(organizationId, ceremonyId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
