@@ -8,8 +8,10 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventAction;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventLog;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyResult;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyResultType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyTemplate;
 import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
@@ -19,6 +21,7 @@ import com.eformworks.signstage.backend.feature.ceremony.model.FieldStrokes;
 import com.eformworks.signstage.backend.feature.ceremony.model.StoredFile;
 import com.eformworks.signstage.backend.feature.ceremony.port.DocumentStoragePort;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyResultRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
@@ -51,6 +54,7 @@ public class CeremonyResultService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final CeremonyResultRepository ceremonyResultRepository;
+    private final CeremonyEventRepository ceremonyEventRepository;
     private final CeremonyTemplateRepository ceremonyTemplateRepository;
     private final TemplateFieldRepository templateFieldRepository;
     private final StrokeDataRepository strokeDataRepository;
@@ -69,6 +73,9 @@ public class CeremonyResultService {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        // 이 체크는 방금 여기서 완료로 전이시키는 호출 자체를 막지 않는다 — Ceremony는 이 시점엔
+        // 아직 IN_PROGRESS이고, 완료 전이는 결과 생성이 전부 성공한 뒤에만 일어난다.
+        ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = ceremonyEventService.findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.FINISHED) {
@@ -92,7 +99,38 @@ public class CeremonyResultService {
                         .build()
         );
 
+        completeCeremonyIfAllMainEventsFinished(ceremony, event);
+
         return results.stream().map(this::toSummary).toList();
+    }
+
+    /**
+     * 이 Ceremony 아래 만들어진 본행사(MAIN)가 전부 FINISHED + 결과 생성까지 끝났으면 Ceremony를
+     * COMPLETED로 전이한다. 방금 결과를 생성한 {@code justCompletedEvent}는 DB 재조회 없이
+     * "결과 있음"으로 간주한다(같은 트랜잭션에서 방금 만들었으므로). 본행사가 하나도 없으면
+     * 당연히 미완료다.
+     */
+    private void completeCeremonyIfAllMainEventsFinished(Ceremony ceremony, CeremonyEvent justCompletedEvent) {
+        if (justCompletedEvent.getEventType() != CeremonyEventType.MAIN
+                || ceremony.getStatus() != CeremonyStatus.IN_PROGRESS) {
+            return;
+        }
+
+        List<CeremonyEvent> mainEvents =
+                ceremonyEventRepository.findAllByCeremonyIdAndEventType(ceremony.getId(), CeremonyEventType.MAIN);
+        if (mainEvents.isEmpty()) {
+            return;
+        }
+
+        for (CeremonyEvent mainEvent : mainEvents) {
+            boolean hasResults = mainEvent.getId().equals(justCompletedEvent.getId())
+                    || ceremonyResultRepository.existsByCeremonyEventId(mainEvent.getId());
+            if (mainEvent.getStatus() != CeremonyEventStatus.FINISHED || !hasResults) {
+                return;
+            }
+        }
+
+        ceremony.changeStatus(CeremonyStatus.COMPLETED);
     }
 
     public List<CeremonyResultDto.Response.CeremonyResultSummary> findResults(

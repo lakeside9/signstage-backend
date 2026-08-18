@@ -10,6 +10,8 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, Lo
 
     List<CeremonyEvent> findAllByCeremonyId(Long ceremonyId);
 
+    List<CeremonyEvent> findAllByCeremonyIdAndEventType(Long ceremonyId, CeremonyEventType eventType);
+
     long countByCeremonyIdAndEventType(Long ceremonyId, CeremonyEventType eventType);
 
     boolean existsByAccessKey(String accessKey);

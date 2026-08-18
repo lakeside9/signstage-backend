@@ -4,6 +4,8 @@ import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -25,6 +27,9 @@ import lombok.NoArgsConstructor;
  * <p>{@code billingPlan}은 DB 컬럼 자체는 nullable이다 — 이 기능 배포 전 만들어진 기존 행사만
  * 예외로 NULL을 허용하고, 신규 생성은 서비스 레이어가 필수로 강제한다(signstage-docs
  * business/ceremony-billing-options-review.md 4.10절).
+ *
+ * <p>{@code status}는 {@link CeremonyStatus} 참고 — 새로 만든 Ceremony는 항상 IN_PROGRESS로
+ * 시작한다(이 기능 배포 전 기존 행은 마이그레이션에서 소급 적용 없이 DEFAULT로만 채운다).
  */
 @Entity
 @Table(name = "ceremonies")
@@ -47,10 +52,23 @@ public class Ceremony extends BaseEntity {
     @Column(nullable = false, length = 200)
     private String title;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private CeremonyStatus status;
+
     @Builder
     private Ceremony(Organization organization, BillingPlan billingPlan, String title) {
         this.organization = organization;
         this.billingPlan = billingPlan;
         this.title = title;
+        this.status = CeremonyStatus.IN_PROGRESS;
+    }
+
+    /**
+     * 하위 행사(MAIN 전체)가 완료되면 자동으로, 또는 플랫폼 관리자가 수동으로 상태를 바꿀 때 쓴다
+     * (signstage-docs business/ceremony-feature-migration-review.md 참고).
+     */
+    public void changeStatus(CeremonyStatus status) {
+        this.status = status;
     }
 }

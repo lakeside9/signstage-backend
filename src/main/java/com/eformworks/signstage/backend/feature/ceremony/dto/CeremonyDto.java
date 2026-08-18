@@ -57,6 +57,17 @@ public final class CeremonyDto {
             @NotNull
             private Long optionalFeatureId;
         }
+
+        /** 플랫폼 관리자 전용. IN_PROGRESS/COMPLETED만 허용한다. */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateStatus {
+
+            @NotBlank
+            private String status;
+        }
     }
 
     public static final class Response {
@@ -72,6 +83,7 @@ public final class CeremonyDto {
             private final Long organizationId;
             private final Long billingPlanId;
             private final String title;
+            private final String status;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }

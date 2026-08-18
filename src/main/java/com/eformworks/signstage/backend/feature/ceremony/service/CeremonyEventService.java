@@ -74,6 +74,7 @@ public class CeremonyEventService {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEventType eventType = parseEventType(request.getEventType());
         CapacityType capacityType = eventType == CeremonyEventType.TEST
@@ -145,6 +146,7 @@ public class CeremonyEventService {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
 
@@ -183,6 +185,7 @@ public class CeremonyEventService {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         checkEventNotLocked(event);
@@ -237,6 +240,7 @@ public class CeremonyEventService {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.DRAFT) {
@@ -261,6 +265,7 @@ public class CeremonyEventService {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.READY) {
@@ -289,6 +294,7 @@ public class CeremonyEventService {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.STARTED) {
@@ -321,6 +327,7 @@ public class CeremonyEventService {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.STARTED) {

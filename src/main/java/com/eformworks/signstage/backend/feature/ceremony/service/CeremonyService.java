@@ -10,6 +10,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyAssignment;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyCapacityPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOptionalFeaturePurchase;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
@@ -29,9 +30,14 @@ import com.eformworks.signstage.backend.feature.organization.entity.Organization
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
+import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +54,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class CeremonyService {
 
+    private static final Set<String> CEREMONY_STATUS_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
+
     private final CeremonyRepository ceremonyRepository;
     private final CeremonyAssignmentRepository ceremonyAssignmentRepository;
     private final CeremonyCapacityPurchaseRepository ceremonyCapacityPurchaseRepository;
@@ -59,6 +67,7 @@ public class CeremonyService {
     private final CapacityAddOnRepository capacityAddOnRepository;
     private final OptionalFeatureRepository optionalFeatureRepository;
     private final UserRepository userRepository;
+    private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     @Transactional
     public CeremonyDto.Response.CeremonySummary createCeremony(
@@ -91,19 +100,22 @@ public class CeremonyService {
         return toSummary(ceremony);
     }
 
-    public List<CeremonyDto.Response.CeremonySummary> findCeremonies(Long organizationId, Long currentUserId) {
+    /**
+     * OPERATOR는 배정된 행사만 조회된다 — {@code assignedUserId}를 본인 id로 넘겨 조회 시점에
+     * {@link CeremonyAssignment} 조인으로 스코핑한다({@link CeremonyRepositoryCustom#search}).
+     */
+    public Page<CeremonyDto.Response.CeremonySummary> findCeremonies(
+            Long organizationId,
+            Long currentUserId,
+            String title,
+            CeremonyStatus status,
+            Pageable pageable
+    ) {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        Long assignedUserId = actingMember.getRole() == MemberRole.OPERATOR ? currentUserId : null;
 
-        List<Ceremony> ceremonies;
-        if (actingMember.getRole() == MemberRole.OPERATOR) {
-            ceremonies = ceremonyAssignmentRepository.findAllByUserId(currentUserId).stream()
-                    .map(CeremonyAssignment::getCeremony)
-                    .filter(ceremony -> ceremony.getOrganization().getId().equals(organizationId))
-                    .toList();
-        } else {
-            ceremonies = ceremonyRepository.findAllByOrganizationId(organizationId);
-        }
-        return ceremonies.stream().map(this::toSummary).toList();
+        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, assignedUserId, pageable);
+        return ceremonies.map(this::toSummary);
     }
 
     public CeremonyDto.Response.CeremonySummary retrieveCeremony(Long organizationId, Long ceremonyId, Long currentUserId) {
@@ -123,6 +135,7 @@ public class CeremonyService {
         Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        checkCeremonyEditable(ceremony);
 
         CapacityAddOn addOn = capacityAddOnRepository.findById(request.getCapacityAddOnId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND));
@@ -150,6 +163,7 @@ public class CeremonyService {
         Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        checkCeremonyEditable(ceremony);
 
         OptionalFeature feature = optionalFeatureRepository.findById(request.getOptionalFeatureId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND));
@@ -168,6 +182,45 @@ public class CeremonyService {
         ceremonyOptionalFeaturePurchaseRepository.save(purchase);
 
         return toOptionalFeatureSummary(purchase);
+    }
+
+    /**
+     * 플랫폼 관리자가 Ceremony 상태를 양방향으로 강제 변경한다(실수로 완료됐거나 예외 상황 처리용).
+     * {@code feature.platformadmin.service}에 별도 래퍼를 두지 않고 여기 직접 붙인다 — 과금
+     * 카탈로그 작업에서 확립한 관례(PlatformAdminBillingCatalogController → BillingPlanService 등)와
+     * 같다. 아래 {@code findCeremonyInOrganizationOrThrow}를 그대로 재사용한다.
+     */
+    @Transactional
+    public CeremonyDto.Response.CeremonySummary updateStatusByPlatformAdmin(
+            Long organizationId,
+            Long ceremonyId,
+            Long adminUserId,
+            String actingPlatformRole,
+            CeremonyDto.Request.UpdateStatus request
+    ) {
+        if (!CEREMONY_STATUS_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        CeremonyStatus previousStatus = ceremony.getStatus();
+        CeremonyStatus newStatus = parseCeremonyStatus(request.getStatus());
+        ceremony.changeStatus(newStatus);
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.UPDATE_CEREMONY_STATUS, null, organizationId,
+                "ceremonyId=" + ceremonyId + ", status: " + previousStatus + " -> " + newStatus
+        );
+
+        return toSummary(ceremony);
+    }
+
+    private CeremonyStatus parseCeremonyStatus(String status) {
+        try {
+            return CeremonyStatus.valueOf(status);
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
     }
 
     // ---- CeremonyEventService와 공유하는 package-private 헬퍼 ----
@@ -204,6 +257,17 @@ public class CeremonyService {
         }
         if (actingMember.getRole() == MemberRole.OPERATOR) {
             checkAssigned(ceremony, currentUserId);
+        }
+    }
+
+    /**
+     * 완료(COMPLETED)된 Ceremony 아래에서는 하위 데이터를 더 이상 수정할 수 없다 — 조회만 가능하다.
+     * 결과물 생성처럼 완료를 유발하는 호출 자체는 이 체크가 통과한 뒤(아직 IN_PROGRESS일 때)
+     * 실행되고, 완료 전이는 그 성공 이후에 일어나므로 스스로를 막지 않는다.
+     */
+    void checkCeremonyEditable(Ceremony ceremony) {
+        if (ceremony.getStatus() == CeremonyStatus.COMPLETED) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_ALREADY_COMPLETED);
         }
     }
 
@@ -270,6 +334,7 @@ public class CeremonyService {
                 ceremony.getOrganization().getId(),
                 ceremony.getBillingPlan() != null ? ceremony.getBillingPlan().getId() : null,
                 ceremony.getTitle(),
+                ceremony.getStatus().name(),
                 ceremony.getCreatedBy(),
                 ceremony.getCreatedAt()
         );

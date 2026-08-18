@@ -39,6 +39,7 @@ public class TemplateFieldService {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         Signer signer = request.getSignerId() == null

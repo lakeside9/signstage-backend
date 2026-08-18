@@ -135,6 +135,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_EVENT_NOT_IN_PROGRESS",
             HttpStatus.CONFLICT,
             "서명 진행 중(STARTED)인 하위 행사에서만 가능합니다."
+    ),
+    CEREMONY_ALREADY_COMPLETED(
+            "CEREMONY_ALREADY_COMPLETED",
+            HttpStatus.CONFLICT,
+            "완료된 행사는 더 이상 수정할 수 없습니다."
     );
 
     private final String code;
