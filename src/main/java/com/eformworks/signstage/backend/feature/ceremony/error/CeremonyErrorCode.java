@@ -88,6 +88,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "이미 이 하위 행사에 매핑된 템플릿입니다."
     ),
+    TEMPLATE_MAPPING_NOT_FOUND(
+            "CEREMONY_TEMPLATE_MAPPING_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "문서 매핑을 찾을 수 없습니다."
+    ),
     TEMPLATE_IN_USE(
             "CEREMONY_TEMPLATE_IN_USE",
             HttpStatus.CONFLICT,

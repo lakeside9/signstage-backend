@@ -284,6 +284,38 @@ public class CeremonyEventService {
         return toMappingSummary(mapping);
     }
 
+    /**
+     * 문서 매핑을 해제한다. {@code DRAFT}/{@code READY}일 때만 가능하다 — {@link #mapTemplate}과
+     * 같은 잠금 규칙. Template 자신이나 그 서명란(TemplateField)은 건드리지 않는다 — 이
+     * 매핑(CeremonyTemplate)만 지운다. 문서 교체는 프런트가 이 메서드로 기존 매핑을 지운 뒤
+     * {@link #mapTemplate}으로 새 매핑을 만드는 두 단계로 한다(레거시의 통째 교체 PUT과 달리
+     * REST 자원 하나씩 다루는 이 프로젝트 관례를 따른다).
+     */
+    @Transactional
+    public void unmapTemplate(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long mappingId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        checkEventNotLocked(event);
+
+        CeremonyTemplate mapping = ceremonyTemplateRepository.findById(mappingId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.TEMPLATE_MAPPING_NOT_FOUND));
+        if (!mapping.getCeremonyEvent().getId().equals(eventId)) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_MAPPING_NOT_FOUND);
+        }
+
+        ceremonyTemplateRepository.delete(mapping);
+    }
+
     public List<CeremonyEventDto.Response.CeremonyTemplateSummary> findMappedTemplates(
             Long organizationId,
             Long ceremonyId,

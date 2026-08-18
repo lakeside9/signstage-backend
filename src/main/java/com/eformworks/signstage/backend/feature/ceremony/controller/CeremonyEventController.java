@@ -161,6 +161,23 @@ public class CeremonyEventController {
     }
 
     @Operation(
+            summary = "문서 매핑 해제",
+            description = "DRAFT/READY일 때만 가능하다. Template 자신이나 서명란은 건드리지 않고 이 매핑만 지운다. "
+                    + "문서를 교체하려면 이 API로 기존 매핑을 지운 뒤 새 문서로 다시 매핑한다."
+    )
+    @DeleteMapping("/{eventId}/templates/{mappingId}")
+    public ApiResponse<Void> unmapTemplate(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId,
+            @PathVariable Long mappingId
+    ) {
+        ceremonyEventService.unmapTemplate(organizationId, ceremonyId, eventId, mappingId, currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
             summary = "READY 전이",
             description = "CONTRACT/EXHIBITION 각 1개 이상 매핑, 필수 서명란 전원 배정, "
                     + "CONTRACT/EXHIBITION 필수 서명자 구성 일치가 조건이다."
