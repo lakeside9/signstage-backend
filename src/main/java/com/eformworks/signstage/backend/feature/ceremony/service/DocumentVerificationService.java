@@ -33,7 +33,7 @@ public class DocumentVerificationService {
     @Transactional
     public DocumentVerificationDto.Response.VerificationResult verify(MultipartFile file) {
         String checksum = sha256Hex(readBytes(file));
-        Optional<CeremonyResult> found = ceremonyResultRepository.findByChecksum(checksum);
+        Optional<CeremonyResult> found = ceremonyResultRepository.findFirstByChecksumOrderByCreatedAtDesc(checksum);
         if (found.isEmpty()) {
             return new DocumentVerificationDto.Response.VerificationResult(false, null, null, null, null, null);
         }
