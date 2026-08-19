@@ -28,13 +28,15 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 서명자 포털. JWT를 쓰지 않는다 — {@code eventAccessKey}/{@code signerAccessKey} 소지만으로
  * 접근한다(signstage-docs business/ceremony-feature-migration-review.md 2.3/4.5절 결정).
  * 조직 스코프 검사가 필요 없는 완전히 다른 인가 모델이라 {@link CeremonyService}의 헬퍼를
- * 재사용하지 않고 리포지토리를 직접 쓴다.
+ * 재사용하지 않고 리포지토리를 직접 쓴다 — 다만 {@link CeremonyEventService#isAllRequiredSignersComplete}는
+ * 조직 스코프 검사가 없는 순수 조회 헬퍼라 예외적으로 재사용한다({@link #completeSignature} 참고).
  */
 @Service
 @RequiredArgsConstructor
@@ -48,6 +50,7 @@ public class SignerPortalService {
     private final StrokeDataRepository strokeDataRepository;
     private final CeremonyEventLogRepository ceremonyEventLogRepository;
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
+    private final CeremonyEventService ceremonyEventService;
     private final TemplateService templateService;
 
     public SignerPortalDto.Response.PortalContext retrievePortalContext(String eventAccessKey, String signerAccessKey) {
@@ -169,6 +172,10 @@ public class SignerPortalService {
     ) {
         PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
 
+        if (context.event().getStatus() != CeremonyEventStatus.STARTED) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_NOT_IN_PROGRESS);
+        }
+
         TemplateField field = templateFieldRepository.findById(request.getTemplateFieldId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.TEMPLATE_FIELD_NOT_FOUND));
 
@@ -198,10 +205,22 @@ public class SignerPortalService {
     /**
      * 배정된 모든 필수 서명란에 스트로크가 있어야 완료할 수 있다 — 레거시의 "로그 스캔으로
      * 완료 판정" 방식을 그대로 따른다(별도 completed 컬럼 없음).
+     *
+     * <p>격리 수준을 {@code READ_COMMITTED}로 명시한다 — 기본(REPEATABLE READ, MySQL) 그대로
+     * 두면 이 트랜잭션이 이미 확립한 스냅샷 때문에, 아래에서 {@code findByIdForUpdate}로 잠금을
+     * 잡은 뒤에도 "전원 완료" 판정 쿼리(ceremony_event_logs 조회)가 그 시점 이후 다른
+     * 트랜잭션이 커밋한 내용을 못 볼 수 있다. READ_COMMITTED면 잠금 획득 이후의 모든 조회가
+     * 항상 그 시점의 최신 커밋 데이터를 보므로, 아래 잠금과 조합하면 동시에 마지막 두 서명자가
+     * 완료해도 폭죽 브로드캐스트가 정확히 한 번만 나간다(signstage-docs
+     * business/ceremony-feature-migration-review.md 8.8절 참고).
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void completeSignature(String eventAccessKey, String signerAccessKey) {
         PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
+
+        if (context.event().getStatus() != CeremonyEventStatus.STARTED) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_NOT_IN_PROGRESS);
+        }
 
         List<TemplateField> requiredFields = collectRequiredFieldsForSigner(context.event(), context.signer());
         boolean allSigned = requiredFields.stream().allMatch(field ->
@@ -229,6 +248,18 @@ public class SignerPortalService {
         ceremonyRealtimeNotifier.notifySignatureCompleted(
                 context.event().getId(), context.signer().getId(), context.signer().getName()
         );
+
+        // 폭죽(ALL_SIGNED_FIREWORKS) — 이 이벤트 행에 먼저 잠금을 잡아 동시 완료 요청들을
+        // 이 구간에서 직렬화한 뒤(클래스 문서 주석 참고), "방금 전원 완료로 전환됐는가"를
+        // 판정한다. 옵션이 적용됐는지는 여기서 검사하지 않는다 — 적용 여부는 프로젝터가
+        // ProjectorContext.appliedOptionalFeatureCodes로 스스로 걸러서 소비하고, 다른 화면은
+        // 이 메시지 타입을 아예 처리하지 않아 무시한다(다른 SIGNATURE_* 브로드캐스트와 같은
+        // "사실은 항상 보내고 화면이 알아서 거른다" 원칙).
+        CeremonyEvent lockedEvent = ceremonyEventRepository.findByIdForUpdate(context.event().getId())
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.PORTAL_EVENT_NOT_FOUND));
+        if (ceremonyEventService.isAllRequiredSignersComplete(lockedEvent)) {
+            ceremonyRealtimeNotifier.notifyAllSignersCompleted(lockedEvent.getId());
+        }
     }
 
     /**

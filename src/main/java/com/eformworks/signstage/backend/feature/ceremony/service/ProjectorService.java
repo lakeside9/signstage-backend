@@ -13,6 +13,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
@@ -44,6 +45,7 @@ public class ProjectorService {
     private final CeremonyTemplateRepository ceremonyTemplateRepository;
     private final TemplateFieldRepository templateFieldRepository;
     private final StrokeDataRepository strokeDataRepository;
+    private final CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
     private final TemplateService templateService;
 
     public ProjectorDto.Response.ProjectorContext retrieveContext(String eventAccessKey) {
@@ -81,8 +83,15 @@ public class ProjectorService {
             );
         }
 
+        List<String> appliedOptionalFeatureCodes = ceremonyEventOptionalFeatureRepository
+                .findAllByCeremonyEventId(event.getId())
+                .stream()
+                .map(applied -> applied.getOptionalFeature().getCode().name())
+                .toList();
+
         return new ProjectorDto.Response.ProjectorContext(
-                event.getId(), event.getName(), event.getStatus().name(), event.getAccessKey(), exhibition
+                event.getId(), event.getName(), event.getStatus().name(), event.getAccessKey(), exhibition,
+                appliedOptionalFeatureCodes
         );
     }
 

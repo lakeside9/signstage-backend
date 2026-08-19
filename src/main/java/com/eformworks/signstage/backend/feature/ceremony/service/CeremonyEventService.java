@@ -523,6 +523,19 @@ public class CeremonyEventService {
         }
     }
 
+    /**
+     * {@link #validateFinishConditions}와 정확히 같은 기준(필수 서명자 전원의 최신 감사 로그가
+     * SIGNATURE_COMPLETE인지)으로 "지금 전원 완료 상태인가"만 boolean으로 돌려준다.
+     * {@link SignerPortalService#completeSignature}가 서명 완료 처리 직후 "방금 전원 완료로
+     * 전환됐는가"를 판정해 폭죽(ALL_SIGNED_FIREWORKS) 브로드캐스트 여부를 정하는 데 쓴다 —
+     * 두 서비스가 인가 모델은 다르지만(4.5절), 이 계산 자체는 순수 조회라 조직 스코프 검사가
+     * 없으므로 예외적으로 공유한다(package-private).
+     */
+    boolean isAllRequiredSignersComplete(CeremonyEvent event) {
+        return collectFinishRequiredSignerIds(event).stream()
+                .allMatch(signerId -> isSignerSignatureComplete(event.getId(), signerId));
+    }
+
     /** {@code POST .../finish}가 완료를 요구하는 서명자 집합 — CONTRACT+EXHIBITION 매핑의 필수 서명란이 참조하는 signerId. */
     private Set<Long> collectFinishRequiredSignerIds(CeremonyEvent event) {
         List<CeremonyTemplate> contractMappings = ceremonyTemplateRepository

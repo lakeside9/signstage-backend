@@ -38,6 +38,16 @@ public class CeremonyRealtimeNotifier {
         ));
     }
 
+    /**
+     * 이 이벤트의 필수 서명자 전원이 방금 완료로 전환된 순간에만 쏜다 — 중복/누락 방지는
+     * 호출부인 {@code SignerPortalService.completeSignature}가 {@code CeremonyEvent} 행 잠금으로
+     * 보장한다. 프로젝터가 ALL_SIGNED_FIREWORKS 옵션이 적용된 이벤트에서만 이 메시지를 폭죽
+     * 연출로 소비한다(다른 화면은 이 타입을 처리하지 않아 조용히 무시한다).
+     */
+    public void notifyAllSignersCompleted(Long eventId) {
+        send(eventId, "ALL_SIGNERS_COMPLETED", Map.of());
+    }
+
     public void notifySignatureCleared(Long eventId, Long signerId, Long templateFieldId) {
         send(eventId, "SIGNATURE_CLEARED", Map.of(
                 "signerId", signerId,

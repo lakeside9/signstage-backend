@@ -2,9 +2,13 @@ package com.eformworks.signstage.backend.feature.ceremony.repository;
 
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, Long> {
 
@@ -17,4 +21,14 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, Lo
     boolean existsByAccessKey(String accessKey);
 
     Optional<CeremonyEvent> findByAccessKey(String accessKey);
+
+    /**
+     * 행 잠금(SELECT ... FOR UPDATE)으로 조회 — {@code SignerPortalService.completeSignature}가
+     * "이 이벤트의 필수 서명자 전원이 방금 완료로 전환됐는가"를 판정하기 전에 이 잠금을 먼저
+     * 잡아서, 같은 이벤트에 대한 동시 완료 요청들이 판정 구간에서 직렬화되게 한다(폭죽 중복/누락
+     * 방지, signstage-docs business/ceremony-feature-migration-review.md 8.6/8.8절 참고).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from CeremonyEvent e where e.id = :id")
+    Optional<CeremonyEvent> findByIdForUpdate(@Param("id") Long id);
 }
