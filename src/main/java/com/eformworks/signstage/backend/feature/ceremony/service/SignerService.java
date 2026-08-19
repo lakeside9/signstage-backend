@@ -4,9 +4,12 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.feature.ceremony.dto.SignerDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.SignerRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
@@ -32,6 +35,7 @@ public class SignerService {
     private final TemplateFieldRepository templateFieldRepository;
     private final StrokeDataRepository strokeDataRepository;
     private final CeremonyEventLogRepository ceremonyEventLogRepository;
+    private final CeremonyTemplateRepository ceremonyTemplateRepository;
     private final CeremonyService ceremonyService;
 
     @Transactional
@@ -101,8 +105,29 @@ public class SignerService {
         ceremonyService.checkCeremonyEditable(ceremony);
 
         Signer signer = findSignerInCeremonyOrThrow(ceremonyId, signerId);
+        if (isSignerLockedByStartedEvent(signerId)) {
+            throw new ApplicationException(CeremonyErrorCode.SIGNER_LOCKED_BY_EVENT);
+        }
         signer.updateInfo(request.getName(), request.getPosition(), request.getAffiliation(), request.getRoleCode());
         return toSummary(signer);
+    }
+
+    /**
+     * 이 서명자가 배정된 서명란이 속한 문서 양식이, 시작(STARTED)됐거나 종료(FINISHED)된
+     * 하위 행사에 매핑돼 있으면 잠긴 것으로 본다 — 현장에서 이미 쓰이고 있는 서명자 정보를
+     * 바꾸면 결과물(계약서/감사 기록)과 화면에 보이던 이름이 어긋나기 때문이다.
+     */
+    private boolean isSignerLockedByStartedEvent(Long signerId) {
+        List<TemplateField> fields = templateFieldRepository.findAllBySignerId(signerId);
+        if (fields.isEmpty()) {
+            return false;
+        }
+        return fields.stream()
+                .map(field -> field.getTemplate().getId())
+                .distinct()
+                .flatMap(templateId -> ceremonyTemplateRepository.findAllByTemplateId(templateId).stream())
+                .map(ceremonyTemplate -> ceremonyTemplate.getCeremonyEvent().getStatus())
+                .anyMatch(status -> status == CeremonyEventStatus.STARTED || status == CeremonyEventStatus.FINISHED);
     }
 
     /**

@@ -5,6 +5,7 @@ import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
@@ -236,8 +237,23 @@ public class TemplateService {
         ceremonyService.checkCeremonyEditable(ceremony);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        if (isTemplateLockedByStartedEvent(templateId)) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_LOCKED_BY_EVENT);
+        }
         template.updateInfo(request.getTitle(), parseDocumentRole(request.getDocumentRole()));
         return toSummary(template);
+    }
+
+    /**
+     * 이 문서 양식이 시작(STARTED)됐거나 종료(FINISHED)된 하위 행사에 매핑돼 있으면 잠긴
+     * 것으로 본다 — 제목/문서 역할이 바뀌면 이미 진행 중인 현장 운영·결과물과 어긋나기
+     * 때문이다. 서명란 자체의 잠금({@link #completeTemplate}, {@code TEMPLATE_LOCKED})과는
+     * 별개 조건이다.
+     */
+    private boolean isTemplateLockedByStartedEvent(Long templateId) {
+        return ceremonyTemplateRepository.findAllByTemplateId(templateId).stream()
+                .map(ceremonyTemplate -> ceremonyTemplate.getCeremonyEvent().getStatus())
+                .anyMatch(status -> status == CeremonyEventStatus.STARTED || status == CeremonyEventStatus.FINISHED);
     }
 
     /**

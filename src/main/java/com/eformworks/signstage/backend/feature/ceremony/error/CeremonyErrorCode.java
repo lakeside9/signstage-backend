@@ -66,6 +66,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "서명란에 배정됐거나 서명·감사 기록이 남아 있는 서명자는 삭제할 수 없습니다."
     ),
+    SIGNER_LOCKED_BY_EVENT(
+            "CEREMONY_SIGNER_LOCKED_BY_EVENT",
+            HttpStatus.CONFLICT,
+            "시작되었거나 종료된 하위 행사에 배정된 서명자는 수정할 수 없습니다."
+    ),
     TEMPLATE_NOT_FOUND("CEREMONY_TEMPLATE_NOT_FOUND", HttpStatus.NOT_FOUND, "템플릿을 찾을 수 없습니다."),
     CEREMONY_TEMPLATE_LIMIT_EXCEEDED(
             "CEREMONY_TEMPLATE_LIMIT_EXCEEDED",
@@ -102,6 +107,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_TEMPLATE_IN_USE",
             HttpStatus.CONFLICT,
             "이미 하위 행사에 매핑된 문서 양식은 삭제할 수 없습니다."
+    ),
+    TEMPLATE_LOCKED_BY_EVENT(
+            "CEREMONY_TEMPLATE_LOCKED_BY_EVENT",
+            HttpStatus.CONFLICT,
+            "시작되었거나 종료된 하위 행사에 매핑된 문서 양식은 수정할 수 없습니다."
     ),
     TEMPLATE_LOCKED(
             "CEREMONY_TEMPLATE_LOCKED",

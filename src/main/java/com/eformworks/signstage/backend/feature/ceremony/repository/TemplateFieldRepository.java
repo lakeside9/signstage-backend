@@ -16,4 +16,7 @@ public interface TemplateFieldRepository extends JpaRepository<TemplateField, Lo
 
     /** 서명자 삭제 전 "서명란에 배정돼 있는지" 확인용. */
     boolean existsBySignerId(Long signerId);
+
+    /** 서명자 수정 전 "시작/종료된 하위 행사의 서명란에 배정됐는지" 확인용 — 매핑된 템플릿을 봐야 해서 전체를 가져온다. */
+    List<TemplateField> findAllBySignerId(Long signerId);
 }
