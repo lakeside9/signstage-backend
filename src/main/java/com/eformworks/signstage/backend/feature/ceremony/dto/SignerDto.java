@@ -69,6 +69,8 @@ public final class SignerDto {
             private final String accessKey;
             /** 시작/종료된 하위 행사에 배정돼 수정이 막힌 서명자인지 — true면 화면에서 수정 버튼을 비활성화한다. */
             private final boolean locked;
+            /** 서명란 배정/서명·감사 기록이 있어 삭제할 수 없는 서명자면 false — 화면에서 삭제 버튼을 숨긴다. */
+            private final boolean deletable;
             private final LocalDateTime createdAt;
         }
     }

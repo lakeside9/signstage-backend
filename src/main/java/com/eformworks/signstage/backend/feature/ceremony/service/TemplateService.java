@@ -257,6 +257,16 @@ public class TemplateService {
     }
 
     /**
+     * 하위 행사(CeremonyEvent)에 매핑돼 있는지 — {@link #deleteTemplate}의 차단 조건이자
+     * {@link #toSummary}가 목록 화면의 삭제 버튼 노출 여부(deletable)를 계산하는 데도
+     * 재사용한다. 상태(STARTED/FINISHED)를 가리지 않는다 — DRAFT/READY 이벤트에 매핑돼 있어도
+     * FK가 깨지므로 삭제할 수 없다({@link #isTemplateLockedByStartedEvent}와는 별개 조건).
+     */
+    private boolean isTemplateInUse(Long templateId) {
+        return ceremonyTemplateRepository.existsByTemplateId(templateId);
+    }
+
+    /**
      * 이미 하위 행사(CeremonyEvent)에 매핑된 문서 양식은 삭제할 수 없다 — 막지 않으면
      * ceremony_templates의 FK가 깨진다. 매핑 안 된 문서 양식은 서명란 → 저장소 파일 →
      * Template 행 순으로 지운다.
@@ -269,7 +279,7 @@ public class TemplateService {
         ceremonyService.checkCeremonyEditable(ceremony);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
-        if (ceremonyTemplateRepository.existsByTemplateId(templateId)) {
+        if (isTemplateInUse(templateId)) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_IN_USE);
         }
 
@@ -384,6 +394,7 @@ public class TemplateService {
                 template.getStatus().name(),
                 fieldCount,
                 isTemplateLockedByStartedEvent(template.getId()),
+                !isTemplateInUse(template.getId()),
                 template.getCreatedAt()
         );
     }

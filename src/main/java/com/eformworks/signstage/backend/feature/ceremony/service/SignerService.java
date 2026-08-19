@@ -143,14 +143,22 @@ public class SignerService {
         ceremonyService.checkCeremonyEditable(ceremony);
 
         Signer signer = findSignerInCeremonyOrThrow(ceremonyId, signerId);
-        boolean inUse = templateFieldRepository.existsBySignerId(signerId)
-                || strokeDataRepository.existsBySignerId(signerId)
-                || ceremonyEventLogRepository.existsByTargetSignerId(signerId);
-        if (inUse) {
+        if (isSignerInUse(signerId)) {
             throw new ApplicationException(CeremonyErrorCode.SIGNER_IN_USE);
         }
 
         signerRepository.delete(signer);
+    }
+
+    /**
+     * 서명란에 배정돼 있거나(template_fields), 실제로 서명한 기록(stroke_data)/감사 로그
+     * (ceremony_event_logs)가 있는지 — {@link #deleteSigner}의 차단 조건이자 {@link #toSummary}가
+     * 목록 화면의 삭제 버튼 노출 여부(deletable)를 계산하는 데도 재사용한다.
+     */
+    private boolean isSignerInUse(Long signerId) {
+        return templateFieldRepository.existsBySignerId(signerId)
+                || strokeDataRepository.existsBySignerId(signerId)
+                || ceremonyEventLogRepository.existsByTargetSignerId(signerId);
     }
 
     /** {@link com.eformworks.signstage.backend.feature.ceremony.service.TemplateFieldService}가 signerId 검증에 재사용한다. */
@@ -181,6 +189,7 @@ public class SignerService {
                 signer.getRoleCode(),
                 signer.getAccessKey(),
                 isSignerLockedByStartedEvent(signer.getId()),
+                !isSignerInUse(signer.getId()),
                 signer.getCreatedAt()
         );
     }

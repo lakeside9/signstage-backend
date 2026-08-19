@@ -176,4 +176,20 @@ public class CeremonyController {
                 ceremonyService.retrieveAvailableOptionalFeatures(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
+
+    @Operation(
+            summary = "용량 한도 조회",
+            description = "서명자/문서양식/테스트·본행사 하위 행사 각각 등록할 수 있는 최대 개수(플랜 기본값 + 승인된 추가구매). "
+                    + "서명자·문서양식·하위 행사 등록 화면이 \"등록할 수 있는 개수\"를 보여주는 데 쓴다."
+    )
+    @GetMapping("/{ceremonyId}/capacity-status")
+    public ApiResponse<CeremonyDto.Response.CapacityStatus> retrieveCapacityStatus(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        CeremonyDto.Response.CapacityStatus response =
+                ceremonyService.retrieveCapacityStatus(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
 }

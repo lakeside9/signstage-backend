@@ -510,6 +510,29 @@ public class CeremonyService {
     }
 
     /**
+     * 서명자/문서양식/테스트·본행사 등록 화면이 "등록할 수 있는 개수"를 보여주는 데 쓴다 —
+     * {@link #calculateEffectiveCapacity}(플랜 기본값 + 승인된 추가구매)를 네 가지 용량 유형
+     * 전부에 대해 계산해 돌려준다. 플랜이 없는 행사는 무제한이라 Integer.MAX_VALUE를 그대로
+     * 돌려준다(프런트가 "무제한"으로 표시).
+     */
+    public CeremonyDto.Response.CapacityStatus retrieveCapacityStatus(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        return new CeremonyDto.Response.CapacityStatus(
+                calculateEffectiveCapacity(ceremony, CapacityType.SIGNERS),
+                calculateEffectiveCapacity(ceremony, CapacityType.TEMPLATES),
+                calculateEffectiveCapacity(ceremony, CapacityType.TEST_EVENTS),
+                calculateEffectiveCapacity(ceremony, CapacityType.MAIN_EVENTS)
+        );
+    }
+
+    /**
      * 필수옵션(용량) 유효 한도 = 플랜 기본값 + Σ(구매수량 × addon.unitAmount). 플랜이 없는
      * 행사(4.8 예외 — 이 기능 배포 전 기존 행사)는 한도 강제 자체를 적용하지 않는다(사실상 무제한).
      */

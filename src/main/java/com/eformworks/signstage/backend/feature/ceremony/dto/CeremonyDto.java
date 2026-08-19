@@ -157,5 +157,20 @@ public final class CeremonyDto {
             private final LocalDateTime reviewedAt;
             private final LocalDateTime createdAt;
         }
+
+        /**
+         * 서명자/문서양식/테스트·본행사 각각의 유효 한도(플랜 기본값 + 승인된 추가구매). 등록 화면
+         * 타이틀에 "등록할 수 있는 개수"를 보여주는 데 쓴다. 플랜이 없는 행사는 Integer.MAX_VALUE로
+         * 온다(프런트가 "무제한"으로 표시).
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class CapacityStatus {
+
+            private final int signerLimit;
+            private final int templateLimit;
+            private final int testEventLimit;
+            private final int mainEventLimit;
+        }
     }
 }
