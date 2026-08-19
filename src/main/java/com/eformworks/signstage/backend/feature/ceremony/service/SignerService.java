@@ -180,6 +180,7 @@ public class SignerService {
                 signer.getAffiliation(),
                 signer.getRoleCode(),
                 signer.getAccessKey(),
+                isSignerLockedByStartedEvent(signer.getId()),
                 signer.getCreatedAt()
         );
     }

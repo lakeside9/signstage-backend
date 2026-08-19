@@ -383,6 +383,7 @@ public class TemplateService {
                 template.getOriginalFilename(),
                 template.getStatus().name(),
                 fieldCount,
+                isTemplateLockedByStartedEvent(template.getId()),
                 template.getCreatedAt()
         );
     }

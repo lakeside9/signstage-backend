@@ -67,6 +67,8 @@ public final class SignerDto {
             private final String affiliation;
             private final String roleCode;
             private final String accessKey;
+            /** 시작/종료된 하위 행사에 배정돼 수정이 막힌 서명자인지 — true면 화면에서 수정 버튼을 비활성화한다. */
+            private final boolean locked;
             private final LocalDateTime createdAt;
         }
     }

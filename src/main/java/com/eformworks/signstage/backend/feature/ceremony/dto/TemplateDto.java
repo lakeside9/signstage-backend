@@ -53,6 +53,8 @@ public final class TemplateDto {
             private final String status;
             /** 서명란(TemplateField) 개수 — status 계산과 목록 화면 "서명란" 컬럼에 쓴다. */
             private final long fieldCount;
+            /** 시작/종료된 하위 행사에 매핑돼 수정이 막힌 문서 양식인지 — true면 화면에서 수정 버튼을 비활성화한다. */
+            private final boolean locked;
             private final LocalDateTime createdAt;
         }
 
