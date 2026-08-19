@@ -516,6 +516,15 @@ public class CeremonyEventService {
     }
 
     private void validateFinishConditions(CeremonyEvent event) {
+        for (Long signerId : collectFinishRequiredSignerIds(event)) {
+            if (!isSignerSignatureComplete(event.getId(), signerId)) {
+                throw new ApplicationException(CeremonyErrorCode.EVENT_FINISH_CONDITION_NOT_MET);
+            }
+        }
+    }
+
+    /** {@code POST .../finish}가 완료를 요구하는 서명자 집합 — CONTRACT+EXHIBITION 매핑의 필수 서명란이 참조하는 signerId. */
+    private Set<Long> collectFinishRequiredSignerIds(CeremonyEvent event) {
         List<CeremonyTemplate> contractMappings = ceremonyTemplateRepository
                 .findAllByCeremonyEventIdAndDocumentRole(event.getId(), TemplateDocumentRole.CONTRACT);
         List<CeremonyTemplate> exhibitionMappings = ceremonyTemplateRepository
@@ -524,12 +533,33 @@ public class CeremonyEventService {
         Set<Long> requiredSignerIds = new HashSet<>(collectRequiredSignerIds(contractMappings));
         requiredSignerIds.addAll(collectRequiredSignerIds(exhibitionMappings));
         requiredSignerIds.remove(null);
+        return requiredSignerIds;
+    }
 
-        for (Long signerId : requiredSignerIds) {
-            if (!isSignerSignatureComplete(event.getId(), signerId)) {
-                throw new ApplicationException(CeremonyErrorCode.EVENT_FINISH_CONDITION_NOT_MET);
-            }
-        }
+    /**
+     * 행사제어 화면의 "서명자 모니터링"/"행사 종료" 활성화 판정용 — {@link #validateFinishConditions}가
+     * 실제로 검사하는 것과 정확히 같은 기준(감사 로그의 최신 SIGNATURE_COMPLETE 여부)으로
+     * 서명자별 완료 여부를 돌려준다. 화면이 스트로크 존재만으로 자체 근사 판정을 하면, 스트로크는
+     * 있지만 `/complete` 호출이 실패해 감사 로그엔 완료가 안 남은 경우를 놓쳐 "화면엔 완료로
+     * 보이는데 행사 종료를 누르면 거부되는" 불일치가 생긴다 — 그 근사 판정을 없애기 위한
+     * 엔드포인트다.
+     */
+    public List<CeremonyEventDto.Response.SignerCompletionStatus> findSignatureStatus(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        return collectFinishRequiredSignerIds(event).stream()
+                .map(signerId -> new CeremonyEventDto.Response.SignerCompletionStatus(
+                        signerId, isSignerSignatureComplete(eventId, signerId)
+                ))
+                .toList();
     }
 
     /**

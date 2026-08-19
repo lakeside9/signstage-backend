@@ -301,6 +301,23 @@ public class CeremonyEventController {
     }
 
     @Operation(
+            summary = "서명자별 완료 상태 조회",
+            description = "POST .../finish가 실제로 검사하는 것과 같은 기준(감사 로그)이다 — "
+                    + "행사제어 화면의 완료 표시/행사 종료 버튼 활성화는 이 값을 써야 한다."
+    )
+    @GetMapping("/{eventId}/signature-status")
+    public ApiResponse<List<CeremonyEventDto.Response.SignerCompletionStatus>> findSignatureStatus(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        List<CeremonyEventDto.Response.SignerCompletionStatus> response = ceremonyEventService
+                .findSignatureStatus(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
             summary = "결과물 파일 다운로드",
             description = "관리자 콘솔 전용 경로다(JWT+조직 소속 검증) — 서명자 포털용 다운로드는 없다."
     )

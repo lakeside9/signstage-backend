@@ -134,5 +134,21 @@ public final class CeremonyEventDto {
             private final String documentRole;
             private final LocalDateTime createdAt;
         }
+
+        /**
+         * "이 서명자가 지금 완료 상태인가"를 {@code CeremonyEventService#isSignerSignatureComplete}
+         * (감사 로그 기반 판정, {@code POST .../finish}가 실제로 쓰는 기준)로 그대로 계산해
+         * 돌려준다. 행사제어 화면이 예전에는 "서명란에 스트로크가 있는가"로 자체 근사 판정을
+         * 했는데, 스트로크는 있지만 `/complete` 호출이 실패해 감사 로그엔 완료가 안 남은
+         * 경우를 놓쳐 "화면엔 완료로 보이는데 행사 종료를 누르면 거부되는" 불일치가 있었다 —
+         * 이 엔드포인트가 그 근사 판정을 대체한다.
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class SignerCompletionStatus {
+
+            private final Long signerId;
+            private final boolean completed;
+        }
     }
 }
