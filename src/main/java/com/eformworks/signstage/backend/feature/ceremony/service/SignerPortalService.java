@@ -73,6 +73,8 @@ public class SignerPortalService {
                 context.event().getStatus().name(),
                 context.signer().getId(),
                 context.signer().getName(),
+                context.signer().getPosition(),
+                context.signer().getAffiliation(),
                 fieldStatuses
         );
     }

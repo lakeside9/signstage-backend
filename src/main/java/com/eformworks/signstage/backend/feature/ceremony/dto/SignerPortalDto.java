@@ -50,6 +50,8 @@ public final class SignerPortalDto {
             private final String eventStatus;
             private final Long signerId;
             private final String signerName;
+            private final String signerPosition;
+            private final String signerAffiliation;
             private final List<RequiredFieldStatus> requiredFields;
         }
 
