@@ -312,9 +312,22 @@ public class SignerPortalService {
         }
     }
 
-    /** 이 이벤트에 매핑된 템플릿들 중, 이 서명자에게 배정된 필수 서명란만 모은다. */
+    /**
+     * 이 서명자가 실제로 서명해야 하는 필수 서명란 — CONTRACT 문서의 것만 모은다.
+     *
+     * <p>EXHIBITION도 같은 서명자를 필수로 요구하도록 매핑돼 있지만({@code checkSignerMappingConsistency}
+     * 참고, READY 전이 조건), 그건 화면 배치 일관성(전시용 화면에 이 서명자 자리가 있어야
+     * 실시간 서명 궤적을 보여줄 수 있다)을 위한 것이지 이 서명자가 그 서명란에도 직접 서명해야
+     * 한다는 뜻이 아니다 — 서명자 포털은 CONTRACT만 보여주고 서명도 CONTRACT에만 받는다
+     * (legacy {@code SignerView.tsx}와 같다). EXHIBITION 화면에 뜨는 서명은 같은 서명자의
+     * CONTRACT 획을 그대로 재사용해 그린다({@code MappedDocumentPreview}/{@code ProjectorView}의
+     * signerId 폴백). 예전에는 이 메서드가 EXHIBITION의 필수 서명란까지 다 모았는데, 포털이
+     * 그 서명란엔 애초에 서명을 제출할 방법을 주지 않으니 완료 조건을 영원히 못 채워
+     * "서명했는데도 행사 종료 버튼이 안 켜지는" 버그로 이어졌다.
+     */
     private List<TemplateField> collectRequiredFieldsForSigner(CeremonyEvent event, Signer signer) {
-        List<CeremonyTemplate> mappings = ceremonyTemplateRepository.findAllByCeremonyEventId(event.getId());
+        List<CeremonyTemplate> mappings = ceremonyTemplateRepository
+                .findAllByCeremonyEventIdAndDocumentRole(event.getId(), TemplateDocumentRole.CONTRACT);
         List<TemplateField> result = new ArrayList<>();
         for (CeremonyTemplate mapping : mappings) {
             for (TemplateField field : templateFieldRepository.findAllByTemplateId(mapping.getTemplate().getId())) {
