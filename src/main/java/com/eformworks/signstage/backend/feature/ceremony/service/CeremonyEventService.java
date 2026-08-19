@@ -21,6 +21,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
@@ -269,6 +270,9 @@ public class CeremonyEventService {
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.TEMPLATE_NOT_FOUND));
         if (!template.getCeremony().getId().equals(ceremonyId)) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_NOT_IN_CEREMONY);
+        }
+        if (template.getStatus() != TemplateStatus.COMPLETED) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_NOT_COMPLETED);
         }
         if (ceremonyTemplateRepository.existsByCeremonyEventIdAndTemplateId(eventId, template.getId())) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_ALREADY_MAPPED);
