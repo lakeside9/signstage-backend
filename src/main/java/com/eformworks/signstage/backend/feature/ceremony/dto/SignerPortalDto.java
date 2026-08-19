@@ -64,6 +64,28 @@ public final class SignerPortalDto {
             private final boolean hasStroke;
         }
 
+        /**
+         * 서명자 포털의 서명용(CONTRACT) 문서 배경 — legacy {@code SignerView.tsx}처럼 문서 전체를
+         * 보여주고 그 위에 서명란을 오버레이로 겹쳐 그리기 위한 정보다. CONTRACT 매핑이 없으면
+         * {@code null}(READY 전이 조건상 STARTED 이후엔 항상 있다).
+         *
+         * <p>{@code fields}는 이 서명자 본인 것만이 아니라 문서에 배치된 전체 서명란이다 — 다른
+         * 서명자의 서명란도 흐릿하게 함께 보여주는 게 legacy의 UX다. 필드별 {@code signerId}는
+         * {@link TemplateFieldDto.Response.TemplateFieldSummary}에 이미 포함돼 있어(프로젝터
+         * 컨텍스트와 같은 관례) 프론트가 "내 서명란인지"를 자기 {@code signerId}와 비교해 판단한다.
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class PortalContractDocument {
+
+            private final Long templateId;
+            private final String title;
+            private final Integer pageCount;
+            private final Float width;
+            private final Float height;
+            private final List<TemplateFieldDto.Response.TemplateFieldSummary> fields;
+        }
+
         @Getter
         @AllArgsConstructor
         public static class StrokeSubmitted {

@@ -2,6 +2,9 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.feature.ceremony.dto.SignerPortalDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.TemplateFieldDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.ActorType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventAction;
@@ -10,6 +13,8 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventSta
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyTemplate;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
 import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
+import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
@@ -20,6 +25,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRe
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +48,7 @@ public class SignerPortalService {
     private final StrokeDataRepository strokeDataRepository;
     private final CeremonyEventLogRepository ceremonyEventLogRepository;
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
+    private final TemplateService templateService;
 
     public SignerPortalDto.Response.PortalContext retrievePortalContext(String eventAccessKey, String signerAccessKey) {
         PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
@@ -67,6 +74,88 @@ public class SignerPortalService {
                 context.signer().getId(),
                 context.signer().getName(),
                 fieldStatuses
+        );
+    }
+
+    /**
+     * legacy {@code SignerView.tsx}처럼 서명용(CONTRACT) 문서 전체를 배경으로 보여주기 위한
+     * 문서 정보 + 전체 서명란 목록. CONTRACT 매핑이 없으면 {@code null}이다. 페이지 이미지는
+     * {@link #renderContractPage}로 따로 받는다({@link ProjectorService}와 같은 분리).
+     */
+    public SignerPortalDto.Response.PortalContractDocument retrieveContract(String eventAccessKey, String signerAccessKey) {
+        PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
+        Template contractTemplate = findContractTemplate(context.event()).orElse(null);
+        if (contractTemplate == null) {
+            return null;
+        }
+
+        TemplateDto.Response.TemplateInfo info = templateService.buildTemplateInfo(contractTemplate);
+        List<TemplateFieldDto.Response.TemplateFieldSummary> fields = templateFieldRepository
+                .findAllByTemplateId(contractTemplate.getId())
+                .stream()
+                .map(this::toFieldSummary)
+                .toList();
+
+        return new SignerPortalDto.Response.PortalContractDocument(
+                contractTemplate.getId(), contractTemplate.getTitle(), info.getPageCount(), info.getWidth(), info.getHeight(), fields
+        );
+    }
+
+    public byte[] renderContractPage(String eventAccessKey, String signerAccessKey, int pageIndex, float scale) {
+        PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
+        Template contractTemplate = findContractTemplate(context.event())
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.TEMPLATE_NOT_IN_CEREMONY));
+        return templateService.renderPage(contractTemplate, pageIndex, scale);
+    }
+
+    /**
+     * 이 서명자 본인의 획만이 아니라 이벤트 전체 획을 돌려준다 — legacy가 "같은 문서에 이미
+     * 서명한 다른 사람들의 서명"도 함께 보여주는 것과 같다({@link ProjectorService#findStrokes}와
+     * 같은 조회, 인가만 signerAccessKey 기준으로 다르다).
+     */
+    public List<StrokeDataDto.Response.StrokeSummary> findStrokes(String eventAccessKey, String signerAccessKey) {
+        PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
+        return strokeDataRepository.findAllByCeremonyEventId(context.event().getId()).stream()
+                .map(this::toStrokeSummary)
+                .toList();
+    }
+
+    private Optional<Template> findContractTemplate(CeremonyEvent event) {
+        return ceremonyTemplateRepository
+                .findAllByCeremonyEventIdAndDocumentRole(event.getId(), TemplateDocumentRole.CONTRACT)
+                .stream()
+                .findFirst()
+                .map(CeremonyTemplate::getTemplate);
+    }
+
+    private TemplateFieldDto.Response.TemplateFieldSummary toFieldSummary(TemplateField field) {
+        return new TemplateFieldDto.Response.TemplateFieldSummary(
+                field.getId(),
+                field.getTemplate().getId(),
+                field.getSigner() != null ? field.getSigner().getId() : null,
+                field.getFieldKey(),
+                field.getPageIndex(),
+                field.getFieldIndex(),
+                field.getFieldName(),
+                field.getRoleCode(),
+                field.getSignOrder(),
+                field.getIsRequired(),
+                field.getXRatio(),
+                field.getYRatio(),
+                field.getWidthRatio(),
+                field.getHeightRatio(),
+                field.getCreatedAt()
+        );
+    }
+
+    private StrokeDataDto.Response.StrokeSummary toStrokeSummary(StrokeData stroke) {
+        return new StrokeDataDto.Response.StrokeSummary(
+                stroke.getId(),
+                stroke.getSigner().getId(),
+                stroke.getTemplateField().getId(),
+                stroke.getStrokeSeq(),
+                stroke.getRawData(),
+                stroke.getCreatedAt()
         );
     }
 
