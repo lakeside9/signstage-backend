@@ -533,17 +533,20 @@ public class CeremonyEventService {
     }
 
     /**
-     * {@code SIGNATURE_COMPLETE}/{@code SIGNATURE_REPLACE} 중 이 서명자의 가장 최근 로그가
-     * {@code SIGNATURE_COMPLETE}인지로 "지금 완료 상태인가"를 판정한다 — {@link
-     * SignerPortalService}의 같은 이름 메서드와 동일한 판정이지만, 두 서비스가 서로 다른
-     * 인가 모델(조직 스코프 vs JWT-free 포털)이라 헬퍼를 공유하지 않는 기존 관례를 따른다.
+     * {@code SIGNATURE_COMPLETE}/{@code SIGNATURE_REPLACE}/{@code SIGNATURE_CLEAR} 중 이
+     * 서명자의 가장 최근 로그가 {@code SIGNATURE_COMPLETE}인지로 "지금 완료 상태인가"를
+     * 판정한다 — {@link SignerPortalService}의 같은 이름 메서드와 동일한 판정이지만, 두
+     * 서비스가 서로 다른 인가 모델(조직 스코프 vs JWT-free 포털)이라 헬퍼를 공유하지 않는
+     * 기존 관례를 따른다. CLEAR를 목록에 넣은 이유도 그쪽과 같다 — 서명자가 완료 후 다시
+     * 지우고 그리는 도중엔(행사 종료 전까지 언제든 가능) 이 이벤트의 완료 조건 검사
+     * ({@link #validateFinishConditions})가 "아직 완료 안 됨"으로 정확히 봐야 한다.
      */
     private boolean isSignerSignatureComplete(Long eventId, Long signerId) {
         return ceremonyEventLogRepository
                 .findTopByCeremonyEventIdAndTargetSignerIdAndEventActionInOrderByCreatedAtDesc(
                         eventId,
                         signerId,
-                        List.of(CeremonyEventAction.SIGNATURE_COMPLETE, CeremonyEventAction.SIGNATURE_REPLACE)
+                        List.of(CeremonyEventAction.SIGNATURE_COMPLETE, CeremonyEventAction.SIGNATURE_REPLACE, CeremonyEventAction.SIGNATURE_CLEAR)
                 )
                 .map(log -> log.getEventAction() == CeremonyEventAction.SIGNATURE_COMPLETE)
                 .orElse(false);

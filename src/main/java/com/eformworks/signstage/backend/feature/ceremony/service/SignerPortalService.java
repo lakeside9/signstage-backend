@@ -232,9 +232,14 @@ public class SignerPortalService {
     }
 
     /**
-     * SIGNATURE_CLEAR — 서명 진행 중(STARTED)이고 아직 완료 전인 서명자가 자기 서명란 하나를
-     * 지우고 다시 그린다. 이미 완료한 뒤에는 self-serve로 지울 수 없다 — 관리자의 REPLACE
-     * ({@code CeremonyEventService.replaceSignerSignature})를 거쳐야 한다.
+     * SIGNATURE_CLEAR — 서명 진행 중(STARTED)인 서명자가 자기 서명란 하나를 지우고 다시
+     * 그린다. legacy(~/Works/eform/source/signstage/signstage-backend)
+     * {@code SignerPortalController#replaceAndCompleteEventSignature}는 이미 완료했는지를
+     * 아예 검사하지 않고 매번 무조건 교체+재완료 로그를 남긴다 — 행사가 끝나기 전까지는
+     * 서명자 본인이 몇 번이든 다시 서명할 수 있다는 뜻이다. 이 프로젝트도 같은 규칙을
+     * 따른다: 이벤트가 STARTED인 동안은 이미 완료했어도 self-serve로 지우고 다시 그릴 수
+     * 있다(예전엔 완료 후엔 관리자의 REPLACE를 거쳐야 했는데, 그 제약을 없앴다). FINISHED
+     * 이후엔 아래 상태 검사로 막힌다.
      */
     @Transactional
     public void clearFieldStroke(String eventAccessKey, String signerAccessKey, Long templateFieldId) {
@@ -249,9 +254,6 @@ public class SignerPortalService {
 
         if (context.event().getStatus() != CeremonyEventStatus.STARTED) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_NOT_IN_PROGRESS);
-        }
-        if (isSignerSignatureComplete(context.event().getId(), context.signer().getId())) {
-            throw new ApplicationException(CeremonyErrorCode.SIGNATURE_ALREADY_COMPLETED);
         }
 
         strokeDataRepository.deleteAllByCeremonyEventIdAndSignerIdAndTemplateFieldId(
@@ -273,17 +275,20 @@ public class SignerPortalService {
     }
 
     /**
-     * {@code SIGNATURE_COMPLETE}/{@code SIGNATURE_REPLACE} 중 이 서명자의 가장 최근 로그가
-     * {@code SIGNATURE_COMPLETE}인지로 "지금 완료 상태인가"를 판정한다 — 단순
-     * {@code existsBy(...SIGNATURE_COMPLETE)}는 REPLACE 이후에도 예전 완료 로그가 남아있어
-     * "완료 취소"를 반영하지 못한다(레거시가 못 고친 결함).
+     * {@code SIGNATURE_COMPLETE}/{@code SIGNATURE_REPLACE}/{@code SIGNATURE_CLEAR} 중 이
+     * 서명자의 가장 최근 로그가 {@code SIGNATURE_COMPLETE}인지로 "지금 완료 상태인가"를
+     * 판정한다 — 단순 {@code existsBy(...SIGNATURE_COMPLETE)}는 REPLACE/CLEAR 이후에도 예전
+     * 완료 로그가 남아있어 "완료 취소"를 반영하지 못한다(레거시가 못 고친 결함). CLEAR를
+     * 목록에 넣은 건 {@link #clearFieldStroke}가 완료 후에도 self-serve로 지울 수 있게
+     * 바뀌면서다 — 안 넣으면 "완료 → 지움 → 다시 그림 → 완료 재요청"에서 마지막 완료 재요청이
+     * "이미 완료됨"으로 잘못 막힌다(지운 사실이 최신 판정에 반영되지 않아서).
      */
     private boolean isSignerSignatureComplete(Long eventId, Long signerId) {
         return ceremonyEventLogRepository
                 .findTopByCeremonyEventIdAndTargetSignerIdAndEventActionInOrderByCreatedAtDesc(
                         eventId,
                         signerId,
-                        List.of(CeremonyEventAction.SIGNATURE_COMPLETE, CeremonyEventAction.SIGNATURE_REPLACE)
+                        List.of(CeremonyEventAction.SIGNATURE_COMPLETE, CeremonyEventAction.SIGNATURE_REPLACE, CeremonyEventAction.SIGNATURE_CLEAR)
                 )
                 .map(log -> log.getEventAction() == CeremonyEventAction.SIGNATURE_COMPLETE)
                 .orElse(false);
