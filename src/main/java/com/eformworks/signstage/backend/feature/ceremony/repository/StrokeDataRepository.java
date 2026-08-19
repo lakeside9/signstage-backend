@@ -18,15 +18,11 @@ public interface StrokeDataRepository extends JpaRepository<StrokeData, Long> {
             Long templateFieldId
     );
 
-    /** 결과 PDF 렌더링용 — 이 서명란에 남겨진 모든 획을 그린 순서(strokeSeq)대로 가져온다. */
-    List<StrokeData> findAllByCeremonyEventIdAndTemplateFieldIdOrderByStrokeSeq(
-            Long ceremonyEventId,
-            Long templateFieldId
-    );
-
     /**
      * 행사제어/프로젝터 화면이 늦게 들어와도 이미 그려진 획을 캐치업하려고 쓴다 — 필드별
-     * 순서(strokeSeq)까지는 상관없고, 화면이 필드별로 다시 묶어 그린다.
+     * 순서(strokeSeq)까지는 상관없고, 화면이 필드별로 다시 묶어 그린다. 결과 PDF 렌더링
+     * ({@code CeremonyResultService#buildStrokeContext})도 이걸로 이벤트 전체 획을 한 번에
+     * 읽어 필드별/서명자별로 다시 묶는다 — 문서마다 반복 조회하지 않는다.
      */
     List<StrokeData> findAllByCeremonyEventId(Long ceremonyEventId);
 

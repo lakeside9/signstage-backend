@@ -35,7 +35,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -45,6 +49,12 @@ import org.springframework.transaction.annotation.Transactional;
  * 행사 결과 PDF(CeremonyResult). {@code FINISHED} 상태의 하위 행사에서만, 이벤트당 1회
  * 생성한다. 렌더링은 {@link SignatureOverlayRenderer}(PDFBox 직접 그리기,
  * signstage-docs business/ceremony-feature-migration-review.md §5.1 결정)가 한다.
+ *
+ * <p>매핑된 문서(CONTRACT/EXHIBITION)마다 결과 PDF를 하나씩 만드는데, 서명자 포털은
+ * CONTRACT에만 서명을 받으므로 EXHIBITION 문서의 필드는 원래 자기 자신의 스트로크가 없다 —
+ * {@link #buildStrokeContext}/{@link #buildFieldStrokes}가 화면(행사제어/전시용 화면)과 같은
+ * signerId 폴백으로 같은 서명자의 CONTRACT 획을 재사용해 그린다. 안 그러면 계약서 PDF엔
+ * 서명이 있는데 전시용 PDF만 서명란이 빈 채로 나온다.
  */
 @Service
 @RequiredArgsConstructor
@@ -85,9 +95,10 @@ public class CeremonyResultService {
             throw new ApplicationException(CeremonyErrorCode.RESULTS_ALREADY_GENERATED);
         }
 
+        StrokeContext strokeContext = buildStrokeContext(event);
         List<CeremonyResult> results = new ArrayList<>();
         for (CeremonyTemplate mapping : ceremonyTemplateRepository.findAllByCeremonyEventId(eventId)) {
-            results.add(generateResultForTemplate(event, mapping));
+            results.add(generateResultForTemplate(event, mapping, strokeContext));
         }
 
         ceremonyEventLogRepository.save(
@@ -174,10 +185,10 @@ public class CeremonyResultService {
         return new DownloadedResult(resource, result.getOriginalFilename());
     }
 
-    private CeremonyResult generateResultForTemplate(CeremonyEvent event, CeremonyTemplate mapping) {
+    private CeremonyResult generateResultForTemplate(CeremonyEvent event, CeremonyTemplate mapping, StrokeContext strokeContext) {
         Template template = mapping.getTemplate();
         List<FieldStrokes> fieldStrokesList = templateFieldRepository.findAllByTemplateId(template.getId()).stream()
-                .map(field -> buildFieldStrokes(event, field))
+                .map(field -> buildFieldStrokes(field, strokeContext))
                 .toList();
 
         byte[] originalBytes;
@@ -209,13 +220,46 @@ public class CeremonyResultService {
     }
 
     /**
+     * 이벤트 전체 획을 한 번만 읽어 (1) 필드별 획 목록(저장 순서)과 (2) 서명자별 "실제로
+     * 그린 원본 서명란"을 미리 계산해 둔다 — {@link #buildFieldStrokes}가 문서마다/필드마다
+     * 반복 조회하지 않도록. 원본 서명란은 그 서명자의 가장 이른(created_at) 획이 속한
+     * templateFieldId로 정한다 — 서명자 포털이 실제로 서명을 받는 문서(CONTRACT)가 사실상
+     * 언제나 여기 해당한다.
+     */
+    private StrokeContext buildStrokeContext(CeremonyEvent event) {
+        List<StrokeData> allStrokes = strokeDataRepository.findAllByCeremonyEventId(event.getId());
+
+        Map<Long, List<StrokeData>> strokesByField = allStrokes.stream()
+                .collect(Collectors.groupingBy(stroke -> stroke.getTemplateField().getId()));
+        strokesByField.values().forEach(list -> list.sort(Comparator.comparing(StrokeData::getStrokeSeq)));
+
+        Map<Long, Long> originFieldBySignerId = new LinkedHashMap<>();
+        allStrokes.stream()
+                .sorted(Comparator.comparing(StrokeData::getCreatedAt))
+                .forEach(stroke -> originFieldBySignerId.putIfAbsent(stroke.getSigner().getId(), stroke.getTemplateField().getId()));
+
+        return new StrokeContext(strokesByField, originFieldBySignerId);
+    }
+
+    /**
      * 이 필드의 획을 저장 순서(strokeSeq)대로 모은다. {@code rawData}는 필드 바운딩 박스 기준
      * 0~1 비율 점 배열({@code [[x1,y1],[x2,y2],...]}, 좌상단 원점)이라는 계약이다(이번
      * 라운드에서 처음 정함).
+     *
+     * <p>이 필드 자신에게 직접 그려진 획이 없으면(전시용 문서는 서명자 포털이 서명을 받지
+     * 않으므로 거의 항상 이 경우다) 같은 서명자가 다른 매핑 문서(대개 CONTRACT)에 그린 획을
+     * 대신 쓴다 — 화면(행사제어/전시용 화면, {@code MappedDocumentPreview}/{@code ProjectorView})이
+     * 이미 쓰고 있는 signerId 폴백과 같은 방식이다. 이게 없으면 계약서 PDF엔 서명이 있는데
+     * 전시용 PDF엔 서명란이 빈 채로 나온다.
      */
-    private FieldStrokes buildFieldStrokes(CeremonyEvent event, TemplateField field) {
-        List<StrokeData> strokeRows = strokeDataRepository
-                .findAllByCeremonyEventIdAndTemplateFieldIdOrderByStrokeSeq(event.getId(), field.getId());
+    private FieldStrokes buildFieldStrokes(TemplateField field, StrokeContext strokeContext) {
+        List<StrokeData> strokeRows = strokeContext.strokesByField().getOrDefault(field.getId(), List.of());
+        if (strokeRows.isEmpty() && field.getSigner() != null) {
+            Long originFieldId = strokeContext.originFieldBySignerId().get(field.getSigner().getId());
+            if (originFieldId != null) {
+                strokeRows = strokeContext.strokesByField().getOrDefault(originFieldId, List.of());
+            }
+        }
 
         List<List<double[]>> strokes = strokeRows.stream()
                 .map(stroke -> parseStroke(stroke.getRawData()))
@@ -229,6 +273,9 @@ public class CeremonyResultService {
                 field.getHeightRatio(),
                 strokes
         );
+    }
+
+    private record StrokeContext(Map<Long, List<StrokeData>> strokesByField, Map<Long, Long> originFieldBySignerId) {
     }
 
     private List<double[]> parseStroke(String rawData) {
