@@ -147,6 +147,7 @@ public final class CeremonyDto {
             private final Long ceremonyId;
             private final Long capacityAddOnId;
             private final Integer quantity;
+            private final Integer purchasedUnitAmount;
             private final BigDecimal purchasedSalePrice;
             private final String purchasedDiscountType;
             private final BigDecimal purchasedDiscountValue;
@@ -163,6 +164,7 @@ public final class CeremonyDto {
             private final Long id;
             private final Long ceremonyId;
             private final Long optionalFeatureId;
+            private final String purchasedName;
             private final BigDecimal purchasedSalePrice;
             private final String purchasedDiscountType;
             private final BigDecimal purchasedDiscountValue;

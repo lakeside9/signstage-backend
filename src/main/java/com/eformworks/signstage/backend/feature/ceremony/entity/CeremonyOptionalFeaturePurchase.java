@@ -24,8 +24,11 @@ import lombok.NoArgsConstructor;
  * 행사 마스터(Ceremony) 단위 선택옵션 구매 요청(과금 단위). 실제로 어느 CeremonyEvent에 켤지는
  * {@link CeremonyEventOptionalFeature}가 별도로 다룬다(signstage-docs
  * business/ceremony-billing-options-review.md 4.11절). 요청 즉시 PENDING으로 생기고, 플랫폼
- * 관리자가 승인해야 "구매한 선택옵션" 집계에 반영된다. {@code purchased*} 3개 필드는 구매
- * 시점 가격 스냅샷이다.
+ * 관리자가 승인해야 "구매한 선택옵션" 집계에 반영된다. {@code purchased*} 필드는 구매 시점
+ * 스냅샷이다. {@code purchasedName}은 signstage-docs
+ * business/ceremony-billing-options-review.md 9장에서 추가됐다 — 그 전에는 "적용 가능한
+ * 선택옵션" 화면이 이름을 라이브 {@code OptionalFeature}에서 읽어서, 카탈로그 관리자가 이름을
+ * 바꾸면 이미 구매한 옵션의 표시 이름도 즉시 바뀌는 결함이 있었다.
  *
  * <p>유니크 제약이 status까지 포함한다 — 반려(REJECTED)된 요청은 그 조합을 계속 차지하면
  * 재요청이 막히므로, PENDING/APPROVED/REJECTED 상태별로 별도 행을 허용한다. "이미 구매(요청)한
@@ -56,6 +59,9 @@ public class CeremonyOptionalFeaturePurchase extends BaseEntity {
     @JoinColumn(name = "optional_feature_id", nullable = false)
     private OptionalFeature optionalFeature;
 
+    @Column(name = "purchased_name", nullable = false, length = 100)
+    private String purchasedName;
+
     @Column(name = "purchased_sale_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal purchasedSalePrice;
 
@@ -84,12 +90,14 @@ public class CeremonyOptionalFeaturePurchase extends BaseEntity {
     private CeremonyOptionalFeaturePurchase(
             Ceremony ceremony,
             OptionalFeature optionalFeature,
+            String purchasedName,
             BigDecimal purchasedSalePrice,
             DiscountType purchasedDiscountType,
             BigDecimal purchasedDiscountValue
     ) {
         this.ceremony = ceremony;
         this.optionalFeature = optionalFeature;
+        this.purchasedName = purchasedName;
         this.purchasedSalePrice = purchasedSalePrice;
         this.purchasedDiscountType = purchasedDiscountType;
         this.purchasedDiscountValue = purchasedDiscountValue;

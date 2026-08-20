@@ -12,6 +12,7 @@ import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
@@ -39,6 +40,7 @@ public class BillingPlanService {
     private final OptionalFeatureRepository optionalFeatureRepository;
     private final BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
     private final BillingPlanHistoryRepository billingPlanHistoryRepository;
+    private final CeremonyRepository ceremonyRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     @Transactional
@@ -104,9 +106,15 @@ public class BillingPlanService {
         BillingPlan plan = billingPlanRepository.findById(planId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
 
+        List<Long> optionalFeatureIds = request.getOptionalFeatureIds() == null
+                ? List.of()
+                : request.getOptionalFeatureIds();
+        List<OptionalFeature> optionalFeatures = resolveOptionalFeatures(optionalFeatureIds);
+
         String detail = "planId=" + planId
                 + ", salePrice: " + plan.getSalePrice() + " -> " + request.getSalePrice()
-                + ", active: " + plan.isActive() + " -> " + request.getActive();
+                + ", active: " + plan.isActive() + " -> " + request.getActive()
+                + ", optionalFeatureIds: " + retrieveOptionalFeatureIds(plan.getId()) + " -> " + optionalFeatureIds;
 
         plan.updateInfo(
                 request.getName(),
@@ -122,9 +130,19 @@ public class BillingPlanService {
         );
         recordPlanHistory(plan);
 
+        // 선택옵션 구성 통째로 교체 — 이미 확정/진행 중인 Ceremony는 CeremonyPlanHistoryOptionalFeature
+        // 스냅샷으로 보호되어 이 변경에 영향받지 않는다(signstage-docs
+        // business/ceremony-billing-options-review.md 9장 후속 결정).
+        billingPlanOptionalFeatureRepository.deleteAllByBillingPlanId(planId);
+        for (OptionalFeature optionalFeature : optionalFeatures) {
+            billingPlanOptionalFeatureRepository.save(
+                    BillingPlanOptionalFeature.builder().billingPlan(plan).optionalFeature(optionalFeature).build()
+            );
+        }
+
         platformAdminAuditLogRecorder.record(adminUserId, PlatformAdminAction.UPDATE_BILLING_PLAN, null, null, detail);
 
-        return toSummary(plan, retrieveOptionalFeatureIds(plan.getId()));
+        return toSummary(plan, optionalFeatureIds);
     }
 
     public List<BillingPlanDto.Response.BillingPlanSummary> findPlans() {
@@ -187,6 +205,7 @@ public class BillingPlanService {
                 plan.getMaxMainEvents(),
                 plan.isActive(),
                 optionalFeatureIds,
+                ceremonyRepository.countByBillingPlanId(plan.getId()),
                 plan.getCreatedAt()
         );
     }

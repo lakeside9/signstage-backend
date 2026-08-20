@@ -12,6 +12,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyAssignme
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyCapacityPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOptionalFeaturePurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryOptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
@@ -22,6 +23,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddO
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOptionalFeaturePurchaseRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
@@ -40,6 +42,7 @@ import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAd
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -70,6 +73,7 @@ public class CeremonyService {
     private final CeremonyCapacityPurchaseRepository ceremonyCapacityPurchaseRepository;
     private final CeremonyOptionalFeaturePurchaseRepository ceremonyOptionalFeaturePurchaseRepository;
     private final CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
+    private final CeremonyPlanHistoryOptionalFeatureRepository ceremonyPlanHistoryOptionalFeatureRepository;
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final BillingPlanRepository billingPlanRepository;
@@ -246,6 +250,7 @@ public class CeremonyService {
                 .ceremony(ceremony)
                 .capacityAddOn(addOn)
                 .quantity(request.getQuantity())
+                .purchasedUnitAmount(addOn.getUnitAmount())
                 .purchasedSalePrice(addOn.getSalePrice())
                 .purchasedDiscountType(addOn.getDiscountType())
                 .purchasedDiscountValue(addOn.getDiscountValue())
@@ -298,6 +303,7 @@ public class CeremonyService {
         CeremonyOptionalFeaturePurchase purchase = CeremonyOptionalFeaturePurchase.builder()
                 .ceremony(ceremony)
                 .optionalFeature(feature)
+                .purchasedName(feature.getName())
                 .purchasedSalePrice(feature.getSalePrice())
                 .purchasedDiscountType(feature.getDiscountType())
                 .purchasedDiscountValue(feature.getDiscountValue())
@@ -327,6 +333,13 @@ public class CeremonyService {
      * 카탈로그만 필터링해 돌려준다 — {@link #retrievePurchasedOptionalFeatureIds}와 같은 계산을
      * 쓴다. 하위 행사 등록/수정/상세 세 화면이 전부 이 목록으로 체크박스를 채운다(구매 안 한
      * 옵션을 보여줬다가 저장 시점에야 실패를 아는 예전 방식의 한계를 없앤다).
+     *
+     * <p>개별 추가구매(승인됨)한 옵션은 이름/가격을 구매 시점 스냅샷({@code purchasedName}/
+     * {@code purchasedSalePrice} 등)으로 보여준다 — 카탈로그 관리자가 나중에 이름을 바꿔도
+     * 이미 구매한 옵션의 표시는 안 바뀐다(signstage-docs
+     * business/ceremony-billing-options-review.md 9장). 플랜에 기본 포함된 옵션(추가구매
+     * 기록이 없음)은 스냅샷 대상이 아니라 카탈로그 값을 그대로 보여준다 — 애초에 개별로
+     * "산" 적이 없어 가격을 보호할 대상 자체가 없다.
      */
     public List<OptionalFeatureDto.Response.OptionalFeatureSummary> retrieveAvailableOptionalFeatures(
             Long organizationId,
@@ -341,18 +354,29 @@ public class CeremonyService {
         if (availableIds.isEmpty()) {
             return List.of();
         }
+
+        Map<Long, CeremonyOptionalFeaturePurchase> approvedPurchaseByFeatureId = ceremonyOptionalFeaturePurchaseRepository
+                .findAllByCeremonyIdAndStatus(ceremony.getId(), PurchaseStatus.APPROVED).stream()
+                .collect(Collectors.toMap(purchase -> purchase.getOptionalFeature().getId(), purchase -> purchase));
+
         return optionalFeatureRepository.findAllById(availableIds).stream()
-                .map(feature -> new OptionalFeatureDto.Response.OptionalFeatureSummary(
-                        feature.getId(),
-                        feature.getCode().name(),
-                        feature.getName(),
-                        feature.getSupplyPrice(),
-                        feature.getSalePrice(),
-                        feature.getDiscountType().name(),
-                        feature.getDiscountValue(),
-                        feature.isActive(),
-                        feature.getCreatedAt()
-                ))
+                .map(feature -> {
+                    CeremonyOptionalFeaturePurchase purchase = approvedPurchaseByFeatureId.get(feature.getId());
+                    return new OptionalFeatureDto.Response.OptionalFeatureSummary(
+                            feature.getId(),
+                            feature.getCode().name(),
+                            purchase != null ? purchase.getPurchasedName() : feature.getName(),
+                            feature.getSupplyPrice(),
+                            purchase != null ? purchase.getPurchasedSalePrice() : feature.getSalePrice(),
+                            purchase != null ? purchase.getPurchasedDiscountType().name() : feature.getDiscountType().name(),
+                            purchase != null ? purchase.getPurchasedDiscountValue() : feature.getDiscountValue(),
+                            feature.isActive(),
+                            ceremonyOptionalFeaturePurchaseRepository.countByOptionalFeatureIdAndStatus(
+                                    feature.getId(), PurchaseStatus.APPROVED
+                            ),
+                            feature.getCreatedAt()
+                    );
+                })
                 .toList();
     }
 
@@ -617,10 +641,23 @@ public class CeremonyService {
         }
     }
 
-    /** Ceremony 생성 시(최초 플랜 선택)와 {@link #changePlan}에서 매 변경마다 호출한다(3.4절). */
+    /**
+     * Ceremony 생성 시(최초 플랜 선택)와 {@link #changePlan}에서 매 변경마다 호출한다(3.4절).
+     * 그 순간 플랜에 포함된 선택옵션 구성도 {@link CeremonyPlanHistoryOptionalFeature}로 함께
+     * 스냅샷한다 — 카탈로그 관리자가 나중에 플랜의 옵션 구성을 바꿔도 이 Ceremony는 영향받지
+     * 않아야 한다(signstage-docs business/ceremony-billing-options-review.md 9장 후속 결정).
+     */
     private void recordPlanHistory(Ceremony ceremony, BillingPlan plan) {
-        ceremonyPlanHistoryRepository.save(
+        CeremonyPlanHistory history = ceremonyPlanHistoryRepository.save(
                 CeremonyPlanHistory.builder().ceremony(ceremony).billingPlan(plan).build()
+        );
+        billingPlanOptionalFeatureRepository.findAllByBillingPlanId(plan.getId()).forEach(mapping ->
+                ceremonyPlanHistoryOptionalFeatureRepository.save(
+                        CeremonyPlanHistoryOptionalFeature.builder()
+                                .ceremonyPlanHistory(history)
+                                .optionalFeature(mapping.getOptionalFeature())
+                                .build()
+                )
         );
     }
 
@@ -648,8 +685,16 @@ public class CeremonyService {
     }
 
     /**
-     * 필수옵션(용량) 유효 한도 = 플랜 기본값 + Σ(구매수량 × addon.unitAmount). 플랜이 없는
-     * 행사(4.8 예외 — 이 기능 배포 전 기존 행사)는 한도 강제 자체를 적용하지 않는다(사실상 무제한).
+     * 필수옵션(용량) 유효 한도 = 플랜 기본값(스냅샷) + Σ(구매수량 × 구매 시점 단가 스냅샷). 플랜이
+     * 없는 행사(4.8 예외 — 이 기능 배포 전 기존 행사)는 한도 강제 자체를 적용하지 않는다(사실상
+     * 무제한).
+     *
+     * <p>플랜 기본값은 라이브 {@code BillingPlan}이 아니라 {@link CeremonyPlanHistory}의 최신
+     * 스냅샷을 쓴다 — 카탈로그 관리자가 나중에 플랜 값을 고쳐도 이미 확정/진행 중인 행사는
+     * 영향받지 않아야 한다(signstage-docs business/ceremony-billing-options-review.md 9장).
+     * 이 기능(플랜 확정) 배포 전에 만들어져 이력이 없는 행사만 예외로 라이브 값에 fallback한다.
+     * 추가구매 단가도 같은 이유로 {@code capacityAddOn.getUnitAmount()} 라이브 조회 대신
+     * 구매 시점 스냅샷({@code purchasedUnitAmount})을 쓴다.
      */
     int calculateEffectiveCapacity(Ceremony ceremony, CapacityType capacityType) {
         BillingPlan plan = ceremony.getBillingPlan();
@@ -657,18 +702,26 @@ public class CeremonyService {
             return Integer.MAX_VALUE;
         }
 
-        int baseValue = switch (capacityType) {
-            case SIGNERS -> plan.getMaxSigners();
-            case TEMPLATES -> plan.getMaxTemplates();
-            case TEST_EVENTS -> plan.getMaxTestEvents();
-            case MAIN_EVENTS -> plan.getMaxMainEvents();
-        };
+        int baseValue = ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId())
+                .map(snapshot -> switch (capacityType) {
+                    case SIGNERS -> snapshot.getPlanMaxSigners();
+                    case TEMPLATES -> snapshot.getPlanMaxTemplates();
+                    case TEST_EVENTS -> snapshot.getPlanMaxTestEvents();
+                    case MAIN_EVENTS -> snapshot.getPlanMaxMainEvents();
+                })
+                // 이력이 없는 경우(플랜 확정 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
+                .orElseGet(() -> switch (capacityType) {
+                    case SIGNERS -> plan.getMaxSigners();
+                    case TEMPLATES -> plan.getMaxTemplates();
+                    case TEST_EVENTS -> plan.getMaxTestEvents();
+                    case MAIN_EVENTS -> plan.getMaxMainEvents();
+                });
 
         // 승인(APPROVED)된 요청만 한도에 반영한다 — 대기중/반려된 요청은 아직/영영 쓸 수 없다.
         int purchasedAmount = ceremonyCapacityPurchaseRepository
                 .findAllByCeremonyIdAndCapacityAddOn_CapacityTypeAndStatus(ceremony.getId(), capacityType, PurchaseStatus.APPROVED)
                 .stream()
-                .mapToInt(purchase -> purchase.getQuantity() * purchase.getCapacityAddOn().getUnitAmount())
+                .mapToInt(purchase -> purchase.getQuantity() * purchase.getPurchasedUnitAmount())
                 .sum();
 
         return baseValue + purchasedAmount;
@@ -677,6 +730,12 @@ public class CeremonyService {
     /**
      * Ceremony가 "구매한"(플랜 기본 포함 또는 추가구매) 선택옵션 id 집합(4.11절). 추가구매 쪽은
      * 승인(APPROVED)된 요청만 포함한다 — 대기중/반려된 요청은 아직/영영 적용할 수 없다.
+     *
+     * <p>"플랜 기본 포함" 쪽은 라이브 {@code BillingPlanOptionalFeature} 대신 이 Ceremony의
+     * 최신 {@link CeremonyPlanHistory} 스냅샷(연결된 {@link CeremonyPlanHistoryOptionalFeature})을
+     * 우선 쓴다 — 카탈로그 관리자가 나중에 플랜의 옵션 구성을 바꿔도 영향받지 않아야 한다
+     * (signstage-docs business/ceremony-billing-options-review.md 9장 후속 결정). 이력이 없는
+     * 경우(이 스냅샷 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
      */
     List<Long> retrievePurchasedOptionalFeatureIds(Ceremony ceremony) {
         List<Long> purchased = ceremonyOptionalFeaturePurchaseRepository
@@ -686,10 +745,19 @@ public class CeremonyService {
         if (ceremony.getBillingPlan() == null) {
             return purchased;
         }
-        List<Long> includedInPlan = billingPlanOptionalFeatureRepository
-                .findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
-                .map(mapping -> mapping.getOptionalFeature().getId())
-                .toList();
+
+        Optional<CeremonyPlanHistory> snapshot =
+                ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
+        List<Long> includedInPlan = snapshot
+                .map(history -> ceremonyPlanHistoryOptionalFeatureRepository.findAllByCeremonyPlanHistoryId(history.getId())
+                        .stream()
+                        .map(mapping -> mapping.getOptionalFeature().getId())
+                        .toList())
+                .orElseGet(() -> billingPlanOptionalFeatureRepository
+                        .findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
+                        .map(mapping -> mapping.getOptionalFeature().getId())
+                        .toList());
+
         return Stream.concat(purchased.stream(), includedInPlan.stream()).distinct().toList();
     }
 
@@ -753,6 +821,7 @@ public class CeremonyService {
                 purchase.getCeremony().getId(),
                 purchase.getCapacityAddOn().getId(),
                 purchase.getQuantity(),
+                purchase.getPurchasedUnitAmount(),
                 purchase.getPurchasedSalePrice(),
                 purchase.getPurchasedDiscountType().name(),
                 purchase.getPurchasedDiscountValue(),
@@ -770,6 +839,7 @@ public class CeremonyService {
                 purchase.getId(),
                 purchase.getCeremony().getId(),
                 purchase.getOptionalFeature().getId(),
+                purchase.getPurchasedName(),
                 purchase.getPurchasedSalePrice(),
                 purchase.getPurchasedDiscountType().name(),
                 purchase.getPurchasedDiscountValue(),
