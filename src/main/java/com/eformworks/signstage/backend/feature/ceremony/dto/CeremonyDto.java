@@ -112,6 +112,24 @@ public final class CeremonyDto {
             @NotNull
             private Long billingPlanId;
         }
+
+        /**
+         * 행사 건별 재량 할인. 플랫폼 관리자(PLATFORM_OPS 이상) 전용이고, 플랜이 확정된
+         * (IN_PROGRESS) 행사에만 적용할 수 있다 — DRAFT/COMPLETED는 거부된다(signstage-docs
+         * business/organization-event-discount-pricing-review.md 4.2/6.2절).
+         */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class ApplyFinalDiscount {
+
+            @NotBlank
+            private String discountType;
+
+            @NotNull
+            private BigDecimal discountValue;
+        }
     }
 
     public static final class Response {
@@ -135,6 +153,8 @@ public final class CeremonyDto {
             private final String contactTitle;
             private final String contactPhone;
             private final String contactEmail;
+            private final String finalDiscountType;
+            private final BigDecimal finalDiscountValue;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }
@@ -187,6 +207,25 @@ public final class CeremonyDto {
             private final int templateLimit;
             private final int testEventLimit;
             private final int mainEventLimit;
+        }
+
+        /**
+         * 이 Ceremony의 예상 청구 금액 — 품목 할인 → subtotal → 행사 건별 할인의 2단 순차
+         * 차감(signstage-docs business/organization-event-discount-pricing-review.md 4.3절).
+         * 실제 결제/청구서 발행은 여전히 범위 밖이다(같은 문서 5장) — 지금 계산하면 얼마인지
+         * 보여주는 견적용이다. 각 금액은 승인(APPROVED)된 구매 건만 반영한다.
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class EstimatedTotal {
+
+            private final BigDecimal planAppliedPrice;
+            private final BigDecimal capacityPurchasesTotal;
+            private final BigDecimal optionalFeaturePurchasesTotal;
+            private final BigDecimal subtotal;
+            private final String finalDiscountType;
+            private final BigDecimal finalDiscountValue;
+            private final BigDecimal finalTotal;
         }
 
         /**

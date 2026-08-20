@@ -17,13 +17,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 행사 마스터(Ceremony) 완료 상태를 플랫폼 관리자가 강제로 바꾼다(실수로 완료됐거나 예외 상황
- * 처리용). PLATFORM_SUPPORT 이상만 도달할 수 있고(SecurityConfig에서 /api/platform-admin/**
- * 전체를 게이트), 실제 변경은 PLATFORM_OPS 이상만 서비스에서 한 번 더 검사한다 — 다른
- * PlatformAdminXxxController와 같은 패턴이다. 조직 하위 리소스 URL 중첩은
- * {@link PlatformAdminMemberController}와 같은 관례다.
+ * 행사 마스터(Ceremony) 완료 상태·건별 재량 할인을 플랫폼 관리자가 다룬다. PLATFORM_SUPPORT
+ * 이상만 도달할 수 있고(SecurityConfig에서 /api/platform-admin/** 전체를 게이트), 실제 변경은
+ * PLATFORM_OPS 이상만 서비스에서 한 번 더 검사한다 — 다른 PlatformAdminXxxController와 같은
+ * 패턴이다. 조직 하위 리소스 URL 중첩은 {@link PlatformAdminMemberController}와 같은 관례다.
  */
-@Tag(name = "PlatformAdmin", description = "플랫폼 관리자 행사 상태 API")
+@Tag(name = "PlatformAdmin", description = "플랫폼 관리자 행사 상태/할인 API")
 @RestController
 @RequestMapping("/api/platform-admin/organizations/{organizationId}/ceremonies")
 @RequiredArgsConstructor
@@ -44,6 +43,24 @@ public class PlatformAdminCeremonyController {
             @Valid @RequestBody CeremonyDto.Request.UpdateStatus request
     ) {
         CeremonyDto.Response.CeremonySummary response = ceremonyService.updateStatusByPlatformAdmin(
+                organizationId, ceremonyId, currentUser.userId(), currentUser.platformRole(), request
+        );
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "행사 건별 재량 할인 설정",
+            description = "품목 할인과 별개로 이 행사 건에만 적용하는 추가 할인. 플랜이 확정된(IN_PROGRESS) 행사에만 "
+                    + "적용할 수 있다(DRAFT/COMPLETED는 거부). PLATFORM_OPS 이상만 호출할 수 있다."
+    )
+    @PutMapping("/{ceremonyId}/final-discount")
+    public ApiResponse<CeremonyDto.Response.CeremonySummary> applyFinalDiscount(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @Valid @RequestBody CeremonyDto.Request.ApplyFinalDiscount request
+    ) {
+        CeremonyDto.Response.CeremonySummary response = ceremonyService.applyFinalDiscount(
                 organizationId, ceremonyId, currentUser.userId(), currentUser.platformRole(), request
         );
         return ApiResponse.success(response, traceIdProvider.getTraceId());
