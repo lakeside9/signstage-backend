@@ -11,8 +11,8 @@ ALTER TABLE ceremony_optional_feature_purchases
     ADD COLUMN purchased_name VARCHAR(100) NULL;
 
 UPDATE ceremony_optional_feature_purchases cofp
-    JOIN optional_features of ON of.id = cofp.optional_feature_id
-    SET cofp.purchased_name = of.name
+    JOIN optional_features feat ON feat.id = cofp.optional_feature_id
+    SET cofp.purchased_name = feat.name
     WHERE cofp.purchased_name IS NULL;
 
 ALTER TABLE ceremony_optional_feature_purchases
