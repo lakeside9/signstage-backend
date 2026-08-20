@@ -68,6 +68,10 @@ public final class OptionalFeatureDto {
 
             @NotNull
             private BigDecimal discountValue;
+
+            /** 사용여부. false면 새 추가구매 대상에서 제외된다. */
+            @NotNull
+            private Boolean active;
         }
     }
 
@@ -87,6 +91,24 @@ public final class OptionalFeatureDto {
             private final BigDecimal salePrice;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final Boolean active;
+            private final LocalDateTime createdAt;
+        }
+
+        /** 선택옵션 값/사용여부 변경 이력 한 행 — 그 변경 시점의 전체 상태 스냅샷이다. */
+        @Getter
+        @AllArgsConstructor
+        public static class OptionalFeatureHistorySummary {
+
+            private final Long id;
+            private final String code;
+            private final String name;
+            private final BigDecimal supplyPrice;
+            private final BigDecimal salePrice;
+            private final String discountType;
+            private final BigDecimal discountValue;
+            private final Boolean active;
+            private final Long createdBy;
             private final LocalDateTime createdAt;
         }
     }

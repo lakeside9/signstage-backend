@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -28,8 +29,17 @@ import lombok.NoArgsConstructor;
  * 예외로 NULL을 허용하고, 신규 생성은 서비스 레이어가 필수로 강제한다(signstage-docs
  * business/ceremony-billing-options-review.md 4.10절).
  *
- * <p>{@code status}는 {@link CeremonyStatus} 참고 — 새로 만든 Ceremony는 항상 IN_PROGRESS로
- * 시작한다(이 기능 배포 전 기존 행은 마이그레이션에서 소급 적용 없이 DEFAULT로만 채운다).
+ * <p>{@code status}는 {@link CeremonyStatus} 참고 — 새로 만든 Ceremony는 항상 DRAFT로 시작하고
+ * 플랜 확정({@link #confirmPlan()}) 후 IN_PROGRESS로 넘어간다(이 기능 배포 전 기존 행은
+ * 마이그레이션에서 소급 적용 없이 IN_PROGRESS DEFAULT로만 채운다 — signstage-docs
+ * business/ceremony-plan-confirmation-review.md 4.1절).
+ *
+ * <p>{@code finalDiscountType}/{@code finalDiscountValue}는 품목 할인과 별개로 이 행사 건에만
+ * 매기는 관리자 재량 할인이다 — signstage-docs
+ * business/organization-event-discount-pricing-review.md 4.2 결정(2026-08-21 갱신: 조직 전역
+ * 할인은 우선 보류하고 행사별 할인만 적용). NULL sentinel 없이 항상 구체적인 값을 갖고
+ * ("할인 없음"은 discountValue=0으로 표현), 플랫폼 관리자(PLATFORM_OPS 이상)만 바꿀 수
+ * 있다(4.4 결정).
  */
 @Entity
 @Table(name = "ceremonies")
@@ -79,17 +89,26 @@ public class Ceremony extends BaseEntity {
     @Column(name = "contact_email", length = 255)
     private String contactEmail;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "final_discount_type", nullable = false, length = 20)
+    private DiscountType finalDiscountType;
+
+    @Column(name = "final_discount_value", nullable = false, precision = 12, scale = 2)
+    private BigDecimal finalDiscountValue;
+
     @Builder
     private Ceremony(Organization organization, BillingPlan billingPlan, String title) {
         this.organization = organization;
         this.billingPlan = billingPlan;
         this.title = title;
-        this.status = CeremonyStatus.IN_PROGRESS;
+        this.status = CeremonyStatus.DRAFT;
+        this.finalDiscountType = DiscountType.FIXED_AMOUNT;
+        this.finalDiscountValue = BigDecimal.ZERO;
     }
 
     /**
-     * 행사 수정 화면에서 기본 정보를 바꿀 때 쓴다. 플랜은 여기서 바꾸지 않는다(생성 시점에 고정).
-     * 주관 기관/부서, 담당자 정보는 전부 선택 입력이라 null을 그대로 허용한다.
+     * 행사 수정 화면에서 기본 정보를 바꿀 때 쓴다. 플랜은 여기서 바꾸지 않는다({@link #changePlan}을
+     * 쓴다). 주관 기관/부서, 담당자 정보는 전부 선택 입력이라 null을 그대로 허용한다.
      */
     public void updateInfo(
             String title,
@@ -117,5 +136,35 @@ public class Ceremony extends BaseEntity {
      */
     public void changeStatus(CeremonyStatus status) {
         this.status = status;
+    }
+
+    /**
+     * 플랫폼 관리자가 이 행사 건에만 적용되는 재량 할인을 설정/변경할 때 사용한다(PLATFORM_OPS
+     * 이상 — organization-event-discount-pricing-review.md 4.2/4.4 결정). {@link #updateInfo}
+     * (OWNER도 쓸 수 있는 기본 정보 수정)와 분리된 이유도 같은 결정 참고 — 가격표를 깎는 행위라
+     * 셀프서비스로 허용하지 않는다.
+     */
+    public void applyFinalDiscount(DiscountType finalDiscountType, BigDecimal finalDiscountValue) {
+        this.finalDiscountType = finalDiscountType;
+        this.finalDiscountValue = finalDiscountValue;
+    }
+
+    /**
+     * DRAFT 상태에서만 플랜을 바꾼다 — 상태 검증은 서비스({@code CeremonyService#changePlan})가
+     * 하고 이 메서드는 필드만 바꾼다(다른 상태 전이 메서드와 같은 컨벤션). 호출할 때마다
+     * {@code CeremonyPlanHistory}에 이력 한 행을 남기는 것도 서비스 몫이다 —
+     * signstage-docs business/ceremony-plan-confirmation-review.md 3.2/3.4절.
+     */
+    public void changePlan(BillingPlan billingPlan) {
+        this.billingPlan = billingPlan;
+    }
+
+    /**
+     * "플랜 확정" — DRAFT → IN_PROGRESS로 단방향 전이한다. 이후 {@link #changePlan}은 서비스
+     * 레이어에서 거부된다(플랜이 고정됨), 서명자/문서/하위 행사 등록이 열린다 — signstage-docs
+     * business/ceremony-plan-confirmation-review.md 3.1절.
+     */
+    public void confirmPlan() {
+        this.status = CeremonyStatus.IN_PROGRESS;
     }
 }

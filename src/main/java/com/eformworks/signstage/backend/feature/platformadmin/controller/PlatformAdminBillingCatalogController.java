@@ -12,8 +12,10 @@ import com.eformworks.signstage.backend.feature.ceremony.service.OptionalFeature
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -61,6 +63,12 @@ public class PlatformAdminBillingCatalogController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
+    @Operation(summary = "과금 플랜 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 수정할 때마다(값 또는 사용여부 변경) 1건씩 쌓인다.")
+    @GetMapping("/billing-plans/{id}/history")
+    public ApiResponse<List<BillingPlanDto.Response.BillingPlanHistorySummary>> findPlanHistory(@PathVariable Long id) {
+        return ApiResponse.success(billingPlanService.findPlanHistory(id), traceIdProvider.getTraceId());
+    }
+
     @Operation(summary = "선택옵션 등록", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
     @PostMapping("/optional-features")
     public ApiResponse<OptionalFeatureDto.Response.OptionalFeatureSummary> createOptionalFeature(
@@ -84,6 +92,14 @@ public class PlatformAdminBillingCatalogController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
+    @Operation(summary = "선택옵션 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 수정할 때마다(값 또는 사용여부 변경) 1건씩 쌓인다.")
+    @GetMapping("/optional-features/{id}/history")
+    public ApiResponse<List<OptionalFeatureDto.Response.OptionalFeatureHistorySummary>> findOptionalFeatureHistory(
+            @PathVariable Long id
+    ) {
+        return ApiResponse.success(optionalFeatureService.findFeatureHistory(id), traceIdProvider.getTraceId());
+    }
+
     @Operation(summary = "용량 추가구매 상품 등록", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
     @PostMapping("/capacity-addons")
     public ApiResponse<CapacityAddOnDto.Response.CapacityAddOnSummary> createCapacityAddOn(
@@ -105,5 +121,13 @@ public class PlatformAdminBillingCatalogController {
         CapacityAddOnDto.Response.CapacityAddOnSummary response =
                 capacityAddOnService.updateCapacityAddOn(id, currentUser.platformRole(), currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "용량 추가구매 상품 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 수정할 때마다(값 또는 사용여부 변경) 1건씩 쌓인다.")
+    @GetMapping("/capacity-addons/{id}/history")
+    public ApiResponse<List<CapacityAddOnDto.Response.CapacityAddOnHistorySummary>> findCapacityAddOnHistory(
+            @PathVariable Long id
+    ) {
+        return ApiResponse.success(capacityAddOnService.findAddOnHistory(id), traceIdProvider.getTraceId());
     }
 }

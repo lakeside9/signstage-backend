@@ -11,6 +11,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyAssignment;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyCapacityPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOptionalFeaturePurchase;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
@@ -21,6 +22,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddO
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOptionalFeaturePurchaseRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
@@ -67,6 +69,7 @@ public class CeremonyService {
     private final CeremonyAssignmentRepository ceremonyAssignmentRepository;
     private final CeremonyCapacityPurchaseRepository ceremonyCapacityPurchaseRepository;
     private final CeremonyOptionalFeaturePurchaseRepository ceremonyOptionalFeaturePurchaseRepository;
+    private final CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final BillingPlanRepository billingPlanRepository;
@@ -88,6 +91,7 @@ public class CeremonyService {
 
         BillingPlan plan = billingPlanRepository.findById(request.getBillingPlanId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
+        checkPlanActive(plan);
 
         Ceremony ceremony = Ceremony.builder()
                 .organization(organization)
@@ -95,6 +99,7 @@ public class CeremonyService {
                 .title(request.getTitle())
                 .build();
         ceremonyRepository.save(ceremony);
+        recordPlanHistory(ceremony, plan);
 
         // 생성자는 역할과 무관하게 자동으로 배정된다(4.7절) — 나중에 OPERATOR로 강등돼도
         // 본인이 만든 행사 접근권을 그대로 유지하는 부수 효과가 있다.
@@ -158,6 +163,67 @@ public class CeremonyService {
         return toSummary(ceremony);
     }
 
+    /**
+     * DRAFT 상태에서만 플랜을 바꿀 수 있다 — 확정 후(IN_PROGRESS/COMPLETED) 시도하면 거부한다.
+     * 호출할 때마다 {@link CeremonyPlanHistory}에 이력을 한 행 남긴다(3.2/3.4절).
+     */
+    @Transactional
+    public CeremonyDto.Response.CeremonySummary changePlan(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId,
+            CeremonyDto.Request.ChangePlan request
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        checkCeremonyPlanChangeable(ceremony);
+
+        BillingPlan newPlan = billingPlanRepository.findById(request.getBillingPlanId())
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
+        checkPlanActive(newPlan);
+
+        ceremony.changePlan(newPlan);
+        recordPlanHistory(ceremony, newPlan);
+
+        return toSummary(ceremony);
+    }
+
+    /**
+     * "플랜 확정" — DRAFT → IN_PROGRESS로 단방향 전이한다. 이후 플랜은 고정되고, 서명자/문서/
+     * 하위 행사 등록이 열린다(3.1절). 확정을 취소하는 API는 두지 않는다(4.4절).
+     */
+    @Transactional
+    public CeremonyDto.Response.CeremonySummary confirmPlan(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        checkCeremonyPlanChangeable(ceremony);
+
+        ceremony.confirmPlan();
+
+        return toSummary(ceremony);
+    }
+
+    /** 최신순 — 가장 앞이 확정(또는 가장 최근 변경) 시점의 스냅샷이다. */
+    public List<CeremonyDto.Response.PlanHistorySummary> findPlanHistory(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        return ceremonyPlanHistoryRepository.findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
+                .map(this::toPlanHistorySummary)
+                .toList();
+    }
+
     @Transactional
     public CeremonyDto.Response.CapacityPurchaseSummary purchaseCapacity(
             Long organizationId,
@@ -172,6 +238,9 @@ public class CeremonyService {
 
         CapacityAddOn addOn = capacityAddOnRepository.findById(request.getCapacityAddOnId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND));
+        if (!addOn.isActive()) {
+            throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_INACTIVE);
+        }
 
         CeremonyCapacityPurchase purchase = CeremonyCapacityPurchase.builder()
                 .ceremony(ceremony)
@@ -215,6 +284,9 @@ public class CeremonyService {
 
         OptionalFeature feature = optionalFeatureRepository.findById(request.getOptionalFeatureId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND));
+        if (!feature.isActive()) {
+            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_INACTIVE);
+        }
 
         boolean alreadyRequested = ceremonyOptionalFeaturePurchaseRepository.existsByCeremonyIdAndOptionalFeatureIdAndStatusIn(
                 ceremonyId, feature.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
@@ -278,16 +350,20 @@ public class CeremonyService {
                         feature.getSalePrice(),
                         feature.getDiscountType().name(),
                         feature.getDiscountValue(),
+                        feature.isActive(),
                         feature.getCreatedAt()
                 ))
                 .toList();
     }
 
     /**
-     * 플랫폼 관리자가 Ceremony 상태를 양방향으로 강제 변경한다(실수로 완료됐거나 예외 상황 처리용).
-     * {@code feature.platformadmin.service}에 별도 래퍼를 두지 않고 여기 직접 붙인다 — 과금
-     * 카탈로그 작업에서 확립한 관례(PlatformAdminBillingCatalogController → BillingPlanService 등)와
-     * 같다. 아래 {@code findCeremonyInOrganizationOrThrow}를 그대로 재사용한다.
+     * 플랫폼 관리자가 Ceremony 상태를 IN_PROGRESS/COMPLETED 사이에서 양방향으로 강제 변경한다
+     * (실수로 완료됐거나 예외 상황 처리용). DRAFT는 대상이 아니다 — 플랜 확정(DRAFT →
+     * IN_PROGRESS)은 {@link #confirmPlan}의 단방향 전이로만 이뤄진다(signstage-docs
+     * business/ceremony-plan-confirmation-review.md 4.4절). {@code feature.platformadmin.service}에
+     * 별도 래퍼를 두지 않고 여기 직접 붙인다 — 과금 카탈로그 작업에서 확립한 관례
+     * (PlatformAdminBillingCatalogController → BillingPlanService 등)와 같다. 아래
+     * {@code findCeremonyInOrganizationOrThrow}를 그대로 재사용한다.
      */
     @Transactional
     public CeremonyDto.Response.CeremonySummary updateStatusByPlatformAdmin(
@@ -304,6 +380,9 @@ public class CeremonyService {
         Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         CeremonyStatus previousStatus = ceremony.getStatus();
         CeremonyStatus newStatus = parseCeremonyStatus(request.getStatus());
+        if (newStatus == CeremonyStatus.DRAFT) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
         ceremony.changeStatus(newStatus);
 
         platformAdminAuditLogRecorder.record(
@@ -510,6 +589,42 @@ public class CeremonyService {
     }
 
     /**
+     * 플랜 변경/확정은 DRAFT 상태에서만 가능하다 — signstage-docs
+     * business/ceremony-plan-confirmation-review.md 3.1/3.2절.
+     */
+    private void checkCeremonyPlanChangeable(Ceremony ceremony) {
+        if (ceremony.getStatus() != CeremonyStatus.DRAFT) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_ALREADY_CONFIRMED);
+        }
+    }
+
+    /**
+     * 서명자/문서/하위 행사 등록은 플랜이 확정된(DRAFT를 벗어난) Ceremony에서만 허용한다.
+     * {@link SignerService}/{@link TemplateService}/{@link CeremonyEventService}가
+     * {@link #checkCeremonyEditable}과 함께 재사용한다 — signstage-docs
+     * business/ceremony-plan-confirmation-review.md 3.3절.
+     */
+    void checkCeremonyPlanConfirmed(Ceremony ceremony) {
+        if (ceremony.getStatus() == CeremonyStatus.DRAFT) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_CONFIRMED);
+        }
+    }
+
+    /** 사용 중지(active=false)된 플랜은 신규 선택/변경 대상에서 제외한다. */
+    private void checkPlanActive(BillingPlan plan) {
+        if (!plan.isActive()) {
+            throw new ApplicationException(CeremonyErrorCode.BILLING_PLAN_INACTIVE);
+        }
+    }
+
+    /** Ceremony 생성 시(최초 플랜 선택)와 {@link #changePlan}에서 매 변경마다 호출한다(3.4절). */
+    private void recordPlanHistory(Ceremony ceremony, BillingPlan plan) {
+        ceremonyPlanHistoryRepository.save(
+                CeremonyPlanHistory.builder().ceremony(ceremony).billingPlan(plan).build()
+        );
+    }
+
+    /**
      * 서명자/문서양식/테스트·본행사 등록 화면이 "등록할 수 있는 개수"를 보여주는 데 쓴다 —
      * {@link #calculateEffectiveCapacity}(플랜 기본값 + 승인된 추가구매)를 네 가지 용량 유형
      * 전부에 대해 계산해 돌려준다. 플랜이 없는 행사는 무제한이라 Integer.MAX_VALUE를 그대로
@@ -611,6 +726,24 @@ public class CeremonyService {
                 ceremony.getContactEmail(),
                 ceremony.getCreatedBy(),
                 ceremony.getCreatedAt()
+        );
+    }
+
+    private CeremonyDto.Response.PlanHistorySummary toPlanHistorySummary(CeremonyPlanHistory history) {
+        return new CeremonyDto.Response.PlanHistorySummary(
+                history.getId(),
+                history.getBillingPlan().getId(),
+                history.getPlanName(),
+                history.getPlanSupplyPrice(),
+                history.getPlanSalePrice(),
+                history.getPlanDiscountType().name(),
+                history.getPlanDiscountValue(),
+                history.getPlanMaxSigners(),
+                history.getPlanMaxTemplates(),
+                history.getPlanMaxTestEvents(),
+                history.getPlanMaxMainEvents(),
+                history.getCreatedBy(),
+                history.getCreatedAt()
         );
     }
 

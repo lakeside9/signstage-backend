@@ -59,6 +59,15 @@ public class BillingPlan extends BaseEntity {
     @Column(name = "max_main_events", nullable = false)
     private Integer maxMainEvents;
 
+    /**
+     * 사용여부(비활성화해도 행은 지우지 않는다 — 이미 이 플랜을 참조하는 Ceremony가 있을 수
+     * 있어 삭제는 여전히 범위 밖이다). 비활성화된 플랜은 새 행사 생성/플랜 변경 대상에서
+     * 제외된다({@code CeremonyService}) — signstage-docs
+     * business/ceremony-billing-options-review.md 7장 후속 결정.
+     */
+    @Column(nullable = false)
+    private boolean active;
+
     @Builder
     private BillingPlan(
             String name,
@@ -80,11 +89,14 @@ public class BillingPlan extends BaseEntity {
         this.maxTemplates = maxTemplates;
         this.maxTestEvents = maxTestEvents;
         this.maxMainEvents = maxMainEvents;
+        this.active = true;
     }
 
     /**
      * 플랫폼 관리자 카탈로그 관리 화면의 수정. 이 플랜에 묶인 선택옵션 구성은 생성 시점에만
      * 정해지고 여기서 바꾸지 않는다(교체하려면 새 플랜을 만든다 — 카탈로그 관리 화면 결정).
+     * 호출할 때마다 {@code BillingPlanHistory}에 이력 한 행을 남기는 것은 서비스
+     * ({@code BillingPlanService}) 몫이다.
      */
     public void updateInfo(
             String name,
@@ -95,7 +107,8 @@ public class BillingPlan extends BaseEntity {
             Integer maxSigners,
             Integer maxTemplates,
             Integer maxTestEvents,
-            Integer maxMainEvents
+            Integer maxMainEvents,
+            boolean active
     ) {
         this.name = name;
         this.supplyPrice = supplyPrice;
@@ -106,5 +119,6 @@ public class BillingPlan extends BaseEntity {
         this.maxTemplates = maxTemplates;
         this.maxTestEvents = maxTestEvents;
         this.maxMainEvents = maxMainEvents;
+        this.active = active;
     }
 }

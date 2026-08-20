@@ -78,6 +78,7 @@ public class CeremonyEventService {
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         ceremonyService.checkCeremonyEditable(ceremony);
+        ceremonyService.checkCeremonyPlanConfirmed(ceremony);
 
         CeremonyEventType eventType = parseEventType(request.getEventType());
         CapacityType capacityType = eventType == CeremonyEventType.TEST

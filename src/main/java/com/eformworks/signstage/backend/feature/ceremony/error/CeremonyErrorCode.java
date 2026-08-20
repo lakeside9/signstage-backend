@@ -195,6 +195,31 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_ALREADY_COMPLETED",
             HttpStatus.CONFLICT,
             "완료된 행사는 더 이상 수정할 수 없습니다."
+    ),
+    CEREMONY_PLAN_ALREADY_CONFIRMED(
+            "CEREMONY_PLAN_ALREADY_CONFIRMED",
+            HttpStatus.CONFLICT,
+            "플랜이 이미 확정된 행사는 플랜을 바꿀 수 없습니다."
+    ),
+    CEREMONY_PLAN_NOT_CONFIRMED(
+            "CEREMONY_PLAN_NOT_CONFIRMED",
+            HttpStatus.CONFLICT,
+            "플랜이 확정되지 않은 행사에는 등록할 수 없습니다. 먼저 플랜을 확정해주세요."
+    ),
+    BILLING_PLAN_INACTIVE(
+            "CEREMONY_BILLING_PLAN_INACTIVE",
+            HttpStatus.CONFLICT,
+            "사용 중지된 플랜은 선택할 수 없습니다."
+    ),
+    OPTIONAL_FEATURE_INACTIVE(
+            "CEREMONY_OPTIONAL_FEATURE_INACTIVE",
+            HttpStatus.CONFLICT,
+            "사용 중지된 선택옵션은 구매할 수 없습니다."
+    ),
+    CAPACITY_ADDON_INACTIVE(
+            "CEREMONY_CAPACITY_ADDON_INACTIVE",
+            HttpStatus.CONFLICT,
+            "사용 중지된 용량 추가구매 상품은 구매할 수 없습니다."
     );
 
     private final String code;
