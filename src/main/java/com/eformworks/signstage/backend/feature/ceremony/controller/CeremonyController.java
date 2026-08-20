@@ -247,4 +247,20 @@ public class CeremonyController {
                 ceremonyService.retrieveCapacityStatus(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
+
+    @Operation(
+            summary = "예상 청구 금액 조회",
+            description = "품목 할인 → subtotal → 행사 건별 할인의 2단 순차 차감으로 계산한다(승인된 구매 건만 반영). "
+                    + "실제 결제/청구서 발행 기능은 아직 없다 — 지금 계산하면 얼마인지 보여주는 견적용이다."
+    )
+    @GetMapping("/{ceremonyId}/estimated-total")
+    public ApiResponse<CeremonyDto.Response.EstimatedTotal> retrieveEstimatedTotal(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        CeremonyDto.Response.EstimatedTotal response =
+                ceremonyService.calculateEstimatedTotal(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
 }

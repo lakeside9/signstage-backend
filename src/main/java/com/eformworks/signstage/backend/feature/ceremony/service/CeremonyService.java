@@ -14,6 +14,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOptional
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryOptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
@@ -39,6 +40,8 @@ import com.eformworks.signstage.backend.feature.organization.repository.Organiza
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminCeremonyPurchaseDto;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -425,6 +428,62 @@ public class CeremonyService {
         }
     }
 
+    /**
+     * 행사 건별 재량 할인 설정 — 플랫폼 관리자(PLATFORM_OPS 이상) 전용이고, 플랜이 확정된
+     * (IN_PROGRESS) 행사에만 적용할 수 있다. DRAFT는 "아직 플랜도 안 정해졌는데 할인부터
+     * 매길 수 없다"는 이유로, COMPLETED는 "끝난 행사는 더 이상 안 바뀐다"는 기존 원칙으로
+     * 막는다 — signstage-docs business/organization-event-discount-pricing-review.md
+     * 4.2/4.4/6.2절 참고. {@code feature.platformadmin.service}에 별도 래퍼를 두지 않는 이유는
+     * 위 {@link #updateStatusByPlatformAdmin}과 같다.
+     */
+    @Transactional
+    public CeremonyDto.Response.CeremonySummary applyFinalDiscount(
+            Long organizationId,
+            Long ceremonyId,
+            Long adminUserId,
+            String actingPlatformRole,
+            CeremonyDto.Request.ApplyFinalDiscount request
+    ) {
+        if (!CEREMONY_STATUS_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        checkCeremonyInProgress(ceremony);
+
+        DiscountType previousType = ceremony.getFinalDiscountType();
+        BigDecimal previousValue = ceremony.getFinalDiscountValue();
+        DiscountType newType = parseDiscountType(request.getDiscountType());
+
+        ceremony.applyFinalDiscount(newType, request.getDiscountValue());
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.UPDATE_CEREMONY_FINAL_DISCOUNT, null, organizationId,
+                "ceremonyId=" + ceremonyId + ", finalDiscount: " + previousType + " " + previousValue
+                        + " -> " + newType + " " + request.getDiscountValue()
+        );
+
+        return toSummary(ceremony);
+    }
+
+    /** DRAFT(플랜 미확정)·COMPLETED(완료) 둘 다 막고 IN_PROGRESS만 허용한다. */
+    private void checkCeremonyInProgress(Ceremony ceremony) {
+        if (ceremony.getStatus() == CeremonyStatus.DRAFT) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_CONFIRMED);
+        }
+        if (ceremony.getStatus() == CeremonyStatus.COMPLETED) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_ALREADY_COMPLETED);
+        }
+    }
+
+    private DiscountType parseDiscountType(String discountType) {
+        try {
+            return DiscountType.valueOf(discountType);
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
     // ---- 플랫폼 관리자 — 용량/선택옵션 추가구매 승인 대기열 ----
     // feature.platformadmin.service에 별도 래퍼를 두지 않고 여기 직접 붙인다(위 updateStatusByPlatformAdmin과 같은 이유).
 
@@ -685,6 +744,76 @@ public class CeremonyService {
     }
 
     /**
+     * 이 Ceremony의 예상 청구 금액 — 품목 할인 → subtotal → 행사 건별 할인의 2단 순차 차감
+     * (signstage-docs business/organization-event-discount-pricing-review.md 4.3절). 실제
+     * 결제/청구서 발행은 여전히 범위 밖이다(같은 문서 5장) — "지금 계산하면 얼마인지"를
+     * 보여주는 견적용 계산이다.
+     *
+     * <p>플랜 항목은 라이브 {@code BillingPlan}이 아니라 {@link CeremonyPlanHistory} 최신
+     * 스냅샷을 쓴다 — 9장과 같은 원칙으로, 이력이 없는 행사(이 기능 배포 전 기존 행사)만
+     * 라이브로 폴백한다. 용량/선택옵션 추가구매는 승인(APPROVED)된 건만 반영하고, 그 구매
+     * 시점 스냅샷(가격·단가)을 그대로 쓴다.
+     */
+    public CeremonyDto.Response.EstimatedTotal calculateEstimatedTotal(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        BigDecimal planApplied = BigDecimal.ZERO;
+        BillingPlan plan = ceremony.getBillingPlan();
+        if (plan != null) {
+            Optional<CeremonyPlanHistory> snapshot =
+                    ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
+            planApplied = snapshot
+                    .map(history -> applyDiscount(history.getPlanSalePrice(), history.getPlanDiscountType(), history.getPlanDiscountValue()))
+                    .orElseGet(() -> applyDiscount(plan.getSalePrice(), plan.getDiscountType(), plan.getDiscountValue()));
+        }
+
+        BigDecimal capacityTotal = ceremonyCapacityPurchaseRepository
+                .findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
+                .filter(purchase -> purchase.getStatus() == PurchaseStatus.APPROVED)
+                .map(purchase -> applyDiscount(
+                        purchase.getPurchasedSalePrice().multiply(BigDecimal.valueOf(purchase.getQuantity())),
+                        purchase.getPurchasedDiscountType(),
+                        purchase.getPurchasedDiscountValue()
+                ))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal featureTotal = ceremonyOptionalFeaturePurchaseRepository
+                .findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
+                .filter(purchase -> purchase.getStatus() == PurchaseStatus.APPROVED)
+                .map(purchase -> applyDiscount(
+                        purchase.getPurchasedSalePrice(), purchase.getPurchasedDiscountType(), purchase.getPurchasedDiscountValue()
+                ))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal subtotal = planApplied.add(capacityTotal).add(featureTotal);
+        BigDecimal finalTotal = applyDiscount(subtotal, ceremony.getFinalDiscountType(), ceremony.getFinalDiscountValue());
+
+        return new CeremonyDto.Response.EstimatedTotal(
+                planApplied,
+                capacityTotal,
+                featureTotal,
+                subtotal,
+                ceremony.getFinalDiscountType().name(),
+                ceremony.getFinalDiscountValue(),
+                finalTotal
+        );
+    }
+
+    /** 정률(PERCENT)/정액(FIXED_AMOUNT) 할인을 적용한다 — 결과가 0 밑으로 내려가지 않게 막는다. */
+    private BigDecimal applyDiscount(BigDecimal amount, DiscountType discountType, BigDecimal discountValue) {
+        BigDecimal discount = discountType == DiscountType.PERCENT
+                ? amount.multiply(discountValue).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                : discountValue;
+        return amount.subtract(discount).max(BigDecimal.ZERO);
+    }
+
+    /**
      * 필수옵션(용량) 유효 한도 = 플랜 기본값(스냅샷) + Σ(구매수량 × 구매 시점 단가 스냅샷). 플랜이
      * 없는 행사(4.8 예외 — 이 기능 배포 전 기존 행사)는 한도 강제 자체를 적용하지 않는다(사실상
      * 무제한).
@@ -792,6 +921,8 @@ public class CeremonyService {
                 ceremony.getContactTitle(),
                 ceremony.getContactPhone(),
                 ceremony.getContactEmail(),
+                ceremony.getFinalDiscountType().name(),
+                ceremony.getFinalDiscountValue(),
                 ceremony.getCreatedBy(),
                 ceremony.getCreatedAt()
         );
