@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 선택옵션 카탈로그(서명확대/폭죽/화상참석 등). signstage-docs
+ * 선택옵션 카탈로그(서명 하이라이트/폭죽/화상참석 등). signstage-docs
  * business/ceremony-billing-options-review.md 4.6/4.7절 참고. 등록은 플랫폼 관리자 전용,
  * 조회는 인증된 사용자 누구나 가능하다(행사 생성 화면에서 옵션을 고를 때 필요).
  */

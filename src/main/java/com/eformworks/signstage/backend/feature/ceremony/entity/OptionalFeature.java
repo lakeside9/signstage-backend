@@ -16,7 +16,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 선택옵션 카탈로그 상품(서명확대/폭죽/화상참석 등). 행사 마스터(Ceremony) 단위로 구매되고
+ * 선택옵션 카탈로그 상품(서명 하이라이트/폭죽/화상참석 등). 행사 마스터(Ceremony) 단위로 구매되고
  * ({@code CeremonyOptionalFeaturePurchase}, 2라운드), 실제 적용 여부는 CeremonyEvent 단위로
  * 선택한다({@code CeremonyEventOptionalFeature}, 2라운드) — signstage-docs
  * business/ceremony-billing-options-review.md 4.6/4.11절 참고.
