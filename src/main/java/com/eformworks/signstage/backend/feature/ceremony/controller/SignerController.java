@@ -8,8 +8,13 @@ import com.eformworks.signstage.backend.feature.ceremony.service.SignerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,7 +23,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 서명자(Signer). Ceremony 직속이라 같은 행사의 TEST/MAIN 하위 행사가 명단을 공유한다
@@ -43,6 +50,38 @@ public class SignerController {
     ) {
         SignerDto.Response.SignerSummary response =
                 signerService.createSigner(organizationId, ceremonyId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "서명자 일괄 업로드용 엑셀 양식 다운로드", description = "열 순서는 이름/소속/직위다.")
+    @GetMapping("/excel-template")
+    public ResponseEntity<byte[]> downloadExcelTemplate(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        byte[] workbook = signerService.generateExcelTemplate(organizationId, ceremonyId, currentUser.userId());
+        String filename = URLEncoder.encode("서명자_업로드_양식.xlsx", StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
+                .body(workbook);
+    }
+
+    @Operation(
+            summary = "서명자 엑셀 일괄 업로드",
+            description = "엑셀 양식(이름/소속/직위)으로 서명자를 한 번에 등록한다. 이름이 빈 행은 건너뛰고 결과에 표시한다. "
+                    + "유효한 행 수가 플랜의 서명자 한도를 넘으면 아무것도 등록하지 않는다."
+    )
+    @PostMapping(value = "/excel-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<SignerDto.Response.ExcelUploadResult> uploadSignersExcel(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        SignerDto.Response.ExcelUploadResult response =
+                signerService.uploadSignersExcel(organizationId, ceremonyId, currentUser.userId(), file);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

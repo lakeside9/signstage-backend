@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -72,6 +73,29 @@ public final class SignerDto {
             /** 서명란 배정/서명·감사 기록이 있어 삭제할 수 없는 서명자면 false — 화면에서 삭제 버튼을 숨긴다. */
             private final boolean deletable;
             private final LocalDateTime createdAt;
+        }
+
+        /**
+         * 엑셀 일괄 업로드 결과. 이름이 비어있는 행은 등록하지 않고 {@code skippedRows}로
+         * 돌려준다 — 나머지 유효한 행만 등록한다(행 하나 잘못됐다고 전체를 막지 않는다).
+         * 다만 유효한 행 수가 플랜 한도를 넘으면 아무것도 등록하지 않고 하드 블록한다(4.5절과
+         * 같은 원칙 — {@code CEREMONY_SIGNER_LIMIT_EXCEEDED}).
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class ExcelUploadResult {
+
+            private final List<SignerSummary> createdSigners;
+            private final List<SkippedRow> skippedRows;
+        }
+
+        @Getter
+        @AllArgsConstructor
+        public static class SkippedRow {
+
+            /** 엑셀의 실제 행 번호(1행=헤더, 2행부터 데이터) — 사용자가 엑셀에서 바로 찾을 수 있게. */
+            private final int rowNumber;
+            private final String reason;
         }
     }
 }

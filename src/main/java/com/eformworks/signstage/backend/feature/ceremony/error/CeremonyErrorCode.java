@@ -220,6 +220,21 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_CAPACITY_ADDON_INACTIVE",
             HttpStatus.CONFLICT,
             "사용 중지된 용량 추가구매 상품은 구매할 수 없습니다."
+    ),
+    SIGNER_EXCEL_INVALID_FORMAT(
+            "CEREMONY_SIGNER_EXCEL_INVALID_FORMAT",
+            HttpStatus.BAD_REQUEST,
+            "엑셀 파일(.xlsx)만 업로드할 수 있습니다."
+    ),
+    SIGNER_EXCEL_PARSE_FAILED(
+            "CEREMONY_SIGNER_EXCEL_PARSE_FAILED",
+            HttpStatus.BAD_REQUEST,
+            "엑셀 파일을 읽을 수 없습니다. 다운로드한 양식을 사용해주세요."
+    ),
+    SIGNER_EXCEL_NO_VALID_ROWS(
+            "CEREMONY_SIGNER_EXCEL_NO_VALID_ROWS",
+            HttpStatus.BAD_REQUEST,
+            "업로드할 서명자가 없습니다. 이름이 입력됐는지 확인해주세요."
     );
 
     private final String code;
