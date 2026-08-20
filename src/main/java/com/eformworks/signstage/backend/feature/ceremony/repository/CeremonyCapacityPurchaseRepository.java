@@ -22,4 +22,7 @@ public interface CeremonyCapacityPurchaseRepository extends JpaRepository<Ceremo
 
     /** 플랫폼 관리자 승인 대기열용. */
     Page<CeremonyCapacityPurchase> findAllByStatus(PurchaseStatus status, Pageable pageable);
+
+    /** 카탈로그 관리 화면의 "사용 중" 경고용 — 이 상품을 승인받아 쓰는 구매 건수(signstage-docs 9장). */
+    long countByCapacityAddOnIdAndStatus(Long capacityAddOnId, PurchaseStatus status);
 }

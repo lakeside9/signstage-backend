@@ -92,6 +92,8 @@ public final class OptionalFeatureDto {
             private final String discountType;
             private final BigDecimal discountValue;
             private final Boolean active;
+            /** 이 옵션을 승인받아 쓰는 구매 건수 — 카탈로그 관리 화면의 "사용 중" 경고용. */
+            private final Long usageCount;
             private final LocalDateTime createdAt;
         }
 

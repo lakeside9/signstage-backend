@@ -28,4 +28,7 @@ public interface CeremonyOptionalFeaturePurchaseRepository extends JpaRepository
 
     /** 플랫폼 관리자 승인 대기열용. */
     Page<CeremonyOptionalFeaturePurchase> findAllByStatus(PurchaseStatus status, Pageable pageable);
+
+    /** 카탈로그 관리 화면의 "사용 중" 경고용 — 이 옵션을 승인받아 쓰는 구매 건수(signstage-docs 9장). */
+    long countByOptionalFeatureIdAndStatus(Long optionalFeatureId, PurchaseStatus status);
 }

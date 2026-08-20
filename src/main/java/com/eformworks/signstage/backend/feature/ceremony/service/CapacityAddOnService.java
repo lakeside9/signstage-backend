@@ -7,9 +7,11 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOnHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.util.List;
@@ -32,6 +34,7 @@ public class CapacityAddOnService {
 
     private final CapacityAddOnRepository capacityAddOnRepository;
     private final CapacityAddOnHistoryRepository capacityAddOnHistoryRepository;
+    private final CeremonyCapacityPurchaseRepository ceremonyCapacityPurchaseRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     @Transactional
@@ -148,6 +151,9 @@ public class CapacityAddOnService {
                 capacityAddOn.getDiscountType().name(),
                 capacityAddOn.getDiscountValue(),
                 capacityAddOn.isActive(),
+                ceremonyCapacityPurchaseRepository.countByCapacityAddOnIdAndStatus(
+                        capacityAddOn.getId(), PurchaseStatus.APPROVED
+                ),
                 capacityAddOn.getCreatedAt()
         );
     }

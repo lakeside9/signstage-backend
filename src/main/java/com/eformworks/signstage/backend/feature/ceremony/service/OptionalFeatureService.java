@@ -7,7 +7,9 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureHistory;
+import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOptionalFeaturePurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
@@ -32,6 +34,7 @@ public class OptionalFeatureService {
 
     private final OptionalFeatureRepository optionalFeatureRepository;
     private final OptionalFeatureHistoryRepository optionalFeatureHistoryRepository;
+    private final CeremonyOptionalFeaturePurchaseRepository ceremonyOptionalFeaturePurchaseRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     @Transactional
@@ -153,6 +156,9 @@ public class OptionalFeatureService {
                 optionalFeature.getDiscountType().name(),
                 optionalFeature.getDiscountValue(),
                 optionalFeature.isActive(),
+                ceremonyOptionalFeaturePurchaseRepository.countByOptionalFeatureIdAndStatus(
+                        optionalFeature.getId(), PurchaseStatus.APPROVED
+                ),
                 optionalFeature.getCreatedAt()
         );
     }

@@ -21,10 +21,11 @@ import lombok.NoArgsConstructor;
 
 /**
  * 필수옵션(용량 한도) 추가구매 요청. 유효 한도 = 플랜의 기본값 + Σ(APPROVED인 것만, quantity ×
- * addon.unitAmount)(signstage-docs business/ceremony-billing-options-review.md 3장). 요청 즉시
- * PENDING으로 생기고, 플랫폼 관리자가 승인해야 한도에 반영된다. {@code purchased*} 3개 필드는
- * 구매 시점 가격 스냅샷이다 — 카탈로그 가격이 나중에 바뀌어도 이미 발생한 구매 내역은 바뀌지
- * 않아야 한다.
+ * purchasedUnitAmount)(signstage-docs business/ceremony-billing-options-review.md 3장, 9장).
+ * 요청 즉시 PENDING으로 생기고, 플랫폼 관리자가 승인해야 한도에 반영된다. {@code purchased*}
+ * 필드는 구매 시점 스냅샷이다 — 카탈로그 가격/단가가 나중에 바뀌어도 이미 발생한 구매 내역은
+ * 바뀌지 않아야 한다. {@code purchasedUnitAmount}는 9장에서 추가됐다(그 전에는 단가를
+ * {@code capacityAddOn.getUnitAmount()}로 라이브 조회해 카탈로그 수정에 영향받는 결함이 있었다).
  */
 @Entity
 @Table(name = "ceremony_capacity_purchases")
@@ -46,6 +47,9 @@ public class CeremonyCapacityPurchase extends BaseEntity {
 
     @Column(nullable = false)
     private Integer quantity;
+
+    @Column(name = "purchased_unit_amount", nullable = false)
+    private Integer purchasedUnitAmount;
 
     @Column(name = "purchased_sale_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal purchasedSalePrice;
@@ -76,6 +80,7 @@ public class CeremonyCapacityPurchase extends BaseEntity {
             Ceremony ceremony,
             CapacityAddOn capacityAddOn,
             Integer quantity,
+            Integer purchasedUnitAmount,
             BigDecimal purchasedSalePrice,
             DiscountType purchasedDiscountType,
             BigDecimal purchasedDiscountValue
@@ -83,6 +88,7 @@ public class CeremonyCapacityPurchase extends BaseEntity {
         this.ceremony = ceremony;
         this.capacityAddOn = capacityAddOn;
         this.quantity = quantity;
+        this.purchasedUnitAmount = purchasedUnitAmount;
         this.purchasedSalePrice = purchasedSalePrice;
         this.purchasedDiscountType = purchasedDiscountType;
         this.purchasedDiscountValue = purchasedDiscountValue;

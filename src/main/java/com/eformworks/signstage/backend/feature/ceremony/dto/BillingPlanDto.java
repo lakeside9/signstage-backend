@@ -63,8 +63,11 @@ public final class BillingPlanDto {
         }
 
         /**
-         * 선택옵션 구성({@code optionalFeatureIds})은 생성 시점에만 정해지고 이후 불변이라
-         * {@link CreatePlan}과 달리 여기엔 없다 — 플랫폼 관리자 카탈로그 관리 화면 결정.
+         * 선택옵션 구성({@code optionalFeatureIds})도 여기서 통째로 교체할 수 있다(9장 후속
+         * 결정 — 처음엔 생성 후 불변이었으나 뺄 방법이 없어 문제였다). 생략하면 빈 목록으로
+         * 취급한다({@link CreatePlan}과 같은 규약). 이미 확정/진행 중인 행사는
+         * {@code CeremonyPlanHistoryOptionalFeature} 스냅샷으로 보호되어 이 수정에 영향받지
+         * 않는다.
          */
         @Getter
         @Setter
@@ -106,6 +109,9 @@ public final class BillingPlanDto {
             /** 사용여부. false면 새 행사 생성/플랜 변경 대상에서 제외된다. */
             @NotNull
             private Boolean active;
+
+            /** 이 플랜에 기본으로 포함할 선택옵션 id 목록(생략하면 빈 목록 — 전부 뺀다는 뜻). */
+            private List<Long> optionalFeatureIds;
         }
     }
 
@@ -130,6 +136,8 @@ public final class BillingPlanDto {
             private final Integer maxMainEvents;
             private final Boolean active;
             private final List<Long> optionalFeatureIds;
+            /** 이 플랜을 쓰는 행사(Ceremony) 수 — 카탈로그 관리 화면의 "사용 중" 경고용. */
+            private final Long usageCount;
             private final LocalDateTime createdAt;
         }
 
