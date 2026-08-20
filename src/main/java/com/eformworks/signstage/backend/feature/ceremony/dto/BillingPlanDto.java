@@ -102,6 +102,10 @@ public final class BillingPlanDto {
             @NotNull
             @Min(0)
             private Integer maxMainEvents;
+
+            /** 사용여부. false면 새 행사 생성/플랜 변경 대상에서 제외된다. */
+            @NotNull
+            private Boolean active;
         }
     }
 
@@ -124,7 +128,28 @@ public final class BillingPlanDto {
             private final Integer maxTemplates;
             private final Integer maxTestEvents;
             private final Integer maxMainEvents;
+            private final Boolean active;
             private final List<Long> optionalFeatureIds;
+            private final LocalDateTime createdAt;
+        }
+
+        /** 플랜 값/사용여부 변경 이력 한 행 — 그 변경 시점의 전체 상태 스냅샷이다. */
+        @Getter
+        @AllArgsConstructor
+        public static class BillingPlanHistorySummary {
+
+            private final Long id;
+            private final String name;
+            private final BigDecimal supplyPrice;
+            private final BigDecimal salePrice;
+            private final String discountType;
+            private final BigDecimal discountValue;
+            private final Integer maxSigners;
+            private final Integer maxTemplates;
+            private final Integer maxTestEvents;
+            private final Integer maxMainEvents;
+            private final Boolean active;
+            private final Long createdBy;
             private final LocalDateTime createdAt;
         }
     }

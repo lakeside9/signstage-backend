@@ -67,6 +67,7 @@ public class TemplateService {
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         ceremonyService.checkCeremonyEditable(ceremony);
+        ceremonyService.checkCeremonyPlanConfirmed(ceremony);
 
         int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, CapacityType.TEMPLATES);
         long currentCount = templateRepository.countByCeremonyId(ceremonyId);
@@ -307,6 +308,7 @@ public class TemplateService {
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         ceremonyService.checkCeremonyEditable(ceremony);
+        ceremonyService.checkCeremonyPlanConfirmed(ceremony);
 
         int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, CapacityType.TEMPLATES);
         long currentCount = templateRepository.countByCeremonyId(ceremonyId);

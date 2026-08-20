@@ -30,6 +30,10 @@ import org.springframework.web.bind.annotation.RestController;
  * 행사 마스터(Ceremony). OWNER/ADMIN은 조직의 모든 행사를, OPERATOR는 본인이 배정된 행사만
  * 다룰 수 있다(user-organization-design.md 4.2절). signstage-docs
  * business/ceremony-billing-options-review.md 4.10절 — 생성 시 플랜 선택이 필수다.
+ *
+ * <p>생성된 Ceremony는 DRAFT로 시작한다 — 확정 전엔 플랜을 자유롭게 바꿀 수 있고
+ * (서명자/문서/하위 행사는 등록할 수 없다), "플랜 확정"으로 IN_PROGRESS로 넘어가면 그때부터
+ * 반대가 된다(signstage-docs business/ceremony-plan-confirmation-review.md).
  */
 @Tag(name = "Ceremony", description = "행사 마스터 API")
 @RestController
@@ -40,7 +44,11 @@ public class CeremonyController {
     private final CeremonyService ceremonyService;
     private final TraceIdProvider traceIdProvider;
 
-    @Operation(summary = "행사 생성", description = "billingPlanId는 필수다. 생성자는 자동으로 배정된다.")
+    @Operation(
+            summary = "행사 생성",
+            description = "billingPlanId는 필수다. 생성자는 자동으로 배정된다. 생성 직후엔 DRAFT 상태라 "
+                    + "플랜을 바꿀 수 있고(/plan), 확정(/plan/confirm)해야 서명자/문서/하위 행사를 등록할 수 있다."
+    )
     @PostMapping
     public ApiResponse<CeremonyDto.Response.CeremonySummary> createCeremony(
             @AuthenticationPrincipal CurrentUser currentUser,
@@ -83,7 +91,7 @@ public class CeremonyController {
 
     @Operation(
             summary = "행사 정보 수정",
-            description = "이름/설명, 주관 기관/부서, 담당자 정보를 바꾼다. 플랜은 생성 시점에 고정이라 여기서 바꿀 수 없다. "
+            description = "이름/설명, 주관 기관/부서, 담당자 정보를 바꾼다. 플랜은 여기서 바꿀 수 없다(/plan을 쓴다). "
                     + "완료된 행사는 수정할 수 없다."
     )
     @PutMapping("/{ceremonyId}")
@@ -95,6 +103,53 @@ public class CeremonyController {
     ) {
         CeremonyDto.Response.CeremonySummary response =
                 ceremonyService.updateCeremony(organizationId, ceremonyId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "플랜 변경",
+            description = "플랜이 확정되기 전(DRAFT)에만 가능하다. 호출할 때마다 플랜 변경 이력이 한 행씩 남는다."
+    )
+    @PutMapping("/{ceremonyId}/plan")
+    public ApiResponse<CeremonyDto.Response.CeremonySummary> changePlan(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @Valid @RequestBody CeremonyDto.Request.ChangePlan request
+    ) {
+        CeremonyDto.Response.CeremonySummary response =
+                ceremonyService.changePlan(organizationId, ceremonyId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "플랜 확정",
+            description = "DRAFT → IN_PROGRESS로 단방향 전이한다. 확정 후에는 플랜을 바꿀 수 없고, "
+                    + "서명자/문서/하위 행사를 등록할 수 있다."
+    )
+    @PostMapping("/{ceremonyId}/plan/confirm")
+    public ApiResponse<CeremonyDto.Response.CeremonySummary> confirmPlan(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        CeremonyDto.Response.CeremonySummary response =
+                ceremonyService.confirmPlan(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "플랜 변경 이력 조회",
+            description = "최신순. 각 행은 그 변경 시점 플랜의 이름/가격/한도 스냅샷이다 — 카탈로그가 나중에 바뀌어도 그대로 보전된다."
+    )
+    @GetMapping("/{ceremonyId}/plan/history")
+    public ApiResponse<List<CeremonyDto.Response.PlanHistorySummary>> findPlanHistory(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        List<CeremonyDto.Response.PlanHistorySummary> response =
+                ceremonyService.findPlanHistory(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

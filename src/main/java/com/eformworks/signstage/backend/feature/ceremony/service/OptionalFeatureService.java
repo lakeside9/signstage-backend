@@ -6,7 +6,9 @@ import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureHistory;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
@@ -29,6 +31,7 @@ public class OptionalFeatureService {
     private static final Set<String> CATALOG_MANAGE_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
 
     private final OptionalFeatureRepository optionalFeatureRepository;
+    private final OptionalFeatureHistoryRepository optionalFeatureHistoryRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     @Transactional
@@ -55,6 +58,7 @@ public class OptionalFeatureService {
                 .discountValue(request.getDiscountValue())
                 .build();
         optionalFeatureRepository.save(optionalFeature);
+        recordFeatureHistory(optionalFeature);
 
         platformAdminAuditLogRecorder.record(
                 adminUserId,
@@ -82,15 +86,18 @@ public class OptionalFeatureService {
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND));
 
         String detail = "optionalFeatureId=" + optionalFeatureId
-                + ", salePrice: " + optionalFeature.getSalePrice() + " -> " + request.getSalePrice();
+                + ", salePrice: " + optionalFeature.getSalePrice() + " -> " + request.getSalePrice()
+                + ", active: " + optionalFeature.isActive() + " -> " + request.getActive();
 
         optionalFeature.updateInfo(
                 request.getName(),
                 request.getSupplyPrice(),
                 request.getSalePrice(),
                 parseDiscountType(request.getDiscountType()),
-                request.getDiscountValue()
+                request.getDiscountValue(),
+                request.getActive()
         );
+        recordFeatureHistory(optionalFeature);
 
         platformAdminAuditLogRecorder.record(
                 adminUserId, PlatformAdminAction.UPDATE_OPTIONAL_FEATURE, null, null, detail
@@ -103,6 +110,21 @@ public class OptionalFeatureService {
         return optionalFeatureRepository.findAll().stream()
                 .map(this::toSummary)
                 .toList();
+    }
+
+    /** 최신순 — 생성 시점 1건 + 이후 수정할 때마다 1건씩(값 또는 사용여부가 바뀔 때). */
+    public List<OptionalFeatureDto.Response.OptionalFeatureHistorySummary> findFeatureHistory(Long optionalFeatureId) {
+        if (!optionalFeatureRepository.existsById(optionalFeatureId)) {
+            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND);
+        }
+        return optionalFeatureHistoryRepository.findAllByOptionalFeatureIdOrderByCreatedAtDesc(optionalFeatureId).stream()
+                .map(this::toHistorySummary)
+                .toList();
+    }
+
+    /** 생성 시(최초 상태)와 {@link #updateOptionalFeature}에서 매 변경마다 호출한다. */
+    private void recordFeatureHistory(OptionalFeature optionalFeature) {
+        optionalFeatureHistoryRepository.save(OptionalFeatureHistory.builder().optionalFeature(optionalFeature).build());
     }
 
     private OptionalFeatureCode parseCode(String code) {
@@ -130,7 +152,23 @@ public class OptionalFeatureService {
                 optionalFeature.getSalePrice(),
                 optionalFeature.getDiscountType().name(),
                 optionalFeature.getDiscountValue(),
+                optionalFeature.isActive(),
                 optionalFeature.getCreatedAt()
+        );
+    }
+
+    private OptionalFeatureDto.Response.OptionalFeatureHistorySummary toHistorySummary(OptionalFeatureHistory history) {
+        return new OptionalFeatureDto.Response.OptionalFeatureHistorySummary(
+                history.getId(),
+                history.getCode().name(),
+                history.getName(),
+                history.getSupplyPrice(),
+                history.getSalePrice(),
+                history.getDiscountType().name(),
+                history.getDiscountValue(),
+                history.isActive(),
+                history.getCreatedBy(),
+                history.getCreatedAt()
         );
     }
 }

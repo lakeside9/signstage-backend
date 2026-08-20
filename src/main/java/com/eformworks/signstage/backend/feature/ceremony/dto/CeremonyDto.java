@@ -98,6 +98,20 @@ public final class CeremonyDto {
             @NotBlank
             private String status;
         }
+
+        /**
+         * 플랜 확정 전(DRAFT)에만 허용된다 — signstage-docs
+         * business/ceremony-plan-confirmation-review.md 3.2절.
+         */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class ChangePlan {
+
+            @NotNull
+            private Long billingPlanId;
+        }
     }
 
     public static final class Response {
@@ -171,6 +185,30 @@ public final class CeremonyDto {
             private final int templateLimit;
             private final int testEventLimit;
             private final int mainEventLimit;
+        }
+
+        /**
+         * 플랜 변경 이력 한 행 — 그 변경 시점의 플랜 이름/가격/한도 스냅샷이다(카탈로그가
+         * 나중에 바뀌어도 안 바뀜). signstage-docs business/ceremony-plan-confirmation-review.md
+         * 3.4절.
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class PlanHistorySummary {
+
+            private final Long id;
+            private final Long billingPlanId;
+            private final String planName;
+            private final BigDecimal planSupplyPrice;
+            private final BigDecimal planSalePrice;
+            private final String planDiscountType;
+            private final BigDecimal planDiscountValue;
+            private final Integer planMaxSigners;
+            private final Integer planMaxTemplates;
+            private final Integer planMaxTestEvents;
+            private final Integer planMaxMainEvents;
+            private final Long createdBy;
+            private final LocalDateTime createdAt;
         }
     }
 }

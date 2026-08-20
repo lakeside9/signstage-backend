@@ -50,6 +50,14 @@ public class CapacityAddOn extends BaseEntity {
     @Column(name = "discount_value", nullable = false, precision = 12, scale = 2)
     private BigDecimal discountValue;
 
+    /**
+     * 사용여부(비활성화해도 행은 지우지 않는다). 비활성화된 상품은 새 추가구매 대상에서
+     * 제외된다({@code CeremonyService}) — signstage-docs
+     * business/ceremony-billing-options-review.md 7장 후속 결정.
+     */
+    @Column(nullable = false)
+    private boolean active;
+
     @Builder
     private CapacityAddOn(
             CapacityType capacityType,
@@ -65,23 +73,27 @@ public class CapacityAddOn extends BaseEntity {
         this.salePrice = salePrice;
         this.discountType = discountType;
         this.discountValue = discountValue;
+        this.active = true;
     }
 
     /**
      * 플랫폼 관리자 카탈로그 관리 화면의 수정. {@code capacityType}은 상품의 종류를 규정하는 값이라
-     * 생성 후 불변이고 여기서 바꾸지 않는다(바꾸려면 새 상품을 만든다).
+     * 생성 후 불변이고 여기서 바꾸지 않는다(바꾸려면 새 상품을 만든다). 호출할 때마다
+     * {@code CapacityAddOnHistory}에 이력 한 행을 남기는 것은 서비스 몫이다.
      */
     public void updateInfo(
             Integer unitAmount,
             BigDecimal supplyPrice,
             BigDecimal salePrice,
             DiscountType discountType,
-            BigDecimal discountValue
+            BigDecimal discountValue,
+            boolean active
     ) {
         this.unitAmount = unitAmount;
         this.supplyPrice = supplyPrice;
         this.salePrice = salePrice;
         this.discountType = discountType;
         this.discountValue = discountValue;
+        this.active = active;
     }
 }

@@ -4,10 +4,12 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.BillingPlanDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanOptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
@@ -36,6 +38,7 @@ public class BillingPlanService {
     private final BillingPlanRepository billingPlanRepository;
     private final OptionalFeatureRepository optionalFeatureRepository;
     private final BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
+    private final BillingPlanHistoryRepository billingPlanHistoryRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     @Transactional
@@ -65,6 +68,7 @@ public class BillingPlanService {
                 .maxMainEvents(request.getMaxMainEvents())
                 .build();
         billingPlanRepository.save(plan);
+        recordPlanHistory(plan);
 
         for (OptionalFeature optionalFeature : optionalFeatures) {
             billingPlanOptionalFeatureRepository.save(
@@ -101,7 +105,8 @@ public class BillingPlanService {
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
 
         String detail = "planId=" + planId
-                + ", salePrice: " + plan.getSalePrice() + " -> " + request.getSalePrice();
+                + ", salePrice: " + plan.getSalePrice() + " -> " + request.getSalePrice()
+                + ", active: " + plan.isActive() + " -> " + request.getActive();
 
         plan.updateInfo(
                 request.getName(),
@@ -112,8 +117,10 @@ public class BillingPlanService {
                 request.getMaxSigners(),
                 request.getMaxTemplates(),
                 request.getMaxTestEvents(),
-                request.getMaxMainEvents()
+                request.getMaxMainEvents(),
+                request.getActive()
         );
+        recordPlanHistory(plan);
 
         platformAdminAuditLogRecorder.record(adminUserId, PlatformAdminAction.UPDATE_BILLING_PLAN, null, null, detail);
 
@@ -124,6 +131,21 @@ public class BillingPlanService {
         return billingPlanRepository.findAll().stream()
                 .map(plan -> toSummary(plan, retrieveOptionalFeatureIds(plan.getId())))
                 .toList();
+    }
+
+    /** 최신순 — 생성 시점 1건 + 이후 수정할 때마다 1건씩(값 또는 사용여부가 바뀔 때). */
+    public List<BillingPlanDto.Response.BillingPlanHistorySummary> findPlanHistory(Long planId) {
+        if (!billingPlanRepository.existsById(planId)) {
+            throw new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND);
+        }
+        return billingPlanHistoryRepository.findAllByBillingPlanIdOrderByCreatedAtDesc(planId).stream()
+                .map(this::toHistorySummary)
+                .toList();
+    }
+
+    /** 생성 시(최초 상태)와 {@link #updatePlan}에서 매 변경마다 호출한다. */
+    private void recordPlanHistory(BillingPlan plan) {
+        billingPlanHistoryRepository.save(BillingPlanHistory.builder().billingPlan(plan).build());
     }
 
     private List<OptionalFeature> resolveOptionalFeatures(List<Long> optionalFeatureIds) {
@@ -163,8 +185,27 @@ public class BillingPlanService {
                 plan.getMaxTemplates(),
                 plan.getMaxTestEvents(),
                 plan.getMaxMainEvents(),
+                plan.isActive(),
                 optionalFeatureIds,
                 plan.getCreatedAt()
+        );
+    }
+
+    private BillingPlanDto.Response.BillingPlanHistorySummary toHistorySummary(BillingPlanHistory history) {
+        return new BillingPlanDto.Response.BillingPlanHistorySummary(
+                history.getId(),
+                history.getName(),
+                history.getSupplyPrice(),
+                history.getSalePrice(),
+                history.getDiscountType().name(),
+                history.getDiscountValue(),
+                history.getMaxSigners(),
+                history.getMaxTemplates(),
+                history.getMaxTestEvents(),
+                history.getMaxMainEvents(),
+                history.isActive(),
+                history.getCreatedBy(),
+                history.getCreatedAt()
         );
     }
 }

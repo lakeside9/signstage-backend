@@ -4,9 +4,11 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CapacityAddOnDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOnHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
@@ -29,6 +31,7 @@ public class CapacityAddOnService {
     private static final Set<String> CATALOG_MANAGE_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
 
     private final CapacityAddOnRepository capacityAddOnRepository;
+    private final CapacityAddOnHistoryRepository capacityAddOnHistoryRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     @Transactional
@@ -50,6 +53,7 @@ public class CapacityAddOnService {
                 .discountValue(request.getDiscountValue())
                 .build();
         capacityAddOnRepository.save(capacityAddOn);
+        recordAddOnHistory(capacityAddOn);
 
         platformAdminAuditLogRecorder.record(
                 adminUserId,
@@ -77,15 +81,18 @@ public class CapacityAddOnService {
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND));
 
         String detail = "capacityAddOnId=" + capacityAddOnId
-                + ", salePrice: " + capacityAddOn.getSalePrice() + " -> " + request.getSalePrice();
+                + ", salePrice: " + capacityAddOn.getSalePrice() + " -> " + request.getSalePrice()
+                + ", active: " + capacityAddOn.isActive() + " -> " + request.getActive();
 
         capacityAddOn.updateInfo(
                 request.getUnitAmount(),
                 request.getSupplyPrice(),
                 request.getSalePrice(),
                 parseDiscountType(request.getDiscountType()),
-                request.getDiscountValue()
+                request.getDiscountValue(),
+                request.getActive()
         );
+        recordAddOnHistory(capacityAddOn);
 
         platformAdminAuditLogRecorder.record(
                 adminUserId, PlatformAdminAction.UPDATE_CAPACITY_ADDON, null, null, detail
@@ -98,6 +105,21 @@ public class CapacityAddOnService {
         return capacityAddOnRepository.findAll().stream()
                 .map(this::toSummary)
                 .toList();
+    }
+
+    /** 최신순 — 생성 시점 1건 + 이후 수정할 때마다 1건씩(값 또는 사용여부가 바뀔 때). */
+    public List<CapacityAddOnDto.Response.CapacityAddOnHistorySummary> findAddOnHistory(Long capacityAddOnId) {
+        if (!capacityAddOnRepository.existsById(capacityAddOnId)) {
+            throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND);
+        }
+        return capacityAddOnHistoryRepository.findAllByCapacityAddOnIdOrderByCreatedAtDesc(capacityAddOnId).stream()
+                .map(this::toHistorySummary)
+                .toList();
+    }
+
+    /** 생성 시(최초 상태)와 {@link #updateCapacityAddOn}에서 매 변경마다 호출한다. */
+    private void recordAddOnHistory(CapacityAddOn capacityAddOn) {
+        capacityAddOnHistoryRepository.save(CapacityAddOnHistory.builder().capacityAddOn(capacityAddOn).build());
     }
 
     private CapacityType parseCapacityType(String capacityType) {
@@ -125,7 +147,23 @@ public class CapacityAddOnService {
                 capacityAddOn.getSalePrice(),
                 capacityAddOn.getDiscountType().name(),
                 capacityAddOn.getDiscountValue(),
+                capacityAddOn.isActive(),
                 capacityAddOn.getCreatedAt()
+        );
+    }
+
+    private CapacityAddOnDto.Response.CapacityAddOnHistorySummary toHistorySummary(CapacityAddOnHistory history) {
+        return new CapacityAddOnDto.Response.CapacityAddOnHistorySummary(
+                history.getId(),
+                history.getCapacityType().name(),
+                history.getUnitAmount(),
+                history.getSupplyPrice(),
+                history.getSalePrice(),
+                history.getDiscountType().name(),
+                history.getDiscountValue(),
+                history.isActive(),
+                history.getCreatedBy(),
+                history.getCreatedAt()
         );
     }
 }
