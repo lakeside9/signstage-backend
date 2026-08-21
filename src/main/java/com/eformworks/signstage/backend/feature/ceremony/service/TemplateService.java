@@ -8,6 +8,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.model.StoredFile;
 import com.eformworks.signstage.backend.feature.ceremony.port.DocumentStoragePort;
@@ -294,8 +295,13 @@ public class TemplateService {
     }
 
     /**
-     * 원본 파일을 그대로 복사해 새 문서 양식을 만든다. 서명란은 복제하지 않는다 — 복제본은
-     * 항상 서명란 0개("설정 필요")로 시작한다. 업로드와 같은 템플릿 개수 한도를 적용한다.
+     * 원본 파일과 서명란(TemplateField, signer 매핑 포함)을 그대로 복사해 새 문서 양식을
+     * 만든다 — legacy(~/Works/eform/source/signstage/signstage-frontend)
+     * TemplateCloneService와 같은 동작(2026-08-21 결정: 복제본을 서명란 0개로 비워두면 배치를
+     * 매번 처음부터 다시 해야 해서, 좌표는 그대로 이어받고 검토 후 "설정 완료"만 다시 누르는
+     * 쪽으로 정리). 복제본 상태는 {@link Template#complete()}를 호출하지 않으므로 서명란이
+     * 있어도 항상 DRAFT로 시작한다 — "설정 완료"는 관리자가 배치를 확인한 뒤 별도로 눌러야
+     * 한다. 업로드와 같은 템플릿 개수 한도를 적용한다.
      */
     @Transactional
     public TemplateDto.Response.TemplateSummary duplicateTemplate(
@@ -338,6 +344,28 @@ public class TemplateService {
                 .storedFilename(storedFile.storedFilename())
                 .build();
         templateRepository.save(duplicated);
+
+        List<TemplateField> originalFields = templateFieldRepository.findAllByTemplateId(original.getId());
+        if (!originalFields.isEmpty()) {
+            List<TemplateField> clonedFields = originalFields.stream()
+                    .map(field -> TemplateField.builder()
+                            .template(duplicated)
+                            .signer(field.getSigner())
+                            .fieldKey(field.getFieldKey())
+                            .pageIndex(field.getPageIndex())
+                            .fieldIndex(field.getFieldIndex())
+                            .fieldName(field.getFieldName())
+                            .roleCode(field.getRoleCode())
+                            .signOrder(field.getSignOrder())
+                            .isRequired(field.getIsRequired())
+                            .xRatio(field.getXRatio())
+                            .yRatio(field.getYRatio())
+                            .widthRatio(field.getWidthRatio())
+                            .heightRatio(field.getHeightRatio())
+                            .build())
+                    .toList();
+            templateFieldRepository.saveAll(clonedFields);
+        }
 
         return toSummary(duplicated);
     }

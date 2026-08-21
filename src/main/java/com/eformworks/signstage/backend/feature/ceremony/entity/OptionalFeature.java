@@ -59,6 +59,28 @@ public class OptionalFeature extends BaseEntity {
     @Column(nullable = false)
     private boolean active;
 
+    /**
+     * 이 옵션이 프로젝터(전시용) 화면에 실제로 효과를 내는지 — signstage-docs
+     * business/ceremony-billing-options-review.md 8.7절 계열. 프로젝터 효과가 아닌 옵션(예:
+     * 화상참석)이 늘어날 걸 대비해 코드 변경 없이 카탈로그 등록만으로 구분할 수 있게 한다.
+     * 실제 효과 로직 자체는 여전히 프런트 {@code projectorEffects.ts}에 코드별로 구현해야
+     * 한다 — 이 필드는 "그런 종류의 옵션이다"라는 분류 정보일 뿐, 켠다고 효과가 저절로
+     * 생기지 않는다.
+     */
+    @Column(name = "projector_effect", nullable = false)
+    private boolean projectorEffect;
+
+    /**
+     * 배타 그룹 — 같은 값을 가진 선택옵션들은 한 CeremonyEvent에 동시에 적용할 수 없다
+     * ({@code CeremonyEventService#applyOptionalFeatures}가 강제한다). {@code Signer.roleCode}/
+     * {@code TemplateField.roleCode}처럼 enum이 아니라 관리자가 카탈로그 등록 시 자유롭게
+     * 붙이는 문자열 라벨이다 — 예: "서명 하이라이트 파란색"/"빨간색" 두 상품에 같은 그룹값을
+     * 매기면 관리자 코드 변경 없이 배타 관계를 구성할 수 있다. null이면(기본값) 다른 옵션과
+     * 배타 관계가 없다 — 지금 있는 두 옵션(서명 하이라이트/폭죽)은 항상 null로 시작한다.
+     */
+    @Column(name = "exclusivity_group", length = 50)
+    private String exclusivityGroup;
+
     @Builder
     private OptionalFeature(
             OptionalFeatureCode code,
@@ -66,7 +88,9 @@ public class OptionalFeature extends BaseEntity {
             BigDecimal supplyPrice,
             BigDecimal salePrice,
             DiscountType discountType,
-            BigDecimal discountValue
+            BigDecimal discountValue,
+            Boolean projectorEffect,
+            String exclusivityGroup
     ) {
         this.code = code;
         this.name = name;
@@ -75,6 +99,8 @@ public class OptionalFeature extends BaseEntity {
         this.discountType = discountType;
         this.discountValue = discountValue;
         this.active = true;
+        this.projectorEffect = projectorEffect != null ? projectorEffect : true;
+        this.exclusivityGroup = exclusivityGroup;
     }
 
     /**
@@ -88,7 +114,9 @@ public class OptionalFeature extends BaseEntity {
             BigDecimal salePrice,
             DiscountType discountType,
             BigDecimal discountValue,
-            boolean active
+            boolean active,
+            boolean projectorEffect,
+            String exclusivityGroup
     ) {
         this.name = name;
         this.supplyPrice = supplyPrice;
@@ -96,5 +124,7 @@ public class OptionalFeature extends BaseEntity {
         this.discountType = discountType;
         this.discountValue = discountValue;
         this.active = active;
+        this.projectorEffect = projectorEffect;
+        this.exclusivityGroup = exclusivityGroup;
     }
 }

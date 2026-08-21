@@ -42,6 +42,12 @@ public final class OptionalFeatureDto {
 
             @NotNull
             private BigDecimal discountValue;
+
+            /** 생략하면(null) true — 프로젝터 화면 효과 옵션으로 등록된다. */
+            private Boolean projectorEffect;
+
+            /** 같은 값을 가진 다른 선택옵션과 한 CeremonyEvent에 동시 적용할 수 없다. 생략하면(null) 배타 관계 없음. */
+            private String exclusivityGroup;
         }
 
         /**
@@ -72,6 +78,12 @@ public final class OptionalFeatureDto {
             /** 사용여부. false면 새 추가구매 대상에서 제외된다. */
             @NotNull
             private Boolean active;
+
+            @NotNull
+            private Boolean projectorEffect;
+
+            /** 같은 값을 가진 다른 선택옵션과 한 CeremonyEvent에 동시 적용할 수 없다. null이면 배타 관계 없음. */
+            private String exclusivityGroup;
         }
     }
 
@@ -92,6 +104,8 @@ public final class OptionalFeatureDto {
             private final String discountType;
             private final BigDecimal discountValue;
             private final Boolean active;
+            private final Boolean projectorEffect;
+            private final String exclusivityGroup;
             /** 이 옵션을 승인받아 쓰는 구매 건수 — 카탈로그 관리 화면의 "사용 중" 경고용. */
             private final Long usageCount;
             private final LocalDateTime createdAt;
@@ -110,6 +124,8 @@ public final class OptionalFeatureDto {
             private final String discountType;
             private final BigDecimal discountValue;
             private final Boolean active;
+            private final Boolean projectorEffect;
+            private final String exclusivityGroup;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }

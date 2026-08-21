@@ -35,6 +35,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "이미 구매를 요청했거나 승인된 선택옵션입니다."
     ),
+    OPTIONAL_FEATURE_GROUP_CONFLICT(
+            "CEREMONY_OPTIONAL_FEATURE_GROUP_CONFLICT",
+            HttpStatus.CONFLICT,
+            "같은 배타 그룹의 선택옵션은 하나만 적용할 수 있습니다."
+    ),
     CAPACITY_PURCHASE_NOT_FOUND(
             "CEREMONY_CAPACITY_PURCHASE_NOT_FOUND",
             HttpStatus.NOT_FOUND,

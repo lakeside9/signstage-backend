@@ -59,6 +59,8 @@ public class OptionalFeatureService {
                 .salePrice(request.getSalePrice())
                 .discountType(parseDiscountType(request.getDiscountType()))
                 .discountValue(request.getDiscountValue())
+                .projectorEffect(request.getProjectorEffect())
+                .exclusivityGroup(request.getExclusivityGroup())
                 .build();
         optionalFeatureRepository.save(optionalFeature);
         recordFeatureHistory(optionalFeature);
@@ -98,7 +100,9 @@ public class OptionalFeatureService {
                 request.getSalePrice(),
                 parseDiscountType(request.getDiscountType()),
                 request.getDiscountValue(),
-                request.getActive()
+                request.getActive(),
+                request.getProjectorEffect(),
+                request.getExclusivityGroup()
         );
         recordFeatureHistory(optionalFeature);
 
@@ -156,6 +160,8 @@ public class OptionalFeatureService {
                 optionalFeature.getDiscountType().name(),
                 optionalFeature.getDiscountValue(),
                 optionalFeature.isActive(),
+                optionalFeature.isProjectorEffect(),
+                optionalFeature.getExclusivityGroup(),
                 ceremonyOptionalFeaturePurchaseRepository.countByOptionalFeatureIdAndStatus(
                         optionalFeature.getId(), PurchaseStatus.APPROVED
                 ),
@@ -173,6 +179,8 @@ public class OptionalFeatureService {
                 history.getDiscountType().name(),
                 history.getDiscountValue(),
                 history.isActive(),
+                history.isProjectorEffect(),
+                history.getExclusivityGroup(),
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );

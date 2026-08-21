@@ -3,17 +3,24 @@ package com.eformworks.signstage.backend.feature.platformadmin.controller;
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
+import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -30,6 +37,23 @@ public class PlatformAdminCeremonyController {
 
     private final CeremonyService ceremonyService;
     private final TraceIdProvider traceIdProvider;
+
+    @Operation(
+            summary = "행사 목록 조회(플랫폼 관리자)",
+            description = "조직 멤버십과 무관하게 그 조직의 모든 행사를 본다. title은 부분 일치, status는 정확히 일치. "
+                    + "조회 전용이라 등급 검사 없이 PLATFORM_SUPPORT 이상이면 누구나 호출할 수 있다."
+    )
+    @GetMapping
+    public ApiResponse<PageResponse<CeremonyDto.Response.CeremonySummary>> findCeremonies(
+            @PathVariable Long organizationId,
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) CeremonyStatus status,
+            @PageableDefault(size = 20) Pageable pageable
+    ) {
+        Page<CeremonyDto.Response.CeremonySummary> response =
+                ceremonyService.findCeremoniesByPlatformAdmin(organizationId, title, status, pageable);
+        return ApiResponse.success(PageResponse.from(response), traceIdProvider.getTraceId());
+    }
 
     @Operation(
             summary = "행사 상태 강제 변경",
