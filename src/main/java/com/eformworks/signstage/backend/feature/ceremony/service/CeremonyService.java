@@ -279,6 +279,7 @@ public class CeremonyService {
                 .capacityAddOn(addOn)
                 .quantity(request.getQuantity())
                 .purchasedUnitAmount(addOn.getUnitAmount())
+                .purchasedSecondaryUnitAmount(addOn.getSecondaryUnitAmount())
                 .purchasedSalePrice(addOn.getSalePrice())
                 .purchasedDiscountType(discount.type())
                 .purchasedDiscountValue(discount.value())
@@ -880,6 +881,8 @@ public class CeremonyService {
                     case TEMPLATES -> snapshot.getPlanMaxTemplates();
                     case TEST_EVENTS -> snapshot.getPlanMaxTestEvents();
                     case MAIN_EVENTS -> snapshot.getPlanMaxMainEvents();
+                    // 태블릿은 플랜 기본 포함 개념이 없다 — 항상 0에서 시작해 추가구매로만 늘어난다.
+                    case TABLETS -> 0;
                 })
                 // 이력이 없는 경우(플랜 확정 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
                 .orElseGet(() -> switch (capacityType) {
@@ -887,16 +890,25 @@ public class CeremonyService {
                     case TEMPLATES -> plan.getMaxTemplates();
                     case TEST_EVENTS -> plan.getMaxTestEvents();
                     case MAIN_EVENTS -> plan.getMaxMainEvents();
+                    case TABLETS -> 0;
                 });
 
         // 승인(APPROVED)된 요청만 한도에 반영한다 — 대기중/반려된 요청은 아직/영영 쓸 수 없다.
-        int purchasedAmount = ceremonyCapacityPurchaseRepository
+        // 이 유형을 주(capacityType)로 파는 상품과, 묶음 상품의 보조(secondaryCapacityType)로
+        // 파는 상품(예: "서명자+태블릿") 둘 다 반영한다 — signstage-docs
+        // business/ceremony-billing-options-review.md 4.7절 후속(2026-08-21).
+        int purchasedAsPrimary = ceremonyCapacityPurchaseRepository
                 .findAllByCeremonyIdAndCapacityAddOn_CapacityTypeAndStatus(ceremony.getId(), capacityType, PurchaseStatus.APPROVED)
                 .stream()
                 .mapToInt(purchase -> purchase.getQuantity() * purchase.getPurchasedUnitAmount())
                 .sum();
+        int purchasedAsSecondary = ceremonyCapacityPurchaseRepository
+                .findAllByCeremonyIdAndCapacityAddOn_SecondaryCapacityTypeAndStatus(ceremony.getId(), capacityType, PurchaseStatus.APPROVED)
+                .stream()
+                .mapToInt(purchase -> purchase.getQuantity() * purchase.getPurchasedSecondaryUnitAmount())
+                .sum();
 
-        return baseValue + purchasedAmount;
+        return baseValue + purchasedAsPrimary + purchasedAsSecondary;
     }
 
     /**
@@ -996,6 +1008,7 @@ public class CeremonyService {
                 purchase.getCapacityAddOn().getId(),
                 purchase.getQuantity(),
                 purchase.getPurchasedUnitAmount(),
+                purchase.getPurchasedSecondaryUnitAmount(),
                 purchase.getPurchasedSalePrice(),
                 purchase.getPurchasedDiscountType().name(),
                 purchase.getPurchasedDiscountValue(),

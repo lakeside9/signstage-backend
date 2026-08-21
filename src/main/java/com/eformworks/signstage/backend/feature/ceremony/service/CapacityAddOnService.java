@@ -47,9 +47,15 @@ public class CapacityAddOnService {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
 
+        CapacityType capacityType = parseCapacityType(request.getCapacityType());
+        CapacityType secondaryCapacityType = parseOptionalCapacityType(request.getSecondaryCapacityType());
+        checkSecondaryCapacityValid(capacityType, secondaryCapacityType, request.getSecondaryUnitAmount());
+
         CapacityAddOn capacityAddOn = CapacityAddOn.builder()
-                .capacityType(parseCapacityType(request.getCapacityType()))
+                .capacityType(capacityType)
                 .unitAmount(request.getUnitAmount())
+                .secondaryCapacityType(secondaryCapacityType)
+                .secondaryUnitAmount(secondaryCapacityType == null ? null : request.getSecondaryUnitAmount())
                 .supplyPrice(request.getSupplyPrice())
                 .salePrice(request.getSalePrice())
                 .discountType(parseDiscountType(request.getDiscountType()))
@@ -87,8 +93,19 @@ public class CapacityAddOnService {
                 + ", salePrice: " + capacityAddOn.getSalePrice() + " -> " + request.getSalePrice()
                 + ", active: " + capacityAddOn.isActive() + " -> " + request.getActive();
 
+        // secondaryCapacityType은 생성 후 불변이라 수정 요청에 없다 — 원래 묶음 상품이 아니었으면
+        // (secondaryCapacityType == null) 보조 수량 입력은 조용히 무시한다(묶음으로 바꾸려면 새
+        // 상품을 만들어야 한다). 원래 묶음 상품이었다면 보조 수량은 계속 필수다.
+        if (capacityAddOn.getSecondaryCapacityType() != null && request.getSecondaryUnitAmount() == null) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+        Integer secondaryUnitAmount = capacityAddOn.getSecondaryCapacityType() == null
+                ? null
+                : request.getSecondaryUnitAmount();
+
         capacityAddOn.updateInfo(
                 request.getUnitAmount(),
+                secondaryUnitAmount,
                 request.getSupplyPrice(),
                 request.getSalePrice(),
                 parseDiscountType(request.getDiscountType()),
@@ -133,6 +150,30 @@ public class CapacityAddOnService {
         }
     }
 
+    /** 묶음 상품이 아니면(요청에 없으면) null — {@link #parseCapacityType}과 달리 생략을 허용한다. */
+    private CapacityType parseOptionalCapacityType(String secondaryCapacityType) {
+        if (secondaryCapacityType == null || secondaryCapacityType.isBlank()) {
+            return null;
+        }
+        return parseCapacityType(secondaryCapacityType);
+    }
+
+    /**
+     * 묶음 상품 등록 규칙 — signstage-docs business/ceremony-billing-options-review.md 4.7절
+     * 후속(2026-08-21): 보조 유형/수량은 함께 있거나 함께 없어야 하고, 보조 유형은 주 유형과
+     * 달라야 한다(같은 용량을 두 번 늘리는 건 의미가 없다 — 그냥 unitAmount를 늘리면 된다).
+     */
+    private void checkSecondaryCapacityValid(CapacityType capacityType, CapacityType secondaryCapacityType, Integer secondaryUnitAmount) {
+        boolean hasSecondaryType = secondaryCapacityType != null;
+        boolean hasSecondaryAmount = secondaryUnitAmount != null;
+        if (hasSecondaryType != hasSecondaryAmount) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+        if (hasSecondaryType && secondaryCapacityType == capacityType) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
     private DiscountType parseDiscountType(String discountType) {
         try {
             return DiscountType.valueOf(discountType);
@@ -146,6 +187,8 @@ public class CapacityAddOnService {
                 capacityAddOn.getId(),
                 capacityAddOn.getCapacityType().name(),
                 capacityAddOn.getUnitAmount(),
+                capacityAddOn.getSecondaryCapacityType() == null ? null : capacityAddOn.getSecondaryCapacityType().name(),
+                capacityAddOn.getSecondaryUnitAmount(),
                 capacityAddOn.getSupplyPrice(),
                 capacityAddOn.getSalePrice(),
                 capacityAddOn.getDiscountType().name(),
@@ -163,6 +206,8 @@ public class CapacityAddOnService {
                 history.getId(),
                 history.getCapacityType().name(),
                 history.getUnitAmount(),
+                history.getSecondaryCapacityType() == null ? null : history.getSecondaryCapacityType().name(),
+                history.getSecondaryUnitAmount(),
                 history.getSupplyPrice(),
                 history.getSalePrice(),
                 history.getDiscountType().name(),

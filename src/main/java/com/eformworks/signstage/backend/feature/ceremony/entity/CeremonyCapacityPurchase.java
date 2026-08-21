@@ -51,6 +51,13 @@ public class CeremonyCapacityPurchase extends BaseEntity {
     @Column(name = "purchased_unit_amount", nullable = false)
     private Integer purchasedUnitAmount;
 
+    /**
+     * 상품이 묶음(주+보조 두 용량 동시 증가)이면 그 순간 {@code capacityAddOn.secondaryUnitAmount}의
+     * 스냅샷 — {@code purchasedUnitAmount}와 같은 이유(2026-08-21 추가). 단일 상품 구매면 null.
+     */
+    @Column(name = "purchased_secondary_unit_amount")
+    private Integer purchasedSecondaryUnitAmount;
+
     @Column(name = "purchased_sale_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal purchasedSalePrice;
 
@@ -81,6 +88,7 @@ public class CeremonyCapacityPurchase extends BaseEntity {
             CapacityAddOn capacityAddOn,
             Integer quantity,
             Integer purchasedUnitAmount,
+            Integer purchasedSecondaryUnitAmount,
             BigDecimal purchasedSalePrice,
             DiscountType purchasedDiscountType,
             BigDecimal purchasedDiscountValue
@@ -89,6 +97,7 @@ public class CeremonyCapacityPurchase extends BaseEntity {
         this.capacityAddOn = capacityAddOn;
         this.quantity = quantity;
         this.purchasedUnitAmount = purchasedUnitAmount;
+        this.purchasedSecondaryUnitAmount = purchasedSecondaryUnitAmount;
         this.purchasedSalePrice = purchasedSalePrice;
         this.purchasedDiscountType = purchasedDiscountType;
         this.purchasedDiscountValue = purchasedDiscountValue;
