@@ -60,6 +60,12 @@ public class OptionalFeatureHistory extends BaseEntity {
     @Column(nullable = false)
     private boolean active;
 
+    @Column(name = "projector_effect", nullable = false)
+    private boolean projectorEffect;
+
+    @Column(name = "exclusivity_group", length = 50)
+    private String exclusivityGroup;
+
     @Builder
     private OptionalFeatureHistory(OptionalFeature optionalFeature) {
         this.optionalFeature = optionalFeature;
@@ -70,5 +76,7 @@ public class OptionalFeatureHistory extends BaseEntity {
         this.discountType = optionalFeature.getDiscountType();
         this.discountValue = optionalFeature.getDiscountValue();
         this.active = optionalFeature.isActive();
+        this.projectorEffect = optionalFeature.isProjectorEffect();
+        this.exclusivityGroup = optionalFeature.getExclusivityGroup();
     }
 }

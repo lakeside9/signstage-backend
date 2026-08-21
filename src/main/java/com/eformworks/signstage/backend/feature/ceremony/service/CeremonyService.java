@@ -85,6 +85,7 @@ public class CeremonyService {
     private final OptionalFeatureRepository optionalFeatureRepository;
     private final UserRepository userRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
+    private final OrganizationDiscountService organizationDiscountService;
 
     @Transactional
     public CeremonyDto.Response.CeremonySummary createCeremony(
@@ -134,6 +135,25 @@ public class CeremonyService {
         Long assignedUserId = actingMember.getRole() == MemberRole.OPERATOR ? currentUserId : null;
 
         Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, assignedUserId, pageable);
+        return ceremonies.map(this::toSummary);
+    }
+
+    /**
+     * 플랫폼 관리자용 행사 목록 — {@link #findCeremonies}와 달리 조직 멤버십을 요구하지 않는다
+     * (플랫폼 관리자는 별도 인가 축이라 organization_members에 없는 게 정상이다,
+     * {@link #applyFinalDiscount}/{@link #updateStatusByPlatformAdmin}과 같은 이유). OPERATOR
+     * 스코핑 대상이 없어 {@code assignedUserId}는 항상 null이다 — 관리자는 전부 본다. 조회 전용이라
+     * {@link #applyFinalDiscount}처럼 등급 검사를 하지 않는다(카탈로그 조회 API들과 같은 관례,
+     * PLATFORM_SUPPORT 이상이면 누구나 — 이미 SecurityConfig가 /api/platform-admin/**를 게이트).
+     */
+    public Page<CeremonyDto.Response.CeremonySummary> findCeremoniesByPlatformAdmin(
+            Long organizationId,
+            String title,
+            CeremonyStatus status,
+            Pageable pageable
+    ) {
+        findOrganizationOrThrow(organizationId);
+        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, null, pageable);
         return ceremonies.map(this::toSummary);
     }
 
@@ -249,14 +269,19 @@ public class CeremonyService {
             throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_INACTIVE);
         }
 
+        // 조직×용량추가구매 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다 —
+        // recordPlanHistory와 같은 원칙(4.1절, 2026-08-21 재검토).
+        OrganizationDiscountService.EffectiveDiscount discount =
+                organizationDiscountService.resolveCapacityAddOnDiscount(ceremony.getOrganization(), addOn);
+
         CeremonyCapacityPurchase purchase = CeremonyCapacityPurchase.builder()
                 .ceremony(ceremony)
                 .capacityAddOn(addOn)
                 .quantity(request.getQuantity())
                 .purchasedUnitAmount(addOn.getUnitAmount())
                 .purchasedSalePrice(addOn.getSalePrice())
-                .purchasedDiscountType(addOn.getDiscountType())
-                .purchasedDiscountValue(addOn.getDiscountValue())
+                .purchasedDiscountType(discount.type())
+                .purchasedDiscountValue(discount.value())
                 .build();
         ceremonyCapacityPurchaseRepository.save(purchase);
 
@@ -303,13 +328,18 @@ public class CeremonyService {
             throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_ALREADY_PURCHASED);
         }
 
+        // 조직×선택옵션 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다 —
+        // recordPlanHistory와 같은 원칙(4.1절, 2026-08-21 재검토).
+        OrganizationDiscountService.EffectiveDiscount discount =
+                organizationDiscountService.resolveOptionalFeatureDiscount(ceremony.getOrganization(), feature);
+
         CeremonyOptionalFeaturePurchase purchase = CeremonyOptionalFeaturePurchase.builder()
                 .ceremony(ceremony)
                 .optionalFeature(feature)
                 .purchasedName(feature.getName())
                 .purchasedSalePrice(feature.getSalePrice())
-                .purchasedDiscountType(feature.getDiscountType())
-                .purchasedDiscountValue(feature.getDiscountValue())
+                .purchasedDiscountType(discount.type())
+                .purchasedDiscountValue(discount.value())
                 .build();
         ceremonyOptionalFeaturePurchaseRepository.save(purchase);
 
@@ -374,6 +404,8 @@ public class CeremonyService {
                             purchase != null ? purchase.getPurchasedDiscountType().name() : feature.getDiscountType().name(),
                             purchase != null ? purchase.getPurchasedDiscountValue() : feature.getDiscountValue(),
                             feature.isActive(),
+                            feature.isProjectorEffect(),
+                            feature.getExclusivityGroup(),
                             ceremonyOptionalFeaturePurchaseRepository.countByOptionalFeatureIdAndStatus(
                                     feature.getId(), PurchaseStatus.APPROVED
                             ),
@@ -707,8 +739,19 @@ public class CeremonyService {
      * 않아야 한다(signstage-docs business/ceremony-billing-options-review.md 9장 후속 결정).
      */
     private void recordPlanHistory(Ceremony ceremony, BillingPlan plan) {
+        // 조직×플랜 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다
+        // (signstage-docs business/organization-event-discount-pricing-review.md 4.1절,
+        // 2026-08-21 재검토) — 그 시점의 값을 CeremonyPlanHistory에 고정해 두므로, 오버라이드를
+        // 나중에 바꿔도 이미 만들어진 이 Ceremony에는 영향을 주지 않는다.
+        OrganizationDiscountService.EffectiveDiscount discount =
+                organizationDiscountService.resolveBillingPlanDiscount(ceremony.getOrganization(), plan);
         CeremonyPlanHistory history = ceremonyPlanHistoryRepository.save(
-                CeremonyPlanHistory.builder().ceremony(ceremony).billingPlan(plan).build()
+                CeremonyPlanHistory.builder()
+                        .ceremony(ceremony)
+                        .billingPlan(plan)
+                        .discountType(discount.type())
+                        .discountValue(discount.value())
+                        .build()
         );
         billingPlanOptionalFeatureRepository.findAllByBillingPlanId(plan.getId()).forEach(mapping ->
                 ceremonyPlanHistoryOptionalFeatureRepository.save(

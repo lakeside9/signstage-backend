@@ -75,15 +75,21 @@ public class CeremonyPlanHistory extends BaseEntity {
     @Column(name = "plan_max_main_events", nullable = false)
     private Integer planMaxMainEvents;
 
+    /**
+     * {@code discountType}/{@code discountValue}는 보통 {@code billingPlan}에서 그대로 뽑지만,
+     * 조직×플랜 오버라이드가 있으면({@link OrganizationBillingPlanDiscount},
+     * {@code OrganizationDiscountService#resolveBillingPlanDiscount}) 호출부가 그 값을 대신
+     * 넘긴다 — null이면(오버라이드 없음) 카탈로그 값으로 그대로 떨어진다.
+     */
     @Builder
-    private CeremonyPlanHistory(Ceremony ceremony, BillingPlan billingPlan) {
+    private CeremonyPlanHistory(Ceremony ceremony, BillingPlan billingPlan, DiscountType discountType, BigDecimal discountValue) {
         this.ceremony = ceremony;
         this.billingPlan = billingPlan;
         this.planName = billingPlan.getName();
         this.planSupplyPrice = billingPlan.getSupplyPrice();
         this.planSalePrice = billingPlan.getSalePrice();
-        this.planDiscountType = billingPlan.getDiscountType();
-        this.planDiscountValue = billingPlan.getDiscountValue();
+        this.planDiscountType = discountType != null ? discountType : billingPlan.getDiscountType();
+        this.planDiscountValue = discountValue != null ? discountValue : billingPlan.getDiscountValue();
         this.planMaxSigners = billingPlan.getMaxSigners();
         this.planMaxTemplates = billingPlan.getMaxTemplates();
         this.planMaxTestEvents = billingPlan.getMaxTestEvents();

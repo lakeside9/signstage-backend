@@ -36,10 +36,12 @@ import lombok.NoArgsConstructor;
  *
  * <p>{@code finalDiscountType}/{@code finalDiscountValue}는 품목 할인과 별개로 이 행사 건에만
  * 매기는 관리자 재량 할인이다 — signstage-docs
- * business/organization-event-discount-pricing-review.md 4.2 결정(2026-08-21 갱신: 조직 전역
- * 할인은 우선 보류하고 행사별 할인만 적용). NULL sentinel 없이 항상 구체적인 값을 갖고
- * ("할인 없음"은 discountValue=0으로 표현), 플랫폼 관리자(PLATFORM_OPS 이상)만 바꿀 수
- * 있다(4.4 결정).
+ * business/organization-event-discount-pricing-review.md 4.2 결정. NULL sentinel 없이 항상
+ * 구체적인 값을 갖고("할인 없음"은 discountValue=0으로 표현), 플랫폼 관리자(PLATFORM_OPS
+ * 이상)만 바꿀 수 있다(4.4 결정). 품목 자체의 할인(조직×품목 오버라이드 포함,
+ * {@link com.eformworks.signstage.backend.feature.ceremony.service.OrganizationDiscountService})은
+ * 이 필드와 별개로 각 스냅샷 컬럼(예: {@link CeremonyPlanHistory#getPlanDiscountType()})에
+ * 담긴다(같은 문서 4.1절, 2026-08-21 재검토).
  */
 @Entity
 @Table(name = "ceremonies")

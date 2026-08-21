@@ -236,6 +236,7 @@ public class CeremonyEventService {
         List<OptionalFeature> features = requestedIds.isEmpty()
                 ? List.of()
                 : optionalFeatureRepository.findAllByIdIn(requestedIds);
+        checkExclusivityGroups(features);
 
         ceremonyEventOptionalFeatureRepository.deleteAllByCeremonyEventId(event.getId());
         for (OptionalFeature feature : features) {
@@ -245,6 +246,24 @@ public class CeremonyEventService {
         }
 
         return requestedIds;
+    }
+
+    /**
+     * 같은 {@code exclusivityGroup}을 가진 선택옵션이 요청에 2개 이상 섞여 있으면 거부한다 —
+     * signstage-docs business/ceremony-billing-options-review.md 참고(2026-08-21 추가: 옵션이
+     * 늘어나도 코드 변경 없이 배타 관계를 카탈로그 등록만으로 구성하기 위한 필드). 그룹 없음
+     * (null)은 다른 옵션과 배타 관계가 아니므로 검사 대상에서 뺀다 — 지금 있는 두 옵션(서명
+     * 하이라이트/폭죽)은 전부 null이라 이 검사가 추가돼도 기존 동작은 그대로다.
+     */
+    private void checkExclusivityGroups(List<OptionalFeature> features) {
+        Set<String> seenGroups = new HashSet<>();
+        for (OptionalFeature feature : features) {
+            String group = feature.getExclusivityGroup();
+            if (group == null) continue;
+            if (!seenGroups.add(group)) {
+                throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_GROUP_CONFLICT);
+            }
+        }
     }
 
     /**

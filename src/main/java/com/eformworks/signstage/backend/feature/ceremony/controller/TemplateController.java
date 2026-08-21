@@ -163,7 +163,7 @@ public class TemplateController {
 
     @Operation(
             summary = "문서 양식 복제",
-            description = "원본 파일을 그대로 복사해 새 문서 양식을 만든다. 서명란은 복제하지 않는다."
+            description = "원본 파일과 서명란(signer 매핑 포함)을 그대로 복사해 새 문서 양식을 만든다. 복제본 상태는 항상 DRAFT로 시작한다."
     )
     @PostMapping("/{templateId}/duplicate")
     public ApiResponse<TemplateDto.Response.TemplateSummary> duplicateTemplate(
