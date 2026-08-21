@@ -8,6 +8,7 @@ import com.eformworks.signstage.backend.feature.ceremony.service.OrganizationDis
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -72,6 +73,20 @@ public class PlatformAdminOrganizationDiscountController {
     }
 
     @Operation(
+            summary = "조직×플랜 할인 오버라이드 변경 이력 조회",
+            description = "최신순. 설정(생성/수정) 시점마다, 그리고 제거 시점에(그 직전 값) 한 건씩 쌓인다."
+    )
+    @GetMapping("/plans/{billingPlanId}/history")
+    public ApiResponse<List<OrganizationDiscountDto.Response.BillingPlanDiscountHistorySummary>> findBillingPlanDiscountHistory(
+            @PathVariable Long organizationId,
+            @PathVariable Long billingPlanId
+    ) {
+        return ApiResponse.success(
+                organizationDiscountService.findBillingPlanDiscountHistory(organizationId, billingPlanId), traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(
             summary = "조직×선택옵션 할인 오버라이드 설정",
             description = "이 조직이 이 선택옵션을 살 때 카탈로그 할인 대신 적용할 값. PLATFORM_OPS 이상만 호출할 수 있다."
     )
@@ -102,6 +117,20 @@ public class PlatformAdminOrganizationDiscountController {
     }
 
     @Operation(
+            summary = "조직×선택옵션 할인 오버라이드 변경 이력 조회",
+            description = "최신순. 설정(생성/수정) 시점마다, 그리고 제거 시점에(그 직전 값) 한 건씩 쌓인다."
+    )
+    @GetMapping("/optional-features/{optionalFeatureId}/history")
+    public ApiResponse<List<OrganizationDiscountDto.Response.OptionalFeatureDiscountHistorySummary>> findOptionalFeatureDiscountHistory(
+            @PathVariable Long organizationId,
+            @PathVariable Long optionalFeatureId
+    ) {
+        return ApiResponse.success(
+                organizationDiscountService.findOptionalFeatureDiscountHistory(organizationId, optionalFeatureId), traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(
             summary = "조직×용량 추가구매 할인 오버라이드 설정",
             description = "이 조직이 이 용량 추가구매 상품을 살 때 카탈로그 할인 대신 적용할 값. PLATFORM_OPS 이상만 호출할 수 있다."
     )
@@ -129,5 +158,19 @@ public class PlatformAdminOrganizationDiscountController {
                 organizationId, capacityAddOnId, currentUser.platformRole(), currentUser.userId()
         );
         return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "조직×용량 추가구매 할인 오버라이드 변경 이력 조회",
+            description = "최신순. 설정(생성/수정) 시점마다, 그리고 제거 시점에(그 직전 값) 한 건씩 쌓인다."
+    )
+    @GetMapping("/capacity-addons/{capacityAddOnId}/history")
+    public ApiResponse<List<OrganizationDiscountDto.Response.CapacityAddOnDiscountHistorySummary>> findCapacityAddOnDiscountHistory(
+            @PathVariable Long organizationId,
+            @PathVariable Long capacityAddOnId
+    ) {
+        return ApiResponse.success(
+                organizationDiscountService.findCapacityAddOnDiscountHistory(organizationId, capacityAddOnId), traceIdProvider.getTraceId()
+        );
     }
 }
