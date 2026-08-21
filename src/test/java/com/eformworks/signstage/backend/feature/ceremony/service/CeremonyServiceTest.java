@@ -17,6 +17,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHist
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
+import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
@@ -194,6 +195,99 @@ class CeremonyServiceTest {
         CeremonyCapacityPurchase purchase = captor.getValue();
         assertThat(purchase.getPurchasedDiscountType()).isEqualTo(DiscountType.PERCENT);
         assertThat(purchase.getPurchasedDiscountValue()).isEqualByComparingTo("20");
+    }
+
+    @Test
+    @DisplayName("묶음 상품(예: 서명자+태블릿) 구매는 보조 용량 단가도 함께 스냅샷한다")
+    void purchaseCapacity_comboProduct_snapshotsSecondaryUnitAmount() {
+        // given
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+
+        CapacityAddOn comboAddOn = CapacityAddOn.builder()
+                .capacityType(CapacityType.SIGNERS)
+                .unitAmount(10)
+                .secondaryCapacityType(CapacityType.TABLETS)
+                .secondaryUnitAmount(10)
+                .supplyPrice(new BigDecimal("100000"))
+                .salePrice(new BigDecimal("90000"))
+                .discountType(DiscountType.FIXED_AMOUNT)
+                .discountValue(BigDecimal.ZERO)
+                .build();
+        ReflectionTestUtils.setField(comboAddOn, "id", 301L);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(capacityAddOnRepository.findById(301L)).willReturn(Optional.of(comboAddOn));
+        given(organizationDiscountService.resolveCapacityAddOnDiscount(organization, comboAddOn))
+                .willReturn(new OrganizationDiscountService.EffectiveDiscount(DiscountType.FIXED_AMOUNT, BigDecimal.ZERO));
+
+        CeremonyDto.Request.PurchaseCapacity request = new CeremonyDto.Request.PurchaseCapacity(301L, 2);
+
+        // when
+        ceremonyService.purchaseCapacity(ORGANIZATION_ID, 10L, CURRENT_USER_ID, request);
+
+        // then
+        ArgumentCaptor<CeremonyCapacityPurchase> captor = ArgumentCaptor.forClass(CeremonyCapacityPurchase.class);
+        verify(ceremonyCapacityPurchaseRepository).save(captor.capture());
+        CeremonyCapacityPurchase purchase = captor.getValue();
+        assertThat(purchase.getPurchasedUnitAmount()).isEqualTo(10);
+        assertThat(purchase.getPurchasedSecondaryUnitAmount()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("묶음 상품(예: 서명자+태블릿) 구매는 보조 용량 쪽 유효 한도에도 반영된다")
+    void calculateEffectiveCapacity_comboPurchase_addsToSecondaryCapacityType() {
+        // given
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder()
+                .name("스탠다드")
+                .supplyPrice(new BigDecimal("100000"))
+                .salePrice(new BigDecimal("90000"))
+                .discountType(DiscountType.FIXED_AMOUNT)
+                .discountValue(BigDecimal.ZERO)
+                .maxSigners(10)
+                .maxTemplates(10)
+                .maxTestEvents(1)
+                .maxMainEvents(1)
+                .build();
+        Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+
+        CapacityAddOn comboAddOn = CapacityAddOn.builder()
+                .capacityType(CapacityType.SIGNERS)
+                .unitAmount(10)
+                .secondaryCapacityType(CapacityType.TABLETS)
+                .secondaryUnitAmount(10)
+                .supplyPrice(new BigDecimal("100000"))
+                .salePrice(new BigDecimal("90000"))
+                .discountType(DiscountType.FIXED_AMOUNT)
+                .discountValue(BigDecimal.ZERO)
+                .build();
+        ReflectionTestUtils.setField(comboAddOn, "id", 301L);
+
+        CeremonyCapacityPurchase comboPurchase = CeremonyCapacityPurchase.builder()
+                .ceremony(ceremony)
+                .capacityAddOn(comboAddOn)
+                .quantity(2)
+                .purchasedUnitAmount(10)
+                .purchasedSecondaryUnitAmount(10)
+                .purchasedSalePrice(new BigDecimal("90000"))
+                .purchasedDiscountType(DiscountType.FIXED_AMOUNT)
+                .purchasedDiscountValue(BigDecimal.ZERO)
+                .build();
+
+        given(ceremonyCapacityPurchaseRepository
+                .findAllByCeremonyIdAndCapacityAddOn_SecondaryCapacityTypeAndStatus(10L, CapacityType.TABLETS, PurchaseStatus.APPROVED))
+                .willReturn(List.of(comboPurchase));
+
+        // when — 플랜 기본 포함 0(TABLETS는 플랜 기본값 개념이 없다) + 묶음 구매(수량 2 × 보조 단가 10)
+        int effective = ceremonyService.calculateEffectiveCapacity(ceremony, CapacityType.TABLETS);
+
+        // then
+        assertThat(effective).isEqualTo(20);
     }
 
     @Test

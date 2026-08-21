@@ -44,6 +44,13 @@ public class CapacityAddOnHistory extends BaseEntity {
     @Column(name = "unit_amount", nullable = false)
     private Integer unitAmount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "secondary_capacity_type", length = 20)
+    private CapacityType secondaryCapacityType;
+
+    @Column(name = "secondary_unit_amount")
+    private Integer secondaryUnitAmount;
+
     @Column(name = "supply_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal supplyPrice;
 
@@ -65,6 +72,8 @@ public class CapacityAddOnHistory extends BaseEntity {
         this.capacityAddOn = capacityAddOn;
         this.capacityType = capacityAddOn.getCapacityType();
         this.unitAmount = capacityAddOn.getUnitAmount();
+        this.secondaryCapacityType = capacityAddOn.getSecondaryCapacityType();
+        this.secondaryUnitAmount = capacityAddOn.getSecondaryUnitAmount();
         this.supplyPrice = capacityAddOn.getSupplyPrice();
         this.salePrice = capacityAddOn.getSalePrice();
         this.discountType = capacityAddOn.getDiscountType();

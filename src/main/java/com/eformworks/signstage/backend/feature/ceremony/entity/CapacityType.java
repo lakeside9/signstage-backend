@@ -8,5 +8,11 @@ public enum CapacityType {
     SIGNERS,
     TEMPLATES,
     TEST_EVENTS,
-    MAIN_EVENTS
+    MAIN_EVENTS,
+    /**
+     * 태블릿 대여 대수. 다른 값과 달리 {@code BillingPlan}에 대응하는 필수 필드(기본 포함 대수)가
+     * 없다 — 플랜 기본 포함 없이 항상 0에서 시작해 {@link CapacityAddOn} 추가구매로만 늘어난다
+     * (signstage-docs business/ceremony-billing-options-review.md 4.7절 후속, 2026-08-21).
+     */
+    TABLETS
 }

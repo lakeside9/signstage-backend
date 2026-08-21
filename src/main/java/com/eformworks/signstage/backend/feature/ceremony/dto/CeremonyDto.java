@@ -168,6 +168,8 @@ public final class CeremonyDto {
             private final Long capacityAddOnId;
             private final Integer quantity;
             private final Integer purchasedUnitAmount;
+            /** 묶음 상품(예: "서명자+태블릿")이었을 때만 값이 있다 — 구매 시점 보조 용량 단가 스냅샷. */
+            private final Integer purchasedSecondaryUnitAmount;
             private final BigDecimal purchasedSalePrice;
             private final String purchasedDiscountType;
             private final BigDecimal purchasedDiscountValue;

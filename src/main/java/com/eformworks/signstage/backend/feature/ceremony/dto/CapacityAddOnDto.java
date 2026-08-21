@@ -33,6 +33,12 @@ public final class CapacityAddOnDto {
             @Min(1)
             private Integer unitAmount;
 
+            /** 이 상품이 동시에 늘리는 두 번째 용량 유형. 생략하면(null) 단일 상품 — secondaryUnitAmount와 함께 있거나 함께 없어야 한다. */
+            private String secondaryCapacityType;
+
+            @Min(1)
+            private Integer secondaryUnitAmount;
+
             @NotNull
             private BigDecimal supplyPrice;
 
@@ -47,8 +53,10 @@ public final class CapacityAddOnDto {
         }
 
         /**
-         * {@code capacityType}은 상품의 종류를 규정하는 값이라 생성 후 불변이라
-         * {@link CreateCapacityAddOn}과 달리 여기엔 없다 — 플랫폼 관리자 카탈로그 관리 화면 결정.
+         * {@code capacityType}/{@code secondaryCapacityType}는 상품의 종류를 규정하는 값이라
+         * 생성 후 불변이라 {@link CreateCapacityAddOn}과 달리 여기엔 없다 — 플랫폼 관리자
+         * 카탈로그 관리 화면 결정. 묶음 상품의 보조 수량({@code secondaryUnitAmount})은 주
+         * 수량처럼 수정할 수 있다 — 원래 단일 상품(생성 시 보조 없음)이었다면 계속 null이다.
          */
         @Getter
         @Setter
@@ -59,6 +67,9 @@ public final class CapacityAddOnDto {
             @NotNull
             @Min(1)
             private Integer unitAmount;
+
+            @Min(1)
+            private Integer secondaryUnitAmount;
 
             @NotNull
             private BigDecimal supplyPrice;
@@ -90,6 +101,9 @@ public final class CapacityAddOnDto {
             private final Long id;
             private final String capacityType;
             private final Integer unitAmount;
+            /** 묶음 상품이면 두 번째로 늘어나는 용량 유형. 단일 상품이면 null. */
+            private final String secondaryCapacityType;
+            private final Integer secondaryUnitAmount;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
             private final String discountType;
@@ -108,6 +122,8 @@ public final class CapacityAddOnDto {
             private final Long id;
             private final String capacityType;
             private final Integer unitAmount;
+            private final String secondaryCapacityType;
+            private final Integer secondaryUnitAmount;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
             private final String discountType;

@@ -15,5 +15,11 @@ public enum OptionalFeatureCode {
     /** 그 CeremonyEvent에 배정된 모든 서명자의 서명이 완료되면 프로젝터 화면에 폭죽을 표시한다. */
     ALL_SIGNED_FIREWORKS,
     /** 원격 참석자가 영상으로 행사에 참여한다(상세 설계는 ceremony-video-attendance-review.md 별도 진행). */
-    VIDEO_ATTENDANCE
+    VIDEO_ATTENDANCE,
+    /**
+     * 이 조직이 태블릿 대여 서비스를 쓰는지 표시하는 용도다 — 프로젝터 화면 등 실제 동작에
+     * 연결되지 않는다(등록 시 {@code projectorEffect=false}로 만든다). 실제 대여 대수는
+     * {@code CapacityType.TABLETS} 용량 추가구매로 별도 관리한다(2026-08-21 추가).
+     */
+    TABLET_RENTAL
 }

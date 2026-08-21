@@ -20,6 +20,17 @@ public interface CeremonyCapacityPurchaseRepository extends JpaRepository<Ceremo
             PurchaseStatus status
     );
 
+    /**
+     * 위와 같지만 묶음 상품의 보조 용량({@code CapacityAddOn.secondaryCapacityType}) 쪽으로
+     * 이 유형을 파는 구매 건을 찾는다 — 예: "서명자+태블릿" 상품 구매는 TABLETS 유효 한도
+     * 계산에도 반영돼야 한다(2026-08-21 추가).
+     */
+    List<CeremonyCapacityPurchase> findAllByCeremonyIdAndCapacityAddOn_SecondaryCapacityTypeAndStatus(
+            Long ceremonyId,
+            CapacityType secondaryCapacityType,
+            PurchaseStatus status
+    );
+
     /** 플랫폼 관리자 승인 대기열용. */
     Page<CeremonyCapacityPurchase> findAllByStatus(PurchaseStatus status, Pageable pageable);
 
