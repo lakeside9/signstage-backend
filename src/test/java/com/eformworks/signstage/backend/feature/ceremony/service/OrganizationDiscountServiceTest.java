@@ -15,21 +15,27 @@ import com.eformworks.signstage.backend.feature.ceremony.dto.OrganizationDiscoun
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationBillingPlanDiscount;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationBillingPlanDiscountHistory;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationBillingPlanDiscountHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationBillingPlanDiscountRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationCapacityAddOnDiscountHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationCapacityAddOnDiscountRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationOptionalFeatureDiscountHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationOptionalFeatureDiscountRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -57,6 +63,12 @@ class OrganizationDiscountServiceTest {
     private OrganizationOptionalFeatureDiscountRepository organizationOptionalFeatureDiscountRepository;
     @Mock
     private OrganizationCapacityAddOnDiscountRepository organizationCapacityAddOnDiscountRepository;
+    @Mock
+    private OrganizationBillingPlanDiscountHistoryRepository organizationBillingPlanDiscountHistoryRepository;
+    @Mock
+    private OrganizationOptionalFeatureDiscountHistoryRepository organizationOptionalFeatureDiscountHistoryRepository;
+    @Mock
+    private OrganizationCapacityAddOnDiscountHistoryRepository organizationCapacityAddOnDiscountHistoryRepository;
     @Mock
     private PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
@@ -160,11 +172,20 @@ class OrganizationDiscountServiceTest {
         verify(platformAdminAuditLogRecorder).record(
                 eq(1L), eq(PlatformAdminAction.UPDATE_ORGANIZATION_BILLING_PLAN_DISCOUNT), isNull(), eq(ORGANIZATION_ID), any()
         );
+
+        // 카탈로그(BillingPlanHistory)와 같은 패턴 — 설정 시점마다 그 값을 스냅샷 한 행 남긴다.
+        ArgumentCaptor<OrganizationBillingPlanDiscountHistory> historyCaptor =
+                ArgumentCaptor.forClass(OrganizationBillingPlanDiscountHistory.class);
+        verify(organizationBillingPlanDiscountHistoryRepository).save(historyCaptor.capture());
+        OrganizationBillingPlanDiscountHistory history = historyCaptor.getValue();
+        assertThat(history.getDiscountType()).isEqualTo(DiscountType.PERCENT);
+        assertThat(history.getDiscountValue()).isEqualByComparingTo("30");
+        assertThat(history.isRemoved()).isFalse();
     }
 
     @Test
-    @DisplayName("오버라이드 제거는 카탈로그 값으로 되돌리는 것 — 오버라이드 행이 삭제된다")
-    void removeBillingPlanDiscount_existingOverride_deletesRow() {
+    @DisplayName("오버라이드 제거는 카탈로그 값으로 되돌리는 것 — 오버라이드 행이 삭제되고, 이력엔 제거 직전 값이 removed=true로 남는다")
+    void removeBillingPlanDiscount_existingOverride_deletesRowAndRecordsHistory() {
         Organization organization = organization();
         BillingPlan plan = plan();
         OrganizationBillingPlanDiscount override = OrganizationBillingPlanDiscount.builder()
@@ -179,5 +200,42 @@ class OrganizationDiscountServiceTest {
         organizationDiscountService.removeBillingPlanDiscount(ORGANIZATION_ID, PLAN_ID, "PLATFORM_OPS", 1L);
 
         verify(organizationBillingPlanDiscountRepository).delete(override);
+
+        ArgumentCaptor<OrganizationBillingPlanDiscountHistory> historyCaptor =
+                ArgumentCaptor.forClass(OrganizationBillingPlanDiscountHistory.class);
+        verify(organizationBillingPlanDiscountHistoryRepository).save(historyCaptor.capture());
+        OrganizationBillingPlanDiscountHistory history = historyCaptor.getValue();
+        assertThat(history.getDiscountType()).isEqualTo(DiscountType.PERCENT);
+        assertThat(history.getDiscountValue()).isEqualByComparingTo("30");
+        assertThat(history.isRemoved()).isTrue();
+    }
+
+    @Test
+    @DisplayName("이력 조회는 organizationId+billingPlanId로 스코핑해 최신순으로 반환한다")
+    void findBillingPlanDiscountHistory_returnsScopedHistory() {
+        Organization organization = organization();
+        BillingPlan plan = plan();
+        OrganizationBillingPlanDiscountHistory setEvent = OrganizationBillingPlanDiscountHistory.builder()
+                .organization(organization).billingPlan(plan)
+                .discountType(DiscountType.PERCENT).discountValue(new BigDecimal("30"))
+                .removed(false)
+                .build();
+        OrganizationBillingPlanDiscountHistory removeEvent = OrganizationBillingPlanDiscountHistory.builder()
+                .organization(organization).billingPlan(plan)
+                .discountType(DiscountType.PERCENT).discountValue(new BigDecimal("30"))
+                .removed(true)
+                .build();
+
+        given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(organization));
+        given(billingPlanRepository.existsById(PLAN_ID)).willReturn(true);
+        given(organizationBillingPlanDiscountHistoryRepository
+                .findAllByOrganizationIdAndBillingPlanIdOrderByCreatedAtDesc(ORGANIZATION_ID, PLAN_ID))
+                .willReturn(List.of(removeEvent, setEvent));
+
+        var result = organizationDiscountService.findBillingPlanDiscountHistory(ORGANIZATION_ID, PLAN_ID);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).isRemoved()).isTrue();
+        assertThat(result.get(1).isRemoved()).isFalse();
     }
 }

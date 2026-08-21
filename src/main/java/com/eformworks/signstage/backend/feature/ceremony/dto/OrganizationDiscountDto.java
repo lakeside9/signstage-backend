@@ -93,5 +93,56 @@ public final class OrganizationDiscountDto {
             private final List<OptionalFeatureDiscountSummary> optionalFeatureDiscounts;
             private final List<CapacityAddOnDiscountSummary> capacityAddOnDiscounts;
         }
+
+        /**
+         * 조직×플랜 할인 오버라이드 변경 이력 한 행. 설정(생성/수정) 시점마다, 그리고 제거
+         * 시점에(removed=true, 그 직전 값) 한 건씩 쌓인다 — 카탈로그의
+         * {@code BillingPlanHistorySummary}와 같은 구조다.
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class BillingPlanDiscountHistorySummary {
+
+            private final Long id;
+            private final Long organizationId;
+            private final Long billingPlanId;
+            private final String billingPlanName;
+            private final String discountType;
+            private final BigDecimal discountValue;
+            private final boolean removed;
+            private final Long createdBy;
+            private final LocalDateTime createdAt;
+        }
+
+        @Getter
+        @AllArgsConstructor
+        public static class OptionalFeatureDiscountHistorySummary {
+
+            private final Long id;
+            private final Long organizationId;
+            private final Long optionalFeatureId;
+            private final String optionalFeatureName;
+            private final String discountType;
+            private final BigDecimal discountValue;
+            private final boolean removed;
+            private final Long createdBy;
+            private final LocalDateTime createdAt;
+        }
+
+        @Getter
+        @AllArgsConstructor
+        public static class CapacityAddOnDiscountHistorySummary {
+
+            private final Long id;
+            private final Long organizationId;
+            private final Long capacityAddOnId;
+            private final String capacityType;
+            private final Integer unitAmount;
+            private final String discountType;
+            private final BigDecimal discountValue;
+            private final boolean removed;
+            private final Long createdBy;
+            private final LocalDateTime createdAt;
+        }
     }
 }

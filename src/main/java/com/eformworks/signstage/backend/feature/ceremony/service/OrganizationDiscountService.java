@@ -8,14 +8,20 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationBillingPlanDiscount;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationBillingPlanDiscountHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationCapacityAddOnDiscount;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationCapacityAddOnDiscountHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationOptionalFeatureDiscount;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationOptionalFeatureDiscountHistory;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationBillingPlanDiscountHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationBillingPlanDiscountRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationCapacityAddOnDiscountHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationCapacityAddOnDiscountRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationOptionalFeatureDiscountHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationOptionalFeatureDiscountRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
@@ -23,6 +29,7 @@ import com.eformworks.signstage.backend.feature.organization.repository.Organiza
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -53,6 +60,9 @@ public class OrganizationDiscountService {
     private final OrganizationBillingPlanDiscountRepository organizationBillingPlanDiscountRepository;
     private final OrganizationOptionalFeatureDiscountRepository organizationOptionalFeatureDiscountRepository;
     private final OrganizationCapacityAddOnDiscountRepository organizationCapacityAddOnDiscountRepository;
+    private final OrganizationBillingPlanDiscountHistoryRepository organizationBillingPlanDiscountHistoryRepository;
+    private final OrganizationOptionalFeatureDiscountHistoryRepository organizationOptionalFeatureDiscountHistoryRepository;
+    private final OrganizationCapacityAddOnDiscountHistoryRepository organizationCapacityAddOnDiscountHistoryRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
     // ---- 관리자 CRUD ----
@@ -86,6 +96,7 @@ public class OrganizationDiscountService {
             override.update(newType, request.getDiscountValue());
         }
         organizationBillingPlanDiscountRepository.save(override);
+        recordBillingPlanDiscountHistory(organization, plan, newType, request.getDiscountValue(), false);
 
         platformAdminAuditLogRecorder.record(
                 adminUserId, PlatformAdminAction.UPDATE_ORGANIZATION_BILLING_PLAN_DISCOUNT, null, organizationId,
@@ -98,17 +109,34 @@ public class OrganizationDiscountService {
     @Transactional
     public void removeBillingPlanDiscount(Long organizationId, Long billingPlanId, String actingPlatformRole, Long adminUserId) {
         requireCatalogManageRole(actingPlatformRole);
-        findOrganizationOrThrow(organizationId);
+        Organization organization = findOrganizationOrThrow(organizationId);
 
         organizationBillingPlanDiscountRepository.findByOrganizationIdAndBillingPlanId(organizationId, billingPlanId)
                 .ifPresent(override -> {
                     String previous = describe(override.getDiscountType(), override.getDiscountValue());
+                    recordBillingPlanDiscountHistory(
+                            organization, override.getBillingPlan(), override.getDiscountType(), override.getDiscountValue(), true
+                    );
                     organizationBillingPlanDiscountRepository.delete(override);
                     platformAdminAuditLogRecorder.record(
                             adminUserId, PlatformAdminAction.UPDATE_ORGANIZATION_BILLING_PLAN_DISCOUNT, null, organizationId,
                             "billingPlanId=" + billingPlanId + ", discount: " + previous + " -> 오버라이드 제거(카탈로그 값 사용)"
                     );
                 });
+    }
+
+    /** 최신순 — 설정(생성/수정) 시점마다, 그리고 제거 시점에(removed=true) 한 건씩 쌓인 이력. */
+    public List<OrganizationDiscountDto.Response.BillingPlanDiscountHistorySummary> findBillingPlanDiscountHistory(
+            Long organizationId, Long billingPlanId
+    ) {
+        findOrganizationOrThrow(organizationId);
+        if (!billingPlanRepository.existsById(billingPlanId)) {
+            throw new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND);
+        }
+        return organizationBillingPlanDiscountHistoryRepository
+                .findAllByOrganizationIdAndBillingPlanIdOrderByCreatedAtDesc(organizationId, billingPlanId).stream()
+                .map(this::toBillingPlanDiscountHistorySummary)
+                .toList();
     }
 
     @Transactional
@@ -140,6 +168,7 @@ public class OrganizationDiscountService {
             override.update(newType, request.getDiscountValue());
         }
         organizationOptionalFeatureDiscountRepository.save(override);
+        recordOptionalFeatureDiscountHistory(organization, feature, newType, request.getDiscountValue(), false);
 
         platformAdminAuditLogRecorder.record(
                 adminUserId, PlatformAdminAction.UPDATE_ORGANIZATION_OPTIONAL_FEATURE_DISCOUNT, null, organizationId,
@@ -152,17 +181,33 @@ public class OrganizationDiscountService {
     @Transactional
     public void removeOptionalFeatureDiscount(Long organizationId, Long optionalFeatureId, String actingPlatformRole, Long adminUserId) {
         requireCatalogManageRole(actingPlatformRole);
-        findOrganizationOrThrow(organizationId);
+        Organization organization = findOrganizationOrThrow(organizationId);
 
         organizationOptionalFeatureDiscountRepository.findByOrganizationIdAndOptionalFeatureId(organizationId, optionalFeatureId)
                 .ifPresent(override -> {
                     String previous = describe(override.getDiscountType(), override.getDiscountValue());
+                    recordOptionalFeatureDiscountHistory(
+                            organization, override.getOptionalFeature(), override.getDiscountType(), override.getDiscountValue(), true
+                    );
                     organizationOptionalFeatureDiscountRepository.delete(override);
                     platformAdminAuditLogRecorder.record(
                             adminUserId, PlatformAdminAction.UPDATE_ORGANIZATION_OPTIONAL_FEATURE_DISCOUNT, null, organizationId,
                             "optionalFeatureId=" + optionalFeatureId + ", discount: " + previous + " -> 오버라이드 제거(카탈로그 값 사용)"
                     );
                 });
+    }
+
+    public List<OrganizationDiscountDto.Response.OptionalFeatureDiscountHistorySummary> findOptionalFeatureDiscountHistory(
+            Long organizationId, Long optionalFeatureId
+    ) {
+        findOrganizationOrThrow(organizationId);
+        if (!optionalFeatureRepository.existsById(optionalFeatureId)) {
+            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND);
+        }
+        return organizationOptionalFeatureDiscountHistoryRepository
+                .findAllByOrganizationIdAndOptionalFeatureIdOrderByCreatedAtDesc(organizationId, optionalFeatureId).stream()
+                .map(this::toOptionalFeatureDiscountHistorySummary)
+                .toList();
     }
 
     @Transactional
@@ -194,6 +239,7 @@ public class OrganizationDiscountService {
             override.update(newType, request.getDiscountValue());
         }
         organizationCapacityAddOnDiscountRepository.save(override);
+        recordCapacityAddOnDiscountHistory(organization, addOn, newType, request.getDiscountValue(), false);
 
         platformAdminAuditLogRecorder.record(
                 adminUserId, PlatformAdminAction.UPDATE_ORGANIZATION_CAPACITY_ADDON_DISCOUNT, null, organizationId,
@@ -206,17 +252,33 @@ public class OrganizationDiscountService {
     @Transactional
     public void removeCapacityAddOnDiscount(Long organizationId, Long capacityAddOnId, String actingPlatformRole, Long adminUserId) {
         requireCatalogManageRole(actingPlatformRole);
-        findOrganizationOrThrow(organizationId);
+        Organization organization = findOrganizationOrThrow(organizationId);
 
         organizationCapacityAddOnDiscountRepository.findByOrganizationIdAndCapacityAddOnId(organizationId, capacityAddOnId)
                 .ifPresent(override -> {
                     String previous = describe(override.getDiscountType(), override.getDiscountValue());
+                    recordCapacityAddOnDiscountHistory(
+                            organization, override.getCapacityAddOn(), override.getDiscountType(), override.getDiscountValue(), true
+                    );
                     organizationCapacityAddOnDiscountRepository.delete(override);
                     platformAdminAuditLogRecorder.record(
                             adminUserId, PlatformAdminAction.UPDATE_ORGANIZATION_CAPACITY_ADDON_DISCOUNT, null, organizationId,
                             "capacityAddOnId=" + capacityAddOnId + ", discount: " + previous + " -> 오버라이드 제거(카탈로그 값 사용)"
                     );
                 });
+    }
+
+    public List<OrganizationDiscountDto.Response.CapacityAddOnDiscountHistorySummary> findCapacityAddOnDiscountHistory(
+            Long organizationId, Long capacityAddOnId
+    ) {
+        findOrganizationOrThrow(organizationId);
+        if (!capacityAddOnRepository.existsById(capacityAddOnId)) {
+            throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND);
+        }
+        return organizationCapacityAddOnDiscountHistoryRepository
+                .findAllByOrganizationIdAndCapacityAddOnIdOrderByCreatedAtDesc(organizationId, capacityAddOnId).stream()
+                .map(this::toCapacityAddOnDiscountHistorySummary)
+                .toList();
     }
 
     /** 조직별 할인 관리 화면 — 이 조직에 걸린 세 카탈로그 종류의 오버라이드를 한 번에 보여준다. */
@@ -287,6 +349,49 @@ public class OrganizationDiscountService {
         return type == null ? "없음(카탈로그 값 사용)" : type + " " + value;
     }
 
+    /** 설정(생성/수정) 시점마다, 그리고 {@code removeXxxDiscount}에서 제거 시점마다 호출한다. */
+    private void recordBillingPlanDiscountHistory(
+            Organization organization, BillingPlan plan, DiscountType discountType, BigDecimal discountValue, boolean removed
+    ) {
+        organizationBillingPlanDiscountHistoryRepository.save(
+                OrganizationBillingPlanDiscountHistory.builder()
+                        .organization(organization)
+                        .billingPlan(plan)
+                        .discountType(discountType)
+                        .discountValue(discountValue)
+                        .removed(removed)
+                        .build()
+        );
+    }
+
+    private void recordOptionalFeatureDiscountHistory(
+            Organization organization, OptionalFeature feature, DiscountType discountType, BigDecimal discountValue, boolean removed
+    ) {
+        organizationOptionalFeatureDiscountHistoryRepository.save(
+                OrganizationOptionalFeatureDiscountHistory.builder()
+                        .organization(organization)
+                        .optionalFeature(feature)
+                        .discountType(discountType)
+                        .discountValue(discountValue)
+                        .removed(removed)
+                        .build()
+        );
+    }
+
+    private void recordCapacityAddOnDiscountHistory(
+            Organization organization, CapacityAddOn addOn, DiscountType discountType, BigDecimal discountValue, boolean removed
+    ) {
+        organizationCapacityAddOnDiscountHistoryRepository.save(
+                OrganizationCapacityAddOnDiscountHistory.builder()
+                        .organization(organization)
+                        .capacityAddOn(addOn)
+                        .discountType(discountType)
+                        .discountValue(discountValue)
+                        .removed(removed)
+                        .build()
+        );
+    }
+
     private OrganizationDiscountDto.Response.BillingPlanDiscountSummary toBillingPlanDiscountSummary(OrganizationBillingPlanDiscount override) {
         return new OrganizationDiscountDto.Response.BillingPlanDiscountSummary(
                 override.getId(),
@@ -325,6 +430,55 @@ public class OrganizationDiscountService {
                 override.getDiscountType().name(),
                 override.getDiscountValue(),
                 override.getCreatedAt()
+        );
+    }
+
+    private OrganizationDiscountDto.Response.BillingPlanDiscountHistorySummary toBillingPlanDiscountHistorySummary(
+            OrganizationBillingPlanDiscountHistory history
+    ) {
+        return new OrganizationDiscountDto.Response.BillingPlanDiscountHistorySummary(
+                history.getId(),
+                history.getOrganization().getId(),
+                history.getBillingPlan().getId(),
+                history.getBillingPlan().getName(),
+                history.getDiscountType().name(),
+                history.getDiscountValue(),
+                history.isRemoved(),
+                history.getCreatedBy(),
+                history.getCreatedAt()
+        );
+    }
+
+    private OrganizationDiscountDto.Response.OptionalFeatureDiscountHistorySummary toOptionalFeatureDiscountHistorySummary(
+            OrganizationOptionalFeatureDiscountHistory history
+    ) {
+        return new OrganizationDiscountDto.Response.OptionalFeatureDiscountHistorySummary(
+                history.getId(),
+                history.getOrganization().getId(),
+                history.getOptionalFeature().getId(),
+                history.getOptionalFeature().getName(),
+                history.getDiscountType().name(),
+                history.getDiscountValue(),
+                history.isRemoved(),
+                history.getCreatedBy(),
+                history.getCreatedAt()
+        );
+    }
+
+    private OrganizationDiscountDto.Response.CapacityAddOnDiscountHistorySummary toCapacityAddOnDiscountHistorySummary(
+            OrganizationCapacityAddOnDiscountHistory history
+    ) {
+        return new OrganizationDiscountDto.Response.CapacityAddOnDiscountHistorySummary(
+                history.getId(),
+                history.getOrganization().getId(),
+                history.getCapacityAddOn().getId(),
+                history.getCapacityAddOn().getCapacityType().name(),
+                history.getCapacityAddOn().getUnitAmount(),
+                history.getDiscountType().name(),
+                history.getDiscountValue(),
+                history.isRemoved(),
+                history.getCreatedBy(),
+                history.getCreatedAt()
         );
     }
 }
