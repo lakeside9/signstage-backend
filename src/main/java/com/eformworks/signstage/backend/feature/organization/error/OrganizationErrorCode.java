@@ -65,6 +65,11 @@ public enum OrganizationErrorCode implements ErrorCode {
             "ORGANIZATION_SINGLE_MEMBERSHIP_LIMIT",
             HttpStatus.CONFLICT,
             "한 사용자는 동시에 하나의 조직에만 속할 수 있습니다."
+    ),
+    ORGANIZATION_MEMBER_IS_PLATFORM_ADMIN(
+            "ORGANIZATION_MEMBER_IS_PLATFORM_ADMIN",
+            HttpStatus.CONFLICT,
+            "플랫폼 관리자는 조직에 소속될 수 없습니다."
     );
 
     private final String code;

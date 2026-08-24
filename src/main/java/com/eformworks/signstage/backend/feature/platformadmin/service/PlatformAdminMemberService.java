@@ -54,7 +54,8 @@ public class PlatformAdminMemberService {
     /**
      * 호출자가 그 조직의 멤버일 필요가 없고, OWNER 지정 제한도 없다 — 관리자는 조직 내부 위계를
      * 우회한다({@code feature.organization.service.MemberService#addMember}와 다른 점).
-     * 1인 1조직 제한(2026-08-16 결정)은 그대로 적용한다.
+     * 1인 1조직 제한(2026-08-16 결정)과 플랫폼 관리자-조직 소속 배타 제약(2026-08-24 결정)은
+     * 관리자 강제 추가에도 예외 없이 그대로 적용한다.
      */
     @Transactional
     public PlatformAdminMemberDto.Response.MemberSummary forceAddMember(
@@ -75,6 +76,10 @@ public class PlatformAdminMemberService {
         }
         if (memberRepository.existsByUserIdAndStatus(user.getId(), MemberStatus.ACTIVE)) {
             throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_SINGLE_MEMBERSHIP_LIMIT);
+        }
+        // 플랫폼 관리자는 조직에 소속될 수 없다(2026-08-24 결정) — feature.organization.service.MemberService#addMember와 같은 제약.
+        if (user.getPlatformRole() != null) {
+            throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_IS_PLATFORM_ADMIN);
         }
 
         Member member = Member.builder()

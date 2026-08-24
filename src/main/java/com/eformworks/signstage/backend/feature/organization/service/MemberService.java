@@ -25,7 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 조직에는 항상 ACTIVE 상태의 OWNER가 최소 1명 있어야 한다(4.3절). 조직 역할이 아직
  * JWT 클레임에 실리지 않아(5.2절 미구현) 호출자의 권한은 organization_members를 직접
  * 조회해 판단한다. 1인 1조직 제한(2026-08-16 결정)에 따라, 이미 다른 조직에 ACTIVE로 속한
- * 사용자는 추가할 수 없다.
+ * 사용자는 추가할 수 없다. platform_role이 있는 사용자(플랫폼 관리자)도 추가할 수 없다
+ * (2026-08-24 결정, {@code ORGANIZATION_MEMBER_IS_PLATFORM_ADMIN}) — platform_role과 조직
+ * 멤버십은 서로 배타적이다.
  */
 @Service
 @RequiredArgsConstructor
@@ -67,6 +69,11 @@ public class MemberService {
         // 1인 1조직 제한(2026-08-16 결정) — 역할과 무관하게 이미 다른 조직에 ACTIVE로 속해 있으면 추가할 수 없다.
         if (memberRepository.existsByUserIdAndStatus(user.getId(), MemberStatus.ACTIVE)) {
             throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_SINGLE_MEMBERSHIP_LIMIT);
+        }
+        // 플랫폼 관리자는 조직에 소속될 수 없다(2026-08-24 결정) — platform_role과 조직 멤버십은
+        // 서로 배타적이다.
+        if (user.getPlatformRole() != null) {
+            throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_IS_PLATFORM_ADMIN);
         }
 
         Member member = Member.builder()
