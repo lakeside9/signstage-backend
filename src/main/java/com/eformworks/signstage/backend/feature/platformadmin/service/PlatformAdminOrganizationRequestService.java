@@ -55,8 +55,9 @@ public class PlatformAdminOrganizationRequestService {
     /**
      * 승인 = 관리자 대행 등록과 같은 저장 로직을 탄다({@link PlatformAdminOrganizationService
      * #saveOrganizationWithOwner}). 요청 자체는 코드를 담지 않으므로 관리자가 승인 시점에 입력한다
-     * (3.3절). 1인 1조직 제한(2026-08-16 결정)과 보유 조직 개수 제한(최대 10개, 7.3절)도 이
-     * 시점에 검사한다. 감사 로그는 {@code CREATE_ORGANIZATION}을 재사용한다(신설하지 않음 —
+     * (3.3절). 1인 1조직 제한(2026-08-16 결정), 보유 조직 개수 제한(최대 10개, 7.3절), 플랫폼
+     * 관리자-조직 소속 배타 제약(2026-08-24 결정)도 이 시점에 검사한다. 감사 로그는
+     * {@code CREATE_ORGANIZATION}을 재사용한다(신설하지 않음 —
      * 7.5절 결정됨).
      */
     @Transactional
@@ -75,6 +76,7 @@ public class PlatformAdminOrganizationRequestService {
         User owner = creationRequest.getRequestedBy();
         platformAdminOrganizationService.checkSingleOrganizationLimit(owner);
         platformAdminOrganizationService.checkOwnerLimit(owner);
+        platformAdminOrganizationService.checkNotPlatformAdmin(owner);
 
         Organization organization = platformAdminOrganizationService.saveOrganizationWithOwner(
                 creationRequest.getOrganizationName(), request.getCode(), owner

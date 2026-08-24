@@ -98,7 +98,8 @@ public class PlatformAdminUserService {
      *
      * <p>{@code withoutOrganization=true}면 어느 조직에도 ACTIVE로 속하지 않은 ACTIVE 사용자만
      * 반환한다 — 관리자 콘솔의 "조직 멤버 강제 추가" 화면에서 후보를 고를 때 쓴다(1인 1조직
-     * 제한, 2026-08-16 결정 — 이미 조직이 있는 사용자는 애초에 후보가 아니다). 이때 {@code status}는
+     * 제한, 2026-08-16 결정 — 이미 조직이 있는 사용자는 애초에 후보가 아니다). 플랫폼 관리자도
+     * 후보에서 빠진다(2026-08-24 결정 — 조직 소속과 배타적이다). 이때 {@code status}는
      * 무시된다(항상 ACTIVE로 고정).
      */
     public Page<PlatformAdminUserDto.Response.UserSummary> findUsers(
@@ -281,6 +282,14 @@ public class PlatformAdminUserService {
      * 일반 회원가입/초대 API로는 platform_role을 절대 설정할 수 없다(7.2절) — 이 API가
      * platform_role을 지정할 수 있는 유일한 경로다. 회원 직접 생성({@link #createUser})과
      * 동일하게 임시 비밀번호를 발급하고 다음 로그인 시 변경을 강제한다.
+     *
+     * <p>"이미 조직에 속한 사용자는 플랫폼 관리자가 될 수 없다"(2026-08-24 결정)는 이 메서드가
+     * loginId/email 중복이면 무조건 막아 항상 완전히 새로운 User만 만들 수 있기 때문에 별도
+     * 검사 없이 항상 성립한다 — 새로 만든 User는 정의상 어떤 조직 멤버십도 갖고 있지 않다.
+     * 기존 사용자에게 나중에 platform_role을 부여하는 경로 자체가 없다(등급 변경은
+     * {@link #updateAccountRole}이지만 이미 platform_role이 있는 계정만 대상으로 한다). 반대
+     * 방향("플랫폼 관리자는 조직에 소속될 수 없다")은 조직 가입 쪽에서 검사한다
+     * ({@code OrganizationErrorCode#ORGANIZATION_MEMBER_IS_PLATFORM_ADMIN}).
      */
     @Transactional
     public PlatformAdminUserDto.Response.CreatedUser createAccount(

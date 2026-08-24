@@ -32,6 +32,9 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom {
                                 .from(MEMBER)
                                 .where(MEMBER.status.eq(MemberStatus.ACTIVE))
                 ),
+                // 플랫폼 관리자는 조직에 소속될 수 없다(2026-08-24 결정) — 애초에 후보 목록에도
+                // 띄우지 않는다. 실제 추가 시점 검사는 MemberService/PlatformAdminMemberService가 한다.
+                USER.platformRole.isNull(),
                 loginIdContains(loginId),
                 nameContains(name),
                 emailContains(email),

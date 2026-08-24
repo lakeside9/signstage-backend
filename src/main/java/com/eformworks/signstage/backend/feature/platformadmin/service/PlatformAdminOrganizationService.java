@@ -75,6 +75,7 @@ public class PlatformAdminOrganizationService {
                 .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_USER_NOT_FOUND));
         checkSingleOrganizationLimit(owner);
         checkOwnerLimit(owner);
+        checkNotPlatformAdmin(owner);
 
         Organization organization = saveOrganizationWithOwner(request.getOrganizationName(), request.getCode(), owner);
 
@@ -135,6 +136,18 @@ public class PlatformAdminOrganizationService {
     void checkSingleOrganizationLimit(User owner) {
         if (memberRepository.existsByUserIdAndStatus(owner.getId(), MemberStatus.ACTIVE)) {
             throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_SINGLE_MEMBERSHIP_LIMIT);
+        }
+    }
+
+    /**
+     * 플랫폼 관리자는 조직에 소속될 수 없다(2026-08-24 결정) — 조직을 대행 생성/승인해 OWNER로
+     * 붙이려는 사용자가 platform_role을 갖고 있으면 막는다. {@link #checkSingleOrganizationLimit}과
+     * 같은 이유로 승인 경로 전부({@link #createOrganization}, {@code PlatformAdminOrganizationRequestService#approve})가
+     * 공유한다.
+     */
+    void checkNotPlatformAdmin(User owner) {
+        if (owner.getPlatformRole() != null) {
+            throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_IS_PLATFORM_ADMIN);
         }
     }
 
