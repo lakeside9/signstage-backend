@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -60,7 +61,12 @@ public final class TemplateDto {
             private final LocalDateTime createdAt;
         }
 
-        /** 서명란 배치 화면이 캔버스 크기를 잡는 데 쓴다(PDF 첫 페이지 크기 기준, pt 단위). */
+        /**
+         * 서명란 배치 화면이 캔버스 크기를 잡는 데 쓴다(PDF 첫 페이지 크기 기준, pt 단위).
+         * {@code pages}는 페이지별 CropBox/회전을 반영한 실제 표시 크기다 — 페이지마다 용지
+         * 방향이 다른 문서(가로 페이지가 섞인 경우 등)를 위한 것으로, 첫 페이지 크기만
+         * 참조하던 기존 화면은 {@code width}/{@code height}를 그대로 쓰면 된다.
+         */
         @Getter
         @AllArgsConstructor
         public static class TemplateInfo {
@@ -68,6 +74,18 @@ public final class TemplateDto {
             private final int pageCount;
             private final Float width;
             private final Float height;
+            private final List<TemplatePageInfo> pages;
+        }
+
+        /** 회전(rotation)까지 반영해 실제로 화면에 표시될 페이지 크기(pt)로 뒤집어 놓은 값이다. */
+        @Getter
+        @AllArgsConstructor
+        public static class TemplatePageInfo {
+
+            private final int pageIndex;
+            private final float width;
+            private final float height;
+            private final int rotation;
         }
     }
 }

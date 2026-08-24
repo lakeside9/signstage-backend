@@ -20,4 +20,14 @@ public interface DocumentStoragePort {
 
     /** 문서 양식 삭제 시 쓴다. 이미 없는 파일이어도 에러를 내지 않는다(삭제는 멱등이어야 한다). */
     void delete(String storageKey);
+
+    /**
+     * storageKey가 그대로 저장 경로가 되는 결정적(deterministic) 저장 — {@link #store}와 달리
+     * 파일명을 임의로(UUID) 새로 짓지 않는다. {@code TemplateService}의 페이지 이미지 캐시처럼
+     * 같은 key로 다시 저장을 요청하면 항상 같은 파일을 덮어쓰는 캐시 용도에 쓴다.
+     */
+    void storeAt(String storageKey, byte[] content);
+
+    /** storageKey에 해당하는 파일이 이미 있는지. 페이지 이미지 캐시 조회에 쓴다. */
+    boolean exists(String storageKey);
 }

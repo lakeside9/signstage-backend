@@ -10,7 +10,9 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -73,7 +75,12 @@ public class SignerPortalController {
             @RequestParam(defaultValue = "1.5") float scale
     ) {
         byte[] png = signerPortalService.renderContractPage(eventAccessKey, signerAccessKey, pageIndex, scale);
-        return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(png);
+        // ProjectorController와 같은 이유(TemplateService 캐시 + accessKey 기반 공개 자원이라
+        // 공유 캐시까지 허용).
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePublic())
+                .body(png);
     }
 
     @Operation(

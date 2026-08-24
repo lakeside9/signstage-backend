@@ -9,7 +9,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,7 +53,12 @@ public class ProjectorController {
             @RequestParam(defaultValue = "1.5") float scale
     ) {
         byte[] png = projectorService.renderPage(eventAccessKey, pageIndex, scale);
-        return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(png);
+        // TemplateService가 template/pageIndex/scale 조합으로 렌더링 결과를 캐시하므로, 브라우저
+        // 재요청도 줄인다. accessKey 기반 공개 자원이라 공유 캐시(cachePublic)까지 허용한다.
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePublic())
+                .body(png);
     }
 
     @Operation(summary = "실시간 스트로크 캐치업 조회", description = "그 이후의 획은 WebSocket(SIGNATURE_STROKE_SUBMITTED)으로 이어받는다.")
