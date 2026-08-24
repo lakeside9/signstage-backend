@@ -20,6 +20,7 @@ import com.eformworks.signstage.backend.integration.storage.common.error.Storage
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import javax.imageio.ImageIO;
@@ -54,6 +55,13 @@ public class TemplateService {
     private final CeremonyTemplateRepository ceremonyTemplateRepository;
     private final DocumentStoragePort documentStoragePort;
     private final CeremonyService ceremonyService;
+
+    /**
+     * 페이지 이미지 사전 렌더링(캐시 예열) 배율. {@code MappedDocumentPreview}(프로젝터/행사제어/
+     * 문서매핑 화면이 공유하는 컴포넌트)가 페이지 이미지를 요청할 때 항상 이 값을 쓰므로,
+     * 업로드/복제 직후 이 배율로 미리 캐시를 채워두면 첫 조회부터 캐시 히트가 된다.
+     */
+    private static final float PAGE_IMAGE_CACHE_PRERENDER_SCALE = 1.5f;
 
     @Transactional
     public TemplateDto.Response.TemplateSummary uploadTemplate(
@@ -95,6 +103,7 @@ public class TemplateService {
                 .storedFilename(storedFile.storedFilename())
                 .build();
         templateRepository.save(template);
+        preRenderPageImageCache(template);
 
         return toSummary(template);
     }
@@ -165,19 +174,61 @@ public class TemplateService {
         try (PDDocument document = Loader.loadPDF(readTemplateBytes(template))) {
             Float width = null;
             Float height = null;
-            if (document.getNumberOfPages() > 0) {
-                PDRectangle mediaBox = document.getPage(0).getMediaBox();
-                width = mediaBox.getWidth();
-                height = mediaBox.getHeight();
+            List<TemplateDto.Response.TemplatePageInfo> pages = new ArrayList<>();
+            for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex++) {
+                TemplateDto.Response.TemplatePageInfo pageInfo = resolvePageInfo(document, pageIndex);
+                pages.add(pageInfo);
+                if (pageIndex == 0) {
+                    width = pageInfo.getWidth();
+                    height = pageInfo.getHeight();
+                }
             }
-            return new TemplateDto.Response.TemplateInfo(document.getNumberOfPages(), width, height);
+            return new TemplateDto.Response.TemplateInfo(document.getNumberOfPages(), width, height, pages);
         } catch (IOException e) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
         }
     }
 
-    /** {@link #buildTemplateInfo(Template)}와 같은 이유로 package-private. */
+    /**
+     * CropBox(MediaBox보다 실제 표시 영역에 가깝다)와 회전을 반영해, 화면에 실제로 찍힐 페이지
+     * 크기(pt)를 계산한다. 90도/270도로 회전된 페이지는 가로/세로가 뒤집힌다.
+     */
+    private TemplateDto.Response.TemplatePageInfo resolvePageInfo(PDDocument document, int pageIndex) {
+        PDRectangle cropBox = document.getPage(pageIndex).getCropBox();
+        int rotation = Math.floorMod(document.getPage(pageIndex).getRotation(), 360);
+        boolean rotated = rotation == 90 || rotation == 270;
+        float width = rotated ? cropBox.getHeight() : cropBox.getWidth();
+        float height = rotated ? cropBox.getWidth() : cropBox.getHeight();
+        return new TemplateDto.Response.TemplatePageInfo(pageIndex, width, height, rotation);
+    }
+
+    /**
+     * {@link #buildTemplateInfo(Template)}와 같은 이유로 package-private. 같은 template/
+     * pageIndex/scale 조합은 {@code documentStoragePort}에 PNG로 캐시해 둔다 — 매 요청마다
+     * 원본 PDF를 다시 렌더링하지 않기 위해서다(2026-08-24 legacy 포팅: 템플릿 페이지 이미지
+     * 캐시). 캐시 저장/조회가 실패해도 렌더링 자체는 계속 성공해야 하므로, 캐시 관련 예외는
+     * 요청을 막지 않고 무시한다 — 원본 렌더링 경로로 자연히 폴백된다.
+     */
     byte[] renderPage(Template template, int pageIndex, float scale) {
+        String cacheKey = buildPageImageCacheKey(template.getId(), pageIndex, scale);
+        try {
+            if (documentStoragePort.exists(cacheKey)) {
+                return documentStoragePort.loadAsResource(cacheKey).getContentAsByteArray();
+            }
+        } catch (StorageException | IOException e) {
+            // 캐시 조회 실패 — 아래에서 원본 PDF로 다시 렌더링한다.
+        }
+
+        byte[] image = renderPageUncached(template, pageIndex, scale);
+        try {
+            documentStoragePort.storeAt(cacheKey, image);
+        } catch (StorageException e) {
+            // 캐시 저장 실패 — 이번 요청은 이미 렌더링된 image를 그대로 응답한다.
+        }
+        return image;
+    }
+
+    private byte[] renderPageUncached(Template template, int pageIndex, float scale) {
         try (PDDocument document = Loader.loadPDF(readTemplateBytes(template))) {
             if (pageIndex < 0 || pageIndex >= document.getNumberOfPages()) {
                 throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
@@ -189,6 +240,28 @@ public class TemplateService {
             return out.toByteArray();
         } catch (IOException e) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
+        }
+    }
+
+    private String buildPageImageCacheKey(Long templateId, int pageIndex, float scale) {
+        return String.format(Locale.ROOT, "template-pages/%d/page-%d@%.2f.png", templateId, pageIndex, scale);
+    }
+
+    /**
+     * 업로드/복제 직후 자주 쓰이는 배율(프로젝터·행사제어·문서매핑 화면이 공용으로 쓰는
+     * {@code MappedDocumentPreview}의 고정 배율)로 페이지 이미지를 미리 렌더링해 캐시를
+     * 채워둔다. 실패해도(예: 손상된 PDF, 저장소 일시 오류) 업로드/복제 자체를 막지 않는다 —
+     * 다음 조회 시 {@link #renderPage}가 원본에서 다시 렌더링하면 그만이다.
+     */
+    private void preRenderPageImageCache(Template template) {
+        try {
+            try (PDDocument document = Loader.loadPDF(readTemplateBytes(template))) {
+                for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex++) {
+                    renderPage(template, pageIndex, PAGE_IMAGE_CACHE_PRERENDER_SCALE);
+                }
+            }
+        } catch (Exception e) {
+            // 사전 렌더링은 성능 최적화일 뿐이라 실패해도 업로드/복제 흐름을 막지 않는다.
         }
     }
 
@@ -366,6 +439,8 @@ public class TemplateService {
                     .toList();
             templateFieldRepository.saveAll(clonedFields);
         }
+
+        preRenderPageImageCache(duplicated);
 
         return toSummary(duplicated);
     }

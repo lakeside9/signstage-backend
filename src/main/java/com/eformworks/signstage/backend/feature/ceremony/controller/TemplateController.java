@@ -11,8 +11,10 @@ import jakarta.validation.Valid;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -110,7 +112,13 @@ public class TemplateController {
     ) {
         byte[] png = templateService
                 .renderTemplatePage(organizationId, ceremonyId, templateId, currentUser.userId(), pageIndex, scale);
-        return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(png);
+        // TemplateService가 template/pageIndex/scale 조합으로 렌더링 결과를 캐시하므로, 같은
+        // 사용자의 브라우저도 재요청 없이 재사용하게 한다. 조직별 접근 제어가 걸린 자원이라
+        // 공유 캐시가 아닌 브라우저 캐시로만 제한한다(cachePrivate).
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePrivate())
+                .body(png);
     }
 
     @Operation(
