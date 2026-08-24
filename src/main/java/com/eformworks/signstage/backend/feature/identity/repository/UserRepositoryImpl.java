@@ -24,6 +24,9 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
     public Page<User> search(String loginId, String name, String email, UserStatus status, Pageable pageable) {
         return fetchPage(
                 pageable,
+                // 플랫폼 관리자는 조직 소속과 배타적이므로(2026-08-24 결정) 회원 관리 목록에는
+                // 뜨지 않는다 — 관리자 계정은 별도 화면(관리자 계정, searchAccounts)에서 다룬다.
+                USER.platformRole.isNull(),
                 loginIdContains(loginId),
                 nameContains(name),
                 emailContains(email),

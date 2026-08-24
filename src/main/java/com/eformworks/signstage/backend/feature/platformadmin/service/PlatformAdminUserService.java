@@ -94,7 +94,9 @@ public class PlatformAdminUserService {
 
     /**
      * loginId/name/email은 부분 일치 검색이다. 빈 문자열은 "조건 없음"으로 취급해 null로 바꿔 넘긴다
-     * ({@link UserRepository#search}는 null인 조건만 무시한다).
+     * ({@link UserRepository#search}는 null인 조건만 무시한다). {@code withoutOrganization=false}
+     * (일반 "회원 관리" 목록)일 때도 {@link UserRepository#search}가 플랫폼 관리자는 제외한다
+     * (2026-08-24 결정) — 관리자 계정은 별도 화면({@link #findAccounts})에서 다룬다.
      *
      * <p>{@code withoutOrganization=true}면 어느 조직에도 ACTIVE로 속하지 않은 ACTIVE 사용자만
      * 반환한다 — 관리자 콘솔의 "조직 멤버 강제 추가" 화면에서 후보를 고를 때 쓴다(1인 1조직
