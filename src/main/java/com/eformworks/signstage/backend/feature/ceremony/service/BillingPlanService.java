@@ -67,6 +67,7 @@ public class BillingPlanService {
                 .maxSigners(request.getMaxSigners())
                 .maxTemplates(request.getMaxTemplates())
                 .maxTestEvents(request.getMaxTestEvents())
+                .maxRehearsalEvents(request.getMaxRehearsalEvents())
                 .maxMainEvents(request.getMaxMainEvents())
                 .build();
         billingPlanRepository.save(plan);
@@ -125,6 +126,7 @@ public class BillingPlanService {
                 request.getMaxSigners(),
                 request.getMaxTemplates(),
                 request.getMaxTestEvents(),
+                request.getMaxRehearsalEvents(),
                 request.getMaxMainEvents(),
                 request.getActive()
         );
@@ -202,6 +204,7 @@ public class BillingPlanService {
                 plan.getMaxSigners(),
                 plan.getMaxTemplates(),
                 plan.getMaxTestEvents(),
+                plan.getMaxRehearsalEvents(),
                 plan.getMaxMainEvents(),
                 plan.isActive(),
                 optionalFeatureIds,
@@ -221,6 +224,7 @@ public class BillingPlanService {
                 history.getMaxSigners(),
                 history.getMaxTemplates(),
                 history.getMaxTestEvents(),
+                history.getMaxRehearsalEvents(),
                 history.getMaxMainEvents(),
                 history.isActive(),
                 history.getCreatedBy(),

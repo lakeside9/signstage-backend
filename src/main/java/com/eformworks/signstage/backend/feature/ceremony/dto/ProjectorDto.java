@@ -25,6 +25,8 @@ public final class ProjectorDto {
 
             private final Long eventId;
             private final String eventName;
+            /** TEST/REHEARSAL/MAIN — 전시용 화면 도구모음의 구분 뱃지에 쓴다(2026-08-27 legacy 포팅). */
+            private final String eventType;
             private final String eventStatus;
             private final String eventAccessKey;
 

@@ -56,6 +56,10 @@ public class BillingPlan extends BaseEntity {
     @Column(name = "max_test_events", nullable = false)
     private Integer maxTestEvents;
 
+    /** REHEARSAL 구분 전용 한도(2026-08-27 legacy 포팅) — maxTestEvents와 별도 값이다. */
+    @Column(name = "max_rehearsal_events", nullable = false)
+    private Integer maxRehearsalEvents;
+
     @Column(name = "max_main_events", nullable = false)
     private Integer maxMainEvents;
 
@@ -78,6 +82,7 @@ public class BillingPlan extends BaseEntity {
             Integer maxSigners,
             Integer maxTemplates,
             Integer maxTestEvents,
+            Integer maxRehearsalEvents,
             Integer maxMainEvents
     ) {
         this.name = name;
@@ -88,6 +93,7 @@ public class BillingPlan extends BaseEntity {
         this.maxSigners = maxSigners;
         this.maxTemplates = maxTemplates;
         this.maxTestEvents = maxTestEvents;
+        this.maxRehearsalEvents = maxRehearsalEvents;
         this.maxMainEvents = maxMainEvents;
         this.active = true;
     }
@@ -107,6 +113,7 @@ public class BillingPlan extends BaseEntity {
             Integer maxSigners,
             Integer maxTemplates,
             Integer maxTestEvents,
+            Integer maxRehearsalEvents,
             Integer maxMainEvents,
             boolean active
     ) {
@@ -118,6 +125,7 @@ public class BillingPlan extends BaseEntity {
         this.maxSigners = maxSigners;
         this.maxTemplates = maxTemplates;
         this.maxTestEvents = maxTestEvents;
+        this.maxRehearsalEvents = maxRehearsalEvents;
         this.maxMainEvents = maxMainEvents;
         this.active = active;
     }

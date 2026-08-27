@@ -85,20 +85,17 @@ public class CeremonyEventService {
         ceremonyService.checkCeremonyPlanConfirmed(ceremony);
 
         CeremonyEventType eventType = parseEventType(request.getEventType());
-        // REHEARSAL은 별도 카탈로그 한도를 새로 만들지 않고 TEST와 같은 용량 버킷을 공유한다
-        // (2026-08-27 legacy 포팅 시 판단 — signstage-docs business/ceremony-feature-migration-review.md
-        // 최신 라운드 참고. 리허설도 "정식 본행사가 아닌" 연습성 하위 행사라는 점에서 TEST에
-        // 가깝다고 봤다).
-        CapacityType capacityType = eventType == CeremonyEventType.MAIN
-                ? CapacityType.MAIN_EVENTS
-                : CapacityType.TEST_EVENTS;
-        Set<CeremonyEventType> countedEventTypes = eventType == CeremonyEventType.MAIN
-                ? Set.of(CeremonyEventType.MAIN)
-                : Set.of(CeremonyEventType.TEST, CeremonyEventType.REHEARSAL);
+        // REHEARSAL은 TEST/MAIN과 별도인 자기 용량 버킷(BillingPlan.maxRehearsalEvents)을 쓴다
+        // (2026-08-27 legacy 포팅).
+        CapacityType capacityType = switch (eventType) {
+            case TEST -> CapacityType.TEST_EVENTS;
+            case REHEARSAL -> CapacityType.REHEARSAL_EVENTS;
+            case MAIN -> CapacityType.MAIN_EVENTS;
+        };
 
         // 한도 하드 블록(4.5절) — 유효 한도 = 플랜 기본값 + Σ 추가구매.
         int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, capacityType);
-        long typeCount = ceremonyEventRepository.countByCeremonyIdAndEventTypeIn(ceremonyId, countedEventTypes);
+        long typeCount = ceremonyEventRepository.countByCeremonyIdAndEventType(ceremonyId, eventType);
         if (typeCount >= effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_LIMIT_EXCEEDED);
         }

@@ -72,6 +72,9 @@ public class CeremonyPlanHistory extends BaseEntity {
     @Column(name = "plan_max_test_events", nullable = false)
     private Integer planMaxTestEvents;
 
+    @Column(name = "plan_max_rehearsal_events", nullable = false)
+    private Integer planMaxRehearsalEvents;
+
     @Column(name = "plan_max_main_events", nullable = false)
     private Integer planMaxMainEvents;
 
@@ -93,6 +96,7 @@ public class CeremonyPlanHistory extends BaseEntity {
         this.planMaxSigners = billingPlan.getMaxSigners();
         this.planMaxTemplates = billingPlan.getMaxTemplates();
         this.planMaxTestEvents = billingPlan.getMaxTestEvents();
+        this.planMaxRehearsalEvents = billingPlan.getMaxRehearsalEvents();
         this.planMaxMainEvents = billingPlan.getMaxMainEvents();
     }
 }
