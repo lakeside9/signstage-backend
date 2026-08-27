@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.ceremony.controller;
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
+import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.SignerDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.SignerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -107,6 +108,22 @@ public class SignerController {
     ) {
         SignerDto.Response.SignerSummary response =
                 signerService.retrieveSigner(organizationId, ceremonyId, signerId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "서명자 표시 순서 일괄 변경",
+            description = "목록 화면의 위/아래 이동 버튼이 전체 배열을 원하는 순서로 다시 인덱싱해 통째로 보낸다."
+    )
+    @PutMapping("/display-orders")
+    public ApiResponse<List<SignerDto.Response.SignerSummary>> updateDisplayOrders(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @Valid @RequestBody DisplayOrderRequest.UpdateDisplayOrders request
+    ) {
+        List<SignerDto.Response.SignerSummary> response =
+                signerService.updateDisplayOrders(organizationId, ceremonyId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

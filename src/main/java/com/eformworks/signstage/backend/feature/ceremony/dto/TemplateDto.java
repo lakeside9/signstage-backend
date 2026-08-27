@@ -52,6 +52,8 @@ public final class TemplateDto {
             private final String documentRole;
             private final String originalFilename;
             private final String status;
+            /** 목록 화면의 표시 순서 — 위/아래 이동 버튼이 이 값을 그대로 다시 인덱싱해 저장한다. */
+            private final Integer displayOrder;
             /** 서명란(TemplateField) 개수 — status 계산과 목록 화면 "서명란" 컬럼에 쓴다. */
             private final long fieldCount;
             /** 시작/종료된 하위 행사에 매핑돼 수정이 막힌 문서 양식인지 — true면 화면에서 수정 버튼을 비활성화한다. */

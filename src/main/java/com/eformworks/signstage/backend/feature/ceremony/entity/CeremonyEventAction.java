@@ -8,6 +8,8 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 public enum CeremonyEventAction {
     START_EVENT,
     FINISH_EVENT,
+    /** TEST/REHEARSAL 행사를 서명 완료 여부와 무관하게 강제로 끝냈을 때 남긴다(2026-08-27 포팅). */
+    FORCE_FINISH_EVENT,
     SIGNATURE_COMPLETE,
     SIGNATURE_CLEAR,
     SIGNATURE_REPLACE,

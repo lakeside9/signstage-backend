@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.ceremony.repository;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,9 +15,20 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, Lo
 
     List<CeremonyEvent> findAllByCeremonyId(Long ceremonyId);
 
+    /** 하위 행사 목록 조회가 쓴다 — 표시 순서(displayOrder) 오름차순, 동률은 id 오름차순. */
+    List<CeremonyEvent> findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(Long ceremonyId);
+
     List<CeremonyEvent> findAllByCeremonyIdAndEventType(Long ceremonyId, CeremonyEventType eventType);
 
     long countByCeremonyIdAndEventType(Long ceremonyId, CeremonyEventType eventType);
+
+    long countByCeremonyId(Long ceremonyId);
+
+    /**
+     * REHEARSAL이 TEST와 같은 용량 한도 버킷(CapacityType.TEST_EVENTS)을 공유하므로,
+     * 한도 계산이 두 구분을 함께 센다({@code CeremonyEventService#createCeremonyEvent}).
+     */
+    long countByCeremonyIdAndEventTypeIn(Long ceremonyId, Collection<CeremonyEventType> eventTypes);
 
     boolean existsByAccessKey(String accessKey);
 

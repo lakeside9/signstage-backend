@@ -142,4 +142,46 @@ class TemplateServiceTest {
         assertThat(clonedField.getWidthRatio()).isEqualByComparingTo(originalField.getWidthRatio());
         assertThat(clonedField.getHeightRatio()).isEqualByComparingTo(originalField.getHeightRatio());
     }
+
+    /** 표시 순서(displayOrder, 2026-08-27 legacy 포팅) — 위/아래 이동 버튼이 통째로 보낸 순서를 그대로 반영한다. */
+    @Test
+    @DisplayName("문서 양식 표시 순서를 일괄 변경하면 그 순서대로 목록이 정렬돼 돌아온다")
+    void updateTemplateDisplayOrders_success() {
+        // given
+        Ceremony ceremony = Ceremony.builder().title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", CEREMONY_ID);
+
+        Template first = Template.builder()
+                .ceremony(ceremony).title("첫 문서").documentRole(TemplateDocumentRole.CONTRACT)
+                .storageKey("templates/10/a.pdf").originalFilename("a.pdf").storedFilename("a.pdf").build();
+        ReflectionTestUtils.setField(first, "id", 101L);
+        Template second = Template.builder()
+                .ceremony(ceremony).title("둘째 문서").documentRole(TemplateDocumentRole.CONTRACT)
+                .storageKey("templates/10/b.pdf").originalFilename("b.pdf").storedFilename("b.pdf").build();
+        ReflectionTestUtils.setField(second, "id", 102L);
+
+        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+                .willReturn(Member.builder().role(MemberRole.OWNER).build());
+        given(templateRepository.findAllById(List.of(101L, 102L))).willReturn(List.of(first, second));
+        given(templateRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(CEREMONY_ID))
+                .willReturn(List.of(second, first));
+
+        com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.UpdateDisplayOrders request =
+                new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.UpdateDisplayOrders(List.of(
+                        new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.Item(101L, 1),
+                        new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.Item(102L, 0)
+                ));
+
+        // when
+        List<com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto.Response.TemplateSummary> result =
+                templateService.updateTemplateDisplayOrders(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request);
+
+        // then
+        assertThat(first.getDisplayOrder()).isEqualTo(1);
+        assertThat(second.getDisplayOrder()).isEqualTo(0);
+        assertThat(result)
+                .extracting(com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto.Response.TemplateSummary::getId)
+                .containsExactly(102L, 101L);
+    }
 }

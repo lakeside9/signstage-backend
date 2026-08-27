@@ -57,6 +57,14 @@ public class Template extends BaseEntity {
     @Column(nullable = false, length = 20)
     private TemplateStatus status;
 
+    /**
+     * 문서 양식 목록 화면의 표시 순서(2026-08-27 legacy 포팅) — 위/아래 이동 버튼이 전체 목록을
+     * 다시 인덱싱해 저장한다({@code TemplateService#updateTemplateDisplayOrders}). 새로 업로드/
+     * 복제되는 문서는 그 시점의 형제 수를 그대로 받아 항상 목록 맨 끝에 붙는다.
+     */
+    @Column(name = "display_order", nullable = false)
+    private Integer displayOrder = 0;
+
     @Builder
     private Template(
             Ceremony ceremony,
@@ -64,7 +72,8 @@ public class Template extends BaseEntity {
             TemplateDocumentRole documentRole,
             String storageKey,
             String originalFilename,
-            String storedFilename
+            String storedFilename,
+            Integer displayOrder
     ) {
         this.ceremony = ceremony;
         this.title = title;
@@ -73,6 +82,7 @@ public class Template extends BaseEntity {
         this.originalFilename = originalFilename;
         this.storedFilename = storedFilename;
         this.status = TemplateStatus.DRAFT;
+        this.displayOrder = displayOrder != null ? displayOrder : 0;
     }
 
     /**
@@ -90,5 +100,12 @@ public class Template extends BaseEntity {
      */
     public void complete() {
         this.status = TemplateStatus.COMPLETED;
+    }
+
+    /** 문서 양식 목록의 위/아래 이동 버튼이 호출한다 — {@code null}이면 바꾸지 않는다. */
+    public void updateDisplayOrder(Integer displayOrder) {
+        if (displayOrder != null) {
+            this.displayOrder = displayOrder;
+        }
     }
 }

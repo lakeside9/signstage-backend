@@ -70,6 +70,16 @@ public class CeremonyEvent extends BaseEntity {
     @Column(length = 1000)
     private String description;
 
+    /**
+     * 행사 상세 목록 화면의 표시 순서(2026-08-27 legacy 포팅) — 위/아래 이동 버튼이 전체 목록을
+     * 다시 인덱싱해 저장한다({@code CeremonyEventService#updateEventDisplayOrders}). TEST/
+     * REHEARSAL/MAIN 구분과 무관하게 이 Ceremony의 하위 행사 전체가 하나의 순서를 공유한다 —
+     * legacy처럼 구분별 탭으로 나눠 따로 정렬하지 않는다(화면이 이미 탭 없이 한 표에 전부
+     * 보여주는 구조라 굳이 나누지 않기로 한 판단).
+     */
+    @Column(name = "display_order", nullable = false)
+    private Integer displayOrder = 0;
+
     @Builder
     private CeremonyEvent(
             Ceremony ceremony,
@@ -79,7 +89,8 @@ public class CeremonyEvent extends BaseEntity {
             LocalDateTime scheduledStartAt,
             LocalDateTime scheduledEndAt,
             String accessKey,
-            String description
+            String description,
+            Integer displayOrder
     ) {
         this.ceremony = ceremony;
         this.name = name;
@@ -90,6 +101,7 @@ public class CeremonyEvent extends BaseEntity {
         this.scheduledEndAt = scheduledEndAt;
         this.accessKey = accessKey;
         this.description = description;
+        this.displayOrder = displayOrder != null ? displayOrder : 0;
     }
 
     /**
@@ -117,5 +129,21 @@ public class CeremonyEvent extends BaseEntity {
     public void transitionToFinished() {
         this.status = CeremonyEventStatus.FINISHED;
         this.actualEndAt = LocalDateTime.now();
+    }
+
+    /**
+     * STARTED에서 서명 완료 여부와 무관하게 강제로 끝낸다 — 조건 검증은 서비스
+     * ({@code CeremonyEventService#forceFinishEvent})가 하고, 이 메서드는 상태만 바꾼다.
+     */
+    public void forceFinish() {
+        this.status = CeremonyEventStatus.FORCE_FINISHED;
+        this.actualEndAt = LocalDateTime.now();
+    }
+
+    /** 행사 상세 목록의 위/아래 이동 버튼이 호출한다 — {@code null}이면 바꾸지 않는다. */
+    public void updateDisplayOrder(Integer displayOrder) {
+        if (displayOrder != null) {
+            this.displayOrder = displayOrder;
+        }
     }
 }

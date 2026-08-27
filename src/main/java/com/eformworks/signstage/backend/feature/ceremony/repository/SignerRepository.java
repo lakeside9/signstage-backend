@@ -9,6 +9,9 @@ public interface SignerRepository extends JpaRepository<Signer, Long> {
 
     List<Signer> findAllByCeremonyId(Long ceremonyId);
 
+    /** 서명자 목록 조회가 쓴다 — 표시 순서(displayOrder) 오름차순, 동률은 id 오름차순. */
+    List<Signer> findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(Long ceremonyId);
+
     long countByCeremonyId(Long ceremonyId);
 
     boolean existsByAccessKey(String accessKey);
