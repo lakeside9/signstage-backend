@@ -322,4 +322,98 @@ class CeremonyEventServiceTest {
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CeremonyErrorCode.EVENT_SIGNER_MAPPING_MISMATCH);
     }
+
+    /**
+     * 강제종료(FORCE_FINISHED, 2026-08-27 legacy 포팅) — 서명 완료 여부와 무관하게 STARTED인
+     * TEST/REHEARSAL 행사만 끝낼 수 있고 MAIN은 거부한다({@link CeremonyEventService#forceFinishEvent}).
+     */
+    @Test
+    @DisplayName("STARTED 상태의 TEST 행사는 서명 완료 여부와 무관하게 강제종료할 수 있다")
+    void forceFinishEvent_startedTestEvent_success() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = CeremonyEvent.builder()
+                .ceremony(ceremony).name("리허설").eventType(CeremonyEventType.TEST).accessKey("access-key").build();
+        ReflectionTestUtils.setField(event, "id", EVENT_ID);
+        event.transitionToReady();
+        event.transitionToStarted();
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+
+        // when
+        CeremonyEventDto.Response.CeremonyEventSummary result =
+                eventService.forceFinishEvent(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID);
+
+        // then
+        assertThat(result.getStatus()).isEqualTo("FORCE_FINISHED");
+    }
+
+    @Test
+    @DisplayName("본행사(MAIN)는 강제종료할 수 없다")
+    void forceFinishEvent_mainEvent_fail() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony); // eventType == MAIN
+        event.transitionToReady();
+        event.transitionToStarted();
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+
+        // when & then
+        assertThatThrownBy(() -> eventService.forceFinishEvent(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.EVENT_FORCE_FINISH_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("진행 중(STARTED)이 아닌 행사는 강제종료할 수 없다")
+    void forceFinishEvent_notStarted_fail() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = CeremonyEvent.builder()
+                .ceremony(ceremony).name("리허설").eventType(CeremonyEventType.TEST).accessKey("access-key").build();
+        ReflectionTestUtils.setField(event, "id", EVENT_ID); // DRAFT
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+
+        // when & then
+        assertThatThrownBy(() -> eventService.forceFinishEvent(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.EVENT_FORCE_FINISH_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("하위 행사 표시 순서를 일괄 변경하면 그 순서대로 목록이 정렬돼 돌아온다")
+    void updateEventDisplayOrders_success() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent first = event(101L, ceremony);
+        CeremonyEvent second = event(102L, ceremony);
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findAllById(List.of(101L, 102L))).willReturn(List.of(first, second));
+        given(ceremonyEventRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(CEREMONY_ID))
+                .willReturn(List.of(second, first));
+
+        com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.UpdateDisplayOrders request =
+                new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.UpdateDisplayOrders(List.of(
+                        new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.Item(101L, 1),
+                        new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.Item(102L, 0)
+                ));
+
+        // when
+        List<CeremonyEventDto.Response.CeremonyEventSummary> result =
+                eventService.updateEventDisplayOrders(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request);
+
+        // then
+        assertThat(first.getDisplayOrder()).isEqualTo(1);
+        assertThat(second.getDisplayOrder()).isEqualTo(0);
+        assertThat(result).extracting(CeremonyEventDto.Response.CeremonyEventSummary::getId)
+                .containsExactly(102L, 101L);
+    }
 }

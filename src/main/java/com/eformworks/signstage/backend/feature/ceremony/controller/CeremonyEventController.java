@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyResultDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyEventService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyResultService;
@@ -67,6 +68,23 @@ public class CeremonyEventController {
     ) {
         List<CeremonyEventDto.Response.CeremonyEventSummary> response =
                 ceremonyEventService.findCeremonyEvents(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "하위 행사 표시 순서 일괄 변경",
+            description = "목록 화면의 위/아래 이동 버튼이 전체 배열을 원하는 순서로 다시 인덱싱해 통째로 보낸다. "
+                    + "TEST/REHEARSAL/MAIN 구분과 무관하게 하나의 순서를 공유한다."
+    )
+    @PutMapping("/display-orders")
+    public ApiResponse<List<CeremonyEventDto.Response.CeremonyEventSummary>> updateEventDisplayOrders(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @Valid @RequestBody DisplayOrderRequest.UpdateDisplayOrders request
+    ) {
+        List<CeremonyEventDto.Response.CeremonyEventSummary> response = ceremonyEventService
+                .updateEventDisplayOrders(organizationId, ceremonyId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -221,6 +239,23 @@ public class CeremonyEventController {
     ) {
         CeremonyEventDto.Response.CeremonyEventSummary response = ceremonyEventService
                 .transitionToFinish(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "강제종료 전이(FORCE_FINISHED)",
+            description = "STARTED 상태의 TEST/REHEARSAL 행사만 서명 완료 여부와 무관하게 강제로 끝낼 수 있다. "
+                    + "MAIN에는 허용하지 않는다."
+    )
+    @PostMapping("/{eventId}/force-finish")
+    public ApiResponse<CeremonyEventDto.Response.CeremonyEventSummary> forceFinishEvent(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        CeremonyEventDto.Response.CeremonyEventSummary response = ceremonyEventService
+                .forceFinishEvent(organizationId, ceremonyId, eventId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

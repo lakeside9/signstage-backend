@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.ActorType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
@@ -35,8 +36,11 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepo
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -81,16 +85,27 @@ public class CeremonyEventService {
         ceremonyService.checkCeremonyPlanConfirmed(ceremony);
 
         CeremonyEventType eventType = parseEventType(request.getEventType());
-        CapacityType capacityType = eventType == CeremonyEventType.TEST
-                ? CapacityType.TEST_EVENTS
-                : CapacityType.MAIN_EVENTS;
+        // REHEARSAL은 별도 카탈로그 한도를 새로 만들지 않고 TEST와 같은 용량 버킷을 공유한다
+        // (2026-08-27 legacy 포팅 시 판단 — signstage-docs business/ceremony-feature-migration-review.md
+        // 최신 라운드 참고. 리허설도 "정식 본행사가 아닌" 연습성 하위 행사라는 점에서 TEST에
+        // 가깝다고 봤다).
+        CapacityType capacityType = eventType == CeremonyEventType.MAIN
+                ? CapacityType.MAIN_EVENTS
+                : CapacityType.TEST_EVENTS;
+        Set<CeremonyEventType> countedEventTypes = eventType == CeremonyEventType.MAIN
+                ? Set.of(CeremonyEventType.MAIN)
+                : Set.of(CeremonyEventType.TEST, CeremonyEventType.REHEARSAL);
 
         // 한도 하드 블록(4.5절) — 유효 한도 = 플랜 기본값 + Σ 추가구매.
         int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, capacityType);
-        long currentCount = ceremonyEventRepository.countByCeremonyIdAndEventType(ceremonyId, eventType);
-        if (currentCount >= effectiveLimit) {
+        long typeCount = ceremonyEventRepository.countByCeremonyIdAndEventTypeIn(ceremonyId, countedEventTypes);
+        if (typeCount >= effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_LIMIT_EXCEEDED);
         }
+
+        // 표시 순서는 구분(TEST/REHEARSAL/MAIN)과 무관하게 이 Ceremony의 하위 행사 전체가 하나의
+        // 순서를 공유한다 — 새로 등록되는 행사는 항상 목록 맨 끝에 붙는다.
+        long totalCount = ceremonyEventRepository.countByCeremonyId(ceremonyId);
 
         CeremonyEvent event = CeremonyEvent.builder()
                 .ceremony(ceremony)
@@ -101,6 +116,7 @@ public class CeremonyEventService {
                 .scheduledEndAt(request.getScheduledEndAt())
                 .accessKey(generateUniqueAccessKey())
                 .description(request.getDescription())
+                .displayOrder((int) totalCount)
                 .build();
         ceremonyEventRepository.save(event);
 
@@ -122,9 +138,42 @@ public class CeremonyEventService {
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
-        return ceremonyEventRepository.findAllByCeremonyId(ceremonyId).stream()
+        return ceremonyEventRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(ceremonyId).stream()
                 .map(event -> toSummary(event, retrieveAppliedOptionalFeatureIds(event)))
                 .toList();
+    }
+
+    /**
+     * 하위 행사 목록의 위/아래 이동 버튼이 호출한다 — 전체 배열을 원하는 순서로 다시 인덱싱해
+     * 통째로 보낸다. {@link #checkEventNotLocked}와 달리 STARTED/FINISHED/FORCE_FINISHED
+     * 여부와 무관하게 항상 허용한다 — 표시 순서는 화면 정리일 뿐 행사 진행 상태와 무관해서다.
+     */
+    @Transactional
+    public List<CeremonyEventDto.Response.CeremonyEventSummary> updateEventDisplayOrders(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId,
+            DisplayOrderRequest.UpdateDisplayOrders request
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        Map<Long, CeremonyEvent> eventsById = ceremonyEventRepository
+                .findAllById(request.getItems().stream().map(DisplayOrderRequest.Item::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(CeremonyEvent::getId, Function.identity()));
+
+        for (DisplayOrderRequest.Item item : request.getItems()) {
+            CeremonyEvent event = eventsById.get(item.getId());
+            if (event == null || !event.getCeremony().getId().equals(ceremonyId)) {
+                throw new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_NOT_FOUND);
+            }
+            event.updateDisplayOrder(item.getDisplayOrder());
+        }
+
+        return findCeremonyEvents(organizationId, ceremonyId, currentUserId);
     }
 
     public CeremonyEventDto.Response.CeremonyEventSummary retrieveCeremonyEvent(
@@ -442,6 +491,37 @@ public class CeremonyEventService {
     }
 
     /**
+     * STARTED→FORCE_FINISHED 전이(2026-08-27 legacy 포팅). 서명 완료 여부와 무관하게 관리자가
+     * 강제로 끝낸다 — 리허설 도중 중단처럼 {@link #transitionToFinish}의 전원 완료 조건을 만족할
+     * 필요가 없는 상황을 위한 것이다. TEST/REHEARSAL에만 허용하고 MAIN은 거부한다 — 정식
+     * 본행사를 서명 미완료 상태로 끝내면 결과물/청구 근거가 어긋나기 때문이다.
+     */
+    @Transactional
+    public CeremonyEventDto.Response.CeremonyEventSummary forceFinishEvent(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        if (event.getStatus() != CeremonyEventStatus.STARTED
+                || event.getEventType() == CeremonyEventType.MAIN) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_FORCE_FINISH_NOT_ALLOWED);
+        }
+
+        event.forceFinish();
+        recordLog(event, ActorType.ADMIN, currentUserId, CeremonyEventAction.FORCE_FINISH_EVENT);
+        ceremonyRealtimeNotifier.notifyStatusChanged(event.getId(), CeremonyEventStatus.STARTED, CeremonyEventStatus.FORCE_FINISHED);
+
+        return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
+    }
+
+    /**
      * SIGNATURE_REPLACE — 관리자가 한 서명자의 이 이벤트 서명 진행 상황 전체(배정된 모든
      * 서명란의 스트로크)를 초기화한다. STARTED 상태에서만 가능하고, 완료 여부와 무관하게
      * 항상 허용한다("다시 서명하게 하기"가 목적). 스트로크가 지워지면 배정된 모든 필드의
@@ -640,7 +720,9 @@ public class CeremonyEventService {
     }
 
     private void checkEventNotLocked(CeremonyEvent event) {
-        if (event.getStatus() == CeremonyEventStatus.STARTED || event.getStatus() == CeremonyEventStatus.FINISHED) {
+        if (event.getStatus() == CeremonyEventStatus.STARTED
+                || event.getStatus() == CeremonyEventStatus.FINISHED
+                || event.getStatus() == CeremonyEventStatus.FORCE_FINISHED) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_LOCKED);
         }
     }
@@ -744,6 +826,7 @@ public class CeremonyEventService {
                 event.getAccessKey(),
                 event.getDescription(),
                 optionalFeatureIds,
+                event.getDisplayOrder(),
                 event.getCreatedAt()
         );
     }

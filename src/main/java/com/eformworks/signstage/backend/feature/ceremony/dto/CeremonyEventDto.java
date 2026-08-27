@@ -121,6 +121,8 @@ public final class CeremonyEventDto {
             private final String accessKey;
             private final String description;
             private final List<Long> optionalFeatureIds;
+            /** 목록 화면의 표시 순서 — 위/아래 이동 버튼이 이 값을 그대로 다시 인덱싱해 저장한다. */
+            private final Integer displayOrder;
             private final LocalDateTime createdAt;
         }
 

@@ -240,6 +240,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_SIGNER_EXCEL_NO_VALID_ROWS",
             HttpStatus.BAD_REQUEST,
             "업로드할 서명자가 없습니다. 이름이 입력됐는지 확인해주세요."
+    ),
+    EVENT_FORCE_FINISH_NOT_ALLOWED(
+            "CEREMONY_EVENT_FORCE_FINISH_NOT_ALLOWED",
+            HttpStatus.CONFLICT,
+            "진행 중(STARTED)인 테스트 또는 리허설 행사만 강제종료할 수 있습니다."
     );
 
     private final String code;

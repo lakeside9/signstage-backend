@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.SignerDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
@@ -21,7 +22,10 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -80,6 +84,7 @@ public class SignerService {
                 .affiliation(request.getAffiliation())
                 .roleCode(request.getRoleCode())
                 .accessKey(generateUniqueAccessKey())
+                .displayOrder((int) currentCount)
                 .build();
         signerRepository.save(signer);
 
@@ -140,6 +145,7 @@ public class SignerService {
         ceremonyService.checkCeremonyPlanConfirmed(ceremony);
         checkExcelExtension(file.getOriginalFilename());
 
+        long currentCount = signerRepository.countByCeremonyId(ceremonyId);
         List<Signer> toCreate = new ArrayList<>();
         List<SignerDto.Response.SkippedRow> skippedRows = new ArrayList<>();
         for (ExcelSignerRow row : parseExcelRows(file)) {
@@ -156,6 +162,7 @@ public class SignerService {
                     .position(row.position().isBlank() ? null : row.position())
                     .affiliation(row.affiliation().isBlank() ? null : row.affiliation())
                     .accessKey(generateUniqueAccessKey())
+                    .displayOrder((int) currentCount + toCreate.size())
                     .build());
         }
 
@@ -164,7 +171,6 @@ public class SignerService {
         }
 
         int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, CapacityType.SIGNERS);
-        long currentCount = signerRepository.countByCeremonyId(ceremonyId);
         if (currentCount + toCreate.size() > effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_SIGNER_LIMIT_EXCEEDED);
         }
@@ -223,7 +229,42 @@ public class SignerService {
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
-        return signerRepository.findAllByCeremonyId(ceremonyId).stream().map(this::toSummary).toList();
+        return signerRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(ceremonyId).stream()
+                .map(this::toSummary)
+                .toList();
+    }
+
+    /**
+     * 서명자 목록의 위/아래 이동 버튼이 호출한다 — 목록 화면이 전체 배열을 원하는 순서로 다시
+     * 인덱싱해 통째로 보낸다(부분 변경 없음). 잠금(isSignerLockedByStartedEvent) 여부와
+     * 무관하게 항상 허용한다 — 표시 순서는 서명 배정과 별개의 화면 정리 개념이라서다.
+     */
+    @Transactional
+    public List<SignerDto.Response.SignerSummary> updateDisplayOrders(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId,
+            DisplayOrderRequest.UpdateDisplayOrders request
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        Map<Long, Signer> signersById = signerRepository
+                .findAllById(request.getItems().stream().map(DisplayOrderRequest.Item::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(Signer::getId, Function.identity()));
+
+        for (DisplayOrderRequest.Item item : request.getItems()) {
+            Signer signer = signersById.get(item.getId());
+            if (signer == null || !signer.getCeremony().getId().equals(ceremonyId)) {
+                throw new ApplicationException(CeremonyErrorCode.SIGNER_NOT_FOUND);
+            }
+            signer.updateDisplayOrder(item.getDisplayOrder());
+        }
+
+        return findSigners(organizationId, ceremonyId, currentUserId);
     }
 
     public SignerDto.Response.SignerSummary retrieveSigner(
@@ -276,7 +317,9 @@ public class SignerService {
                 .distinct()
                 .flatMap(templateId -> ceremonyTemplateRepository.findAllByTemplateId(templateId).stream())
                 .map(ceremonyTemplate -> ceremonyTemplate.getCeremonyEvent().getStatus())
-                .anyMatch(status -> status == CeremonyEventStatus.STARTED || status == CeremonyEventStatus.FINISHED);
+                .anyMatch(status -> status == CeremonyEventStatus.STARTED
+                        || status == CeremonyEventStatus.FINISHED
+                        || status == CeremonyEventStatus.FORCE_FINISHED);
     }
 
     /**
@@ -337,6 +380,7 @@ public class SignerService {
                 signer.getAffiliation(),
                 signer.getRoleCode(),
                 signer.getAccessKey(),
+                signer.getDisplayOrder(),
                 isSignerLockedByStartedEvent(signer.getId()),
                 !isSignerInUse(signer.getId()),
                 signer.getCreatedAt()

@@ -68,6 +68,8 @@ public final class SignerDto {
             private final String affiliation;
             private final String roleCode;
             private final String accessKey;
+            /** 목록 화면의 표시 순서 — 위/아래 이동 버튼이 이 값을 그대로 다시 인덱싱해 저장한다. */
+            private final Integer displayOrder;
             /** 시작/종료된 하위 행사에 배정돼 수정이 막힌 서명자인지 — true면 화면에서 수정 버튼을 비활성화한다. */
             private final boolean locked;
             /** 서명란 배정/서명·감사 기록이 있어 삭제할 수 없는 서명자면 false — 화면에서 삭제 버튼을 숨긴다. */
