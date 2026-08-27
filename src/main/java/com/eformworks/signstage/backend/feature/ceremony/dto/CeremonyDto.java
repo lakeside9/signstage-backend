@@ -208,6 +208,7 @@ public final class CeremonyDto {
             private final int signerLimit;
             private final int templateLimit;
             private final int testEventLimit;
+            private final int rehearsalEventLimit;
             private final int mainEventLimit;
         }
 
@@ -249,6 +250,7 @@ public final class CeremonyDto {
             private final Integer planMaxSigners;
             private final Integer planMaxTemplates;
             private final Integer planMaxTestEvents;
+            private final Integer planMaxRehearsalEvents;
             private final Integer planMaxMainEvents;
             private final Long createdBy;
             private final LocalDateTime createdAt;

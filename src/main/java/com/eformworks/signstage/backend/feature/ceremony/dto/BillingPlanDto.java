@@ -56,6 +56,10 @@ public final class BillingPlanDto {
 
             @NotNull
             @Min(0)
+            private Integer maxRehearsalEvents;
+
+            @NotNull
+            @Min(0)
             private Integer maxMainEvents;
 
             /** 이 플랜에 기본으로 포함할 선택옵션 id 목록(생략하면 빈 목록). */
@@ -104,6 +108,10 @@ public final class BillingPlanDto {
 
             @NotNull
             @Min(0)
+            private Integer maxRehearsalEvents;
+
+            @NotNull
+            @Min(0)
             private Integer maxMainEvents;
 
             /** 사용여부. false면 새 행사 생성/플랜 변경 대상에서 제외된다. */
@@ -133,6 +141,7 @@ public final class BillingPlanDto {
             private final Integer maxSigners;
             private final Integer maxTemplates;
             private final Integer maxTestEvents;
+            private final Integer maxRehearsalEvents;
             private final Integer maxMainEvents;
             private final Boolean active;
             private final List<Long> optionalFeatureIds;
@@ -155,6 +164,7 @@ public final class BillingPlanDto {
             private final Integer maxSigners;
             private final Integer maxTemplates;
             private final Integer maxTestEvents;
+            private final Integer maxRehearsalEvents;
             private final Integer maxMainEvents;
             private final Boolean active;
             private final Long createdBy;

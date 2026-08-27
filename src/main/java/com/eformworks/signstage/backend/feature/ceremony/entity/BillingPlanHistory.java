@@ -64,6 +64,9 @@ public class BillingPlanHistory extends BaseEntity {
     @Column(name = "max_test_events", nullable = false)
     private Integer maxTestEvents;
 
+    @Column(name = "max_rehearsal_events", nullable = false)
+    private Integer maxRehearsalEvents;
+
     @Column(name = "max_main_events", nullable = false)
     private Integer maxMainEvents;
 
@@ -81,6 +84,7 @@ public class BillingPlanHistory extends BaseEntity {
         this.maxSigners = billingPlan.getMaxSigners();
         this.maxTemplates = billingPlan.getMaxTemplates();
         this.maxTestEvents = billingPlan.getMaxTestEvents();
+        this.maxRehearsalEvents = billingPlan.getMaxRehearsalEvents();
         this.maxMainEvents = billingPlan.getMaxMainEvents();
         this.active = billingPlan.isActive();
     }

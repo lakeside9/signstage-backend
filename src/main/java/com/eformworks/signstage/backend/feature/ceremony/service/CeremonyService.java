@@ -766,9 +766,9 @@ public class CeremonyService {
 
     /**
      * 서명자/문서양식/테스트·본행사 등록 화면이 "등록할 수 있는 개수"를 보여주는 데 쓴다 —
-     * {@link #calculateEffectiveCapacity}(플랜 기본값 + 승인된 추가구매)를 네 가지 용량 유형
-     * 전부에 대해 계산해 돌려준다. 플랜이 없는 행사는 무제한이라 Integer.MAX_VALUE를 그대로
-     * 돌려준다(프런트가 "무제한"으로 표시).
+     * {@link #calculateEffectiveCapacity}(플랜 기본값 + 승인된 추가구매)를 다섯 가지 용량 유형
+     * 전부에 대해 계산해 돌려준다(2026-08-27 REHEARSAL_EVENTS 추가). 플랜이 없는 행사는
+     * 무제한이라 Integer.MAX_VALUE를 그대로 돌려준다(프런트가 "무제한"으로 표시).
      */
     public CeremonyDto.Response.CapacityStatus retrieveCapacityStatus(
             Long organizationId,
@@ -783,6 +783,7 @@ public class CeremonyService {
                 calculateEffectiveCapacity(ceremony, CapacityType.SIGNERS),
                 calculateEffectiveCapacity(ceremony, CapacityType.TEMPLATES),
                 calculateEffectiveCapacity(ceremony, CapacityType.TEST_EVENTS),
+                calculateEffectiveCapacity(ceremony, CapacityType.REHEARSAL_EVENTS),
                 calculateEffectiveCapacity(ceremony, CapacityType.MAIN_EVENTS)
         );
     }
@@ -880,6 +881,7 @@ public class CeremonyService {
                     case SIGNERS -> snapshot.getPlanMaxSigners();
                     case TEMPLATES -> snapshot.getPlanMaxTemplates();
                     case TEST_EVENTS -> snapshot.getPlanMaxTestEvents();
+                    case REHEARSAL_EVENTS -> snapshot.getPlanMaxRehearsalEvents();
                     case MAIN_EVENTS -> snapshot.getPlanMaxMainEvents();
                     // 태블릿은 플랜 기본 포함 개념이 없다 — 항상 0에서 시작해 추가구매로만 늘어난다.
                     case TABLETS -> 0;
@@ -889,6 +891,7 @@ public class CeremonyService {
                     case SIGNERS -> plan.getMaxSigners();
                     case TEMPLATES -> plan.getMaxTemplates();
                     case TEST_EVENTS -> plan.getMaxTestEvents();
+                    case REHEARSAL_EVENTS -> plan.getMaxRehearsalEvents();
                     case MAIN_EVENTS -> plan.getMaxMainEvents();
                     case TABLETS -> 0;
                 });
@@ -995,6 +998,7 @@ public class CeremonyService {
                 history.getPlanMaxSigners(),
                 history.getPlanMaxTemplates(),
                 history.getPlanMaxTestEvents(),
+                history.getPlanMaxRehearsalEvents(),
                 history.getPlanMaxMainEvents(),
                 history.getCreatedBy(),
                 history.getCreatedAt()

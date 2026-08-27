@@ -73,6 +73,7 @@ public class SignerPortalService {
         return new SignerPortalDto.Response.PortalContext(
                 context.event().getId(),
                 context.event().getName(),
+                context.event().getEventType().name(),
                 context.event().getStatus().name(),
                 context.signer().getId(),
                 context.signer().getName(),

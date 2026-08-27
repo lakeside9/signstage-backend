@@ -90,8 +90,8 @@ public class ProjectorService {
                 .toList();
 
         return new ProjectorDto.Response.ProjectorContext(
-                event.getId(), event.getName(), event.getStatus().name(), event.getAccessKey(), exhibition,
-                appliedOptionalFeatureCodes
+                event.getId(), event.getName(), event.getEventType().name(), event.getStatus().name(),
+                event.getAccessKey(), exhibition, appliedOptionalFeatureCodes
         );
     }
 

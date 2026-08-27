@@ -8,6 +8,8 @@ public enum CapacityType {
     SIGNERS,
     TEMPLATES,
     TEST_EVENTS,
+    /** 하위 행사 REHEARSAL 구분의 한도(2026-08-27 legacy 포팅) — TEST와는 별도 버킷이다. */
+    REHEARSAL_EVENTS,
     MAIN_EVENTS,
     /**
      * 태블릿 대여 대수. 다른 값과 달리 {@code BillingPlan}에 대응하는 필수 필드(기본 포함 대수)가
