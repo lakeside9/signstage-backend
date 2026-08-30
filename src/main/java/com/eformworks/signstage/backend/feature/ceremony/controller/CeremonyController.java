@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
+import com.eformworks.signstage.backend.feature.ceremony.dto.CapacityAddOnDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
@@ -229,6 +230,22 @@ public class CeremonyController {
     ) {
         List<OptionalFeatureDto.Response.OptionalFeatureSummary> response =
                 ceremonyService.retrieveAvailableOptionalFeatures(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "구매 가능한 용량 추가구매 상품 조회",
+            description = "이 행사의 플랜에서 구매 후보로 열어둔(안 A 큐레이션) 용량 추가구매 상품만 필터링해 돌려준다. "
+                    + "용량 추가구매 구매 폼이 이 목록으로 드롭다운을 채운다. 플랜이 없는 행사는 활성 상품 전체를 제한 없이 돌려준다."
+    )
+    @GetMapping("/{ceremonyId}/available-capacity-addons")
+    public ApiResponse<List<CapacityAddOnDto.Response.CapacityAddOnSummary>> findAvailableCapacityAddOns(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        List<CapacityAddOnDto.Response.CapacityAddOnSummary> response =
+                ceremonyService.retrieveAvailableCapacityAddOns(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

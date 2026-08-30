@@ -114,5 +114,28 @@ public final class PlatformAdminUserDto {
             private final String status;
             private final LocalDateTime joinedAt;
         }
+
+        /**
+         * 회원 정보 변경 이력 한 행 — 그 변경 시점의 전체 상태 스냅샷이다. 회원 본인이 바꿨는지
+         * 플랫폼 관리자가 바꿨는지는 {@code createdBy}(회원 id)로 구분한다(2026-08-30 요청 —
+         * "사용자가 변경하거나 관리자가 변경하거나 모두 남겨주세요"). 비밀번호(해시)는 절대
+         * 포함하지 않는다.
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class UserHistorySummary {
+
+            private final Long id;
+            private final String loginId;
+            private final String name;
+            private final String email;
+            private final String phone;
+            private final String locale;
+            private final String status;
+            private final String platformRole;
+            private final boolean passwordResetRequired;
+            private final Long createdBy;
+            private final LocalDateTime createdAt;
+        }
     }
 }

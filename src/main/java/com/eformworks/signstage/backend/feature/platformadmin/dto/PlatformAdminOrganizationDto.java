@@ -45,6 +45,24 @@ public final class PlatformAdminOrganizationDto {
             @NotBlank
             private String status;
         }
+
+        /**
+         * 플랫폼 관리자의 파트너 정보 수정(2026-08-30 요청 — "플랫폼 관리자가 파트너 정보도
+         * 수정할 수 있도록"). {@code OrganizationDto.Request.UpdateOrganization}(OWNER 전용)과
+         * 같은 필드다 — code는 조직 식별자라 이 API로도 바꾸지 않는다.
+         */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateOrganizationInfo {
+
+            @NotBlank
+            private String organizationName;
+
+            @NotBlank
+            private String defaultLocale;
+        }
     }
 
     public static final class Response {

@@ -4,14 +4,18 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.BillingPlanDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanCapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanOptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
@@ -39,6 +43,8 @@ public class BillingPlanService {
     private final BillingPlanRepository billingPlanRepository;
     private final OptionalFeatureRepository optionalFeatureRepository;
     private final BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
+    private final CapacityAddOnRepository capacityAddOnRepository;
+    private final BillingPlanCapacityAddOnRepository billingPlanCapacityAddOnRepository;
     private final BillingPlanHistoryRepository billingPlanHistoryRepository;
     private final CeremonyRepository ceremonyRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
@@ -57,6 +63,11 @@ public class BillingPlanService {
                 ? List.of()
                 : request.getOptionalFeatureIds();
         List<OptionalFeature> optionalFeatures = resolveOptionalFeatures(optionalFeatureIds);
+
+        List<Long> capacityAddOnIds = request.getCapacityAddOnIds() == null
+                ? List.of()
+                : request.getCapacityAddOnIds();
+        List<CapacityAddOn> capacityAddOns = resolveCapacityAddOns(capacityAddOnIds);
 
         BillingPlan plan = BillingPlan.builder()
                 .name(request.getName())
@@ -81,6 +92,14 @@ public class BillingPlanService {
                             .build()
             );
         }
+        for (CapacityAddOn capacityAddOn : capacityAddOns) {
+            billingPlanCapacityAddOnRepository.save(
+                    BillingPlanCapacityAddOn.builder()
+                            .billingPlan(plan)
+                            .capacityAddOn(capacityAddOn)
+                            .build()
+            );
+        }
 
         platformAdminAuditLogRecorder.record(
                 adminUserId,
@@ -90,7 +109,7 @@ public class BillingPlanService {
                 "planId=" + plan.getId() + ", name=" + plan.getName()
         );
 
-        return toSummary(plan, optionalFeatureIds);
+        return toSummary(plan, optionalFeatureIds, capacityAddOnIds);
     }
 
     @Transactional
@@ -112,10 +131,16 @@ public class BillingPlanService {
                 : request.getOptionalFeatureIds();
         List<OptionalFeature> optionalFeatures = resolveOptionalFeatures(optionalFeatureIds);
 
+        List<Long> capacityAddOnIds = request.getCapacityAddOnIds() == null
+                ? List.of()
+                : request.getCapacityAddOnIds();
+        List<CapacityAddOn> capacityAddOns = resolveCapacityAddOns(capacityAddOnIds);
+
         String detail = "planId=" + planId
                 + ", salePrice: " + plan.getSalePrice() + " -> " + request.getSalePrice()
                 + ", active: " + plan.isActive() + " -> " + request.getActive()
-                + ", optionalFeatureIds: " + retrieveOptionalFeatureIds(plan.getId()) + " -> " + optionalFeatureIds;
+                + ", optionalFeatureIds: " + retrieveOptionalFeatureIds(plan.getId()) + " -> " + optionalFeatureIds
+                + ", capacityAddOnIds: " + retrieveCapacityAddOnIds(plan.getId()) + " -> " + capacityAddOnIds;
 
         plan.updateInfo(
                 request.getName(),
@@ -142,14 +167,24 @@ public class BillingPlanService {
             );
         }
 
+        // 구매 가능 용량 추가구매 상품 구성도 통째로 교체 — 같은 원칙으로
+        // CeremonyPlanHistoryCapacityAddOn 스냅샷이 이미 진행 중인 Ceremony를 보호한다(signstage-docs
+        // business/optional-feature-display-scope-and-plan-capacity-addon-review.md 5.5절).
+        billingPlanCapacityAddOnRepository.deleteAllByBillingPlanId(planId);
+        for (CapacityAddOn capacityAddOn : capacityAddOns) {
+            billingPlanCapacityAddOnRepository.save(
+                    BillingPlanCapacityAddOn.builder().billingPlan(plan).capacityAddOn(capacityAddOn).build()
+            );
+        }
+
         platformAdminAuditLogRecorder.record(adminUserId, PlatformAdminAction.UPDATE_BILLING_PLAN, null, null, detail);
 
-        return toSummary(plan, optionalFeatureIds);
+        return toSummary(plan, optionalFeatureIds, capacityAddOnIds);
     }
 
     public List<BillingPlanDto.Response.BillingPlanSummary> findPlans() {
         return billingPlanRepository.findAll().stream()
-                .map(plan -> toSummary(plan, retrieveOptionalFeatureIds(plan.getId())))
+                .map(plan -> toSummary(plan, retrieveOptionalFeatureIds(plan.getId()), retrieveCapacityAddOnIds(plan.getId())))
                 .toList();
     }
 
@@ -185,6 +220,23 @@ public class BillingPlanService {
                 .toList();
     }
 
+    private List<CapacityAddOn> resolveCapacityAddOns(List<Long> capacityAddOnIds) {
+        if (CollectionUtils.isEmpty(capacityAddOnIds)) {
+            return List.of();
+        }
+        List<CapacityAddOn> found = capacityAddOnRepository.findAllByIdIn(capacityAddOnIds);
+        if (found.size() != capacityAddOnIds.size()) {
+            throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND);
+        }
+        return found;
+    }
+
+    private List<Long> retrieveCapacityAddOnIds(Long billingPlanId) {
+        return billingPlanCapacityAddOnRepository.findAllByBillingPlanId(billingPlanId).stream()
+                .map(mapping -> mapping.getCapacityAddOn().getId())
+                .toList();
+    }
+
     private DiscountType parseDiscountType(String discountType) {
         try {
             return DiscountType.valueOf(discountType);
@@ -193,7 +245,11 @@ public class BillingPlanService {
         }
     }
 
-    private BillingPlanDto.Response.BillingPlanSummary toSummary(BillingPlan plan, List<Long> optionalFeatureIds) {
+    private BillingPlanDto.Response.BillingPlanSummary toSummary(
+            BillingPlan plan,
+            List<Long> optionalFeatureIds,
+            List<Long> capacityAddOnIds
+    ) {
         return new BillingPlanDto.Response.BillingPlanSummary(
                 plan.getId(),
                 plan.getName(),
@@ -208,6 +264,7 @@ public class BillingPlanService {
                 plan.getMaxMainEvents(),
                 plan.isActive(),
                 optionalFeatureIds,
+                capacityAddOnIds,
                 ceremonyRepository.countByBillingPlanId(plan.getId()),
                 plan.getCreatedAt()
         );

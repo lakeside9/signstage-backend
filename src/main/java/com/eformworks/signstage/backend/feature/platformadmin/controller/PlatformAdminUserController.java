@@ -11,6 +11,7 @@ import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAd
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -99,6 +100,18 @@ public class PlatformAdminUserController {
         Page<PlatformAdminLoginHistoryDto.Response.LoginHistoryEntry> result =
                 platformAdminUserService.findLoginHistory(userId, currentUser.platformRole(), pageable);
         return ApiResponse.success(PageResponse.from(result), traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "회원 정보 변경 이력 조회",
+            description = "최신순. 가입 시점 1건 + 이후 정보가 바뀔 때마다 1건씩(회원 본인·플랫폼 관리자 구분 없이 "
+                    + "모두 포함, createdBy로 누가 바꿨는지 구분한다). 다른 조회 API와 같이 PLATFORM_SUPPORT 이상이면 "
+                    + "볼 수 있다."
+    )
+    @GetMapping("/{userId}/history")
+    public ApiResponse<List<PlatformAdminUserDto.Response.UserHistorySummary>> findUserHistory(@PathVariable Long userId) {
+        List<PlatformAdminUserDto.Response.UserHistorySummary> response = platformAdminUserService.findUserHistory(userId);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
     @Operation(

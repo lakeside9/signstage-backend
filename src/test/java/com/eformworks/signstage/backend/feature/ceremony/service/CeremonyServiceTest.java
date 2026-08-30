@@ -18,12 +18,14 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOptionalFeaturePurchaseRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
@@ -78,6 +80,8 @@ class CeremonyServiceTest {
     @Mock
     private CeremonyPlanHistoryOptionalFeatureRepository ceremonyPlanHistoryOptionalFeatureRepository;
     @Mock
+    private CeremonyPlanHistoryCapacityAddOnRepository ceremonyPlanHistoryCapacityAddOnRepository;
+    @Mock
     private OrganizationRepository organizationRepository;
     @Mock
     private MemberRepository memberRepository;
@@ -85,6 +89,8 @@ class CeremonyServiceTest {
     private BillingPlanRepository billingPlanRepository;
     @Mock
     private BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
+    @Mock
+    private BillingPlanCapacityAddOnRepository billingPlanCapacityAddOnRepository;
     @Mock
     private CapacityAddOnRepository capacityAddOnRepository;
     @Mock

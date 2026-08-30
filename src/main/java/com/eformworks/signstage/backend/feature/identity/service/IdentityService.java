@@ -4,9 +4,11 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.security.JwtProvider;
 import com.eformworks.signstage.backend.feature.identity.dto.IdentityDto;
 import com.eformworks.signstage.backend.feature.identity.error.IdentityErrorCode;
+import com.eformworks.signstage.backend.feature.identity.repository.UserHistoryRepository;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.LoginHistoryStatus;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
+import com.eformworks.signstage.backend.feature.identity.entity.UserHistory;
 import com.eformworks.signstage.backend.feature.identity.entity.UserStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class IdentityService {
 
     private final UserRepository userRepository;
+    private final UserHistoryRepository userHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
     private final LoginAttemptRecorder loginAttemptRecorder;
@@ -117,6 +120,7 @@ public class IdentityService {
                 .status(UserStatus.PENDING)
                 .build();
         userRepository.save(user);
+        recordUserHistory(user);
 
         return new IdentityDto.Response.Signup(user.getId(), user.getLoginId(), user.getStatus().name());
     }
@@ -158,7 +162,16 @@ public class IdentityService {
         }
 
         user.changeProfile(request.getName(), request.getEmail(), request.getPhone(), request.getLocale());
+        recordUserHistory(user);
         return toMeResponse(user);
+    }
+
+    /**
+     * 회원 정보 변경 이력 스냅샷(2026-08-30 요청). 비밀번호 변경(순수 인증 정보라 스냅샷 대상이
+     * 아니다, {@link UserHistory} 클래스 설명 참고)에는 호출하지 않는다.
+     */
+    private void recordUserHistory(User user) {
+        userHistoryRepository.save(UserHistory.builder().user(user).build());
     }
 
     @Transactional

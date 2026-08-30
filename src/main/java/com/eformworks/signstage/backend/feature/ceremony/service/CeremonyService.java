@@ -2,9 +2,11 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.dto.CapacityAddOnDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanCapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
@@ -12,18 +14,21 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyAssignme
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyCapacityPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOptionalFeaturePurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryCapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryOptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOptionalFeaturePurchaseRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
@@ -77,10 +82,12 @@ public class CeremonyService {
     private final CeremonyOptionalFeaturePurchaseRepository ceremonyOptionalFeaturePurchaseRepository;
     private final CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
     private final CeremonyPlanHistoryOptionalFeatureRepository ceremonyPlanHistoryOptionalFeatureRepository;
+    private final CeremonyPlanHistoryCapacityAddOnRepository ceremonyPlanHistoryCapacityAddOnRepository;
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final BillingPlanRepository billingPlanRepository;
     private final BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
+    private final BillingPlanCapacityAddOnRepository billingPlanCapacityAddOnRepository;
     private final CapacityAddOnRepository capacityAddOnRepository;
     private final OptionalFeatureRepository optionalFeatureRepository;
     private final UserRepository userRepository;
@@ -267,6 +274,13 @@ public class CeremonyService {
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND));
         if (!addOn.isActive()) {
             throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_INACTIVE);
+        }
+        // 안 A(구매 가능 상품 큐레이션) — 이 Ceremony의 플랜에서 구매 후보로 열어두지 않은 상품은
+        // 거부한다. 플랜이 없는 행사(4.8절 예외)는 제한 없이 전부 허용한다 — signstage-docs
+        // business/optional-feature-display-scope-and-plan-capacity-addon-review.md 5장.
+        if (ceremony.getBillingPlan() != null
+                && !retrieveAvailableCapacityAddOnIds(ceremony).contains(addOn.getId())) {
+            throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_AVAILABLE_FOR_PLAN);
         }
 
         // 조직×용량추가구매 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다 —
@@ -735,9 +749,12 @@ public class CeremonyService {
 
     /**
      * Ceremony 생성 시(최초 플랜 선택)와 {@link #changePlan}에서 매 변경마다 호출한다(3.4절).
-     * 그 순간 플랜에 포함된 선택옵션 구성도 {@link CeremonyPlanHistoryOptionalFeature}로 함께
-     * 스냅샷한다 — 카탈로그 관리자가 나중에 플랜의 옵션 구성을 바꿔도 이 Ceremony는 영향받지
-     * 않아야 한다(signstage-docs business/ceremony-billing-options-review.md 9장 후속 결정).
+     * 그 순간 플랜에 포함된 선택옵션 구성도 {@link CeremonyPlanHistoryOptionalFeature}로,
+     * 그 순간 플랜에서 구매 가능했던 용량 추가구매 상품 구성도 {@link CeremonyPlanHistoryCapacityAddOn}
+     * 으로 함께 스냅샷한다 — 카탈로그 관리자가 나중에 플랜의 옵션/구매 가능 상품 구성을 바꿔도
+     * 이 Ceremony는 영향받지 않아야 한다(signstage-docs business/ceremony-billing-options-review.md
+     * 9장 후속 결정, business/optional-feature-display-scope-and-plan-capacity-addon-review.md
+     * 5.5절 후속).
      */
     private void recordPlanHistory(Ceremony ceremony, BillingPlan plan) {
         // 조직×플랜 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다
@@ -759,6 +776,14 @@ public class CeremonyService {
                         CeremonyPlanHistoryOptionalFeature.builder()
                                 .ceremonyPlanHistory(history)
                                 .optionalFeature(mapping.getOptionalFeature())
+                                .build()
+                )
+        );
+        billingPlanCapacityAddOnRepository.findAllByBillingPlanId(plan.getId()).forEach(mapping ->
+                ceremonyPlanHistoryCapacityAddOnRepository.save(
+                        CeremonyPlanHistoryCapacityAddOn.builder()
+                                .ceremonyPlanHistory(history)
+                                .capacityAddOn(mapping.getCapacityAddOn())
                                 .build()
                 )
         );
@@ -946,6 +971,75 @@ public class CeremonyService {
                         .toList());
 
         return Stream.concat(purchased.stream(), includedInPlan.stream()).distinct().toList();
+    }
+
+    /**
+     * 이 Ceremony의 플랜에서 구매 가능한(안 A 큐레이션) {@code CapacityAddOn} id 목록. 라이브
+     * {@code BillingPlanCapacityAddOn} 대신 이 Ceremony의 최신 {@link CeremonyPlanHistory}
+     * 스냅샷(연결된 {@link CeremonyPlanHistoryCapacityAddOn})을 우선 쓴다 — 카탈로그 관리자가
+     * 나중에 플랜의 구매 가능 상품 구성을 바꿔도 영향받지 않아야 한다(signstage-docs
+     * business/optional-feature-display-scope-and-plan-capacity-addon-review.md 5.5절 결정).
+     * 이력이 없는 경우(이 기능 배포 전 기존 행사, 마이그레이션 백필로 대부분 커버되지만 혹시
+     * 놓친 경우)만 라이브 값으로 대체한다. 호출부가 {@code ceremony.getBillingPlan() != null}을
+     * 먼저 확인해야 한다 — 플랜 없는 행사는 제한 자체가 없다.
+     */
+    List<Long> retrieveAvailableCapacityAddOnIds(Ceremony ceremony) {
+        Optional<CeremonyPlanHistory> snapshot =
+                ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
+        return snapshot
+                .map(history -> ceremonyPlanHistoryCapacityAddOnRepository.findAllByCeremonyPlanHistoryId(history.getId())
+                        .stream()
+                        .map(mapping -> mapping.getCapacityAddOn().getId())
+                        .toList())
+                .orElseGet(() -> billingPlanCapacityAddOnRepository
+                        .findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
+                        .map(mapping -> mapping.getCapacityAddOn().getId())
+                        .toList());
+    }
+
+    /**
+     * 이 Ceremony가 실제로 구매 요청할 수 있는 용량 추가구매 상품 카탈로그만 필터링해 돌려준다
+     * (안 A, 2026-08-30) — {@link #retrieveAvailableOptionalFeatures}와 같은 목적으로,
+     * {@code UserCeremonyEdit.tsx}의 구매 드롭다운이 이 목록으로 채워야 플랜에 없는 상품을 골라
+     * 제출한 뒤에야 거부당하는 UX를 피할 수 있다(signstage-docs
+     * business/optional-feature-display-scope-and-plan-capacity-addon-review.md 5.6절). 플랜이
+     * 없는 행사(4.8절 예외)는 활성 상품 전체를 제한 없이 돌려준다.
+     */
+    public List<CapacityAddOnDto.Response.CapacityAddOnSummary> retrieveAvailableCapacityAddOns(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        if (ceremony.getBillingPlan() == null) {
+            return capacityAddOnRepository.findAll().stream().map(this::toCapacityAddOnSummary).toList();
+        }
+
+        List<Long> availableIds = retrieveAvailableCapacityAddOnIds(ceremony);
+        if (availableIds.isEmpty()) {
+            return List.of();
+        }
+        return capacityAddOnRepository.findAllById(availableIds).stream().map(this::toCapacityAddOnSummary).toList();
+    }
+
+    private CapacityAddOnDto.Response.CapacityAddOnSummary toCapacityAddOnSummary(CapacityAddOn addOn) {
+        return new CapacityAddOnDto.Response.CapacityAddOnSummary(
+                addOn.getId(),
+                addOn.getCapacityType().name(),
+                addOn.getUnitAmount(),
+                addOn.getSecondaryCapacityType() == null ? null : addOn.getSecondaryCapacityType().name(),
+                addOn.getSecondaryUnitAmount(),
+                addOn.getSupplyPrice(),
+                addOn.getSalePrice(),
+                addOn.getDiscountType().name(),
+                addOn.getDiscountValue(),
+                addOn.isActive(),
+                ceremonyCapacityPurchaseRepository.countByCapacityAddOnIdAndStatus(addOn.getId(), PurchaseStatus.APPROVED),
+                addOn.getCreatedAt()
+        );
     }
 
     private void checkAssigned(Ceremony ceremony, Long currentUserId) {

@@ -226,6 +226,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "사용 중지된 용량 추가구매 상품은 구매할 수 없습니다."
     ),
+    CAPACITY_ADDON_NOT_AVAILABLE_FOR_PLAN(
+            "CEREMONY_CAPACITY_ADDON_NOT_AVAILABLE_FOR_PLAN",
+            HttpStatus.CONFLICT,
+            "이 행사의 플랜에서는 구매할 수 없는 용량 추가구매 상품입니다."
+    ),
     SIGNER_EXCEL_INVALID_FORMAT(
             "CEREMONY_SIGNER_EXCEL_INVALID_FORMAT",
             HttpStatus.BAD_REQUEST,

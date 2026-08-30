@@ -9,7 +9,9 @@ import com.eformworks.signstage.backend.feature.identity.repository.LoginHistory
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.PlatformRole;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
+import com.eformworks.signstage.backend.feature.identity.entity.UserHistory;
 import com.eformworks.signstage.backend.feature.identity.entity.UserStatus;
+import com.eformworks.signstage.backend.feature.identity.repository.UserHistoryRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
@@ -48,6 +50,7 @@ public class PlatformAdminUserService {
     private final UserRepository userRepository;
     private final MemberRepository memberRepository;
     private final LoginHistoryRepository loginHistoryRepository;
+    private final UserHistoryRepository userHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final TemporaryPasswordGenerator temporaryPasswordGenerator;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
@@ -87,6 +90,7 @@ public class PlatformAdminUserService {
                 .passwordResetRequired(true)
                 .build();
         userRepository.save(user);
+        recordUserHistory(user);
 
         auditLogRecorder.record(actingUserId, PlatformAdminAction.CREATE_USER, user.getId(), null, "loginId=" + user.getLoginId());
         return new PlatformAdminUserDto.Response.CreatedUser(toUserSummary(user), temporaryPassword);
@@ -165,6 +169,7 @@ public class PlatformAdminUserService {
         UserStatus previousStatus = user.getStatus();
         UserStatus newStatus = parseAssignableStatus(request.getStatus());
         user.changeStatus(newStatus);
+        recordUserHistory(user);
 
         auditLogRecorder.record(
                 actingUserId, PlatformAdminAction.UPDATE_USER_STATUS, userId, null,
@@ -200,6 +205,7 @@ public class PlatformAdminUserService {
 
         User user = findUserOrThrow(userId);
         user.requirePasswordReset();
+        recordUserHistory(user);
 
         auditLogRecorder.record(actingUserId, PlatformAdminAction.FORCE_PASSWORD_RESET, userId, null, null);
         return toUserSummary(user);
@@ -246,9 +252,46 @@ public class PlatformAdminUserService {
         String unusablePasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
         user.withdraw(unusablePasswordHash);
         activeMemberships.forEach(Member::remove);
+        // 이미 쌓여 있던 이력 행의 PII도 함께 지운다 — 그러지 않으면 이력 테이블이 방금 지운
+        // PII를 되살릴 수 있는 우회로가 된다(UserHistoryRepository#maskPiiForUser 참고).
+        userHistoryRepository.maskPiiForUser(userId, user.getName());
+        recordUserHistory(user);
 
         auditLogRecorder.record(actingUserId, PlatformAdminAction.FORCE_WITHDRAW_USER, userId, null, "loginId was " + originalLoginId);
         return toUserSummary(user);
+    }
+
+    /**
+     * 회원 정보 변경 이력 조회(2026-08-30 요청). 회원 본인의 프로필 수정({@code IdentityService})과
+     * 이 서비스의 회원 제어 기능 전부가 남긴 스냅샷을 함께 보여준다 — createdBy로 누가 바꿨는지
+     * 구분한다. 다른 조회 API와 같이 PLATFORM_SUPPORT 이상이면 누구나 볼 수 있다(로그인 이력만
+     * PLATFORM_OPS 이상으로 더 좁다, {@link #findLoginHistory}).
+     */
+    public List<PlatformAdminUserDto.Response.UserHistorySummary> findUserHistory(Long userId) {
+        findUserOrThrow(userId);
+        return userHistoryRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(this::toHistorySummary)
+                .toList();
+    }
+
+    private void recordUserHistory(User user) {
+        userHistoryRepository.save(UserHistory.builder().user(user).build());
+    }
+
+    private PlatformAdminUserDto.Response.UserHistorySummary toHistorySummary(UserHistory history) {
+        return new PlatformAdminUserDto.Response.UserHistorySummary(
+                history.getId(),
+                history.getLoginId(),
+                history.getName(),
+                history.getEmail(),
+                history.getPhone(),
+                history.getLocale(),
+                history.getStatus().name(),
+                history.getPlatformRole() != null ? history.getPlatformRole().name() : null,
+                history.isPasswordResetRequired(),
+                history.getCreatedBy(),
+                history.getCreatedAt()
+        );
     }
 
     private void checkCanManage(Long targetUserId, Long actingUserId, String actingPlatformRole) {
@@ -321,6 +364,7 @@ public class PlatformAdminUserService {
                 .passwordResetRequired(true)
                 .build();
         userRepository.save(user);
+        recordUserHistory(user);
 
         auditLogRecorder.record(
                 actingUserId, PlatformAdminAction.CREATE_ACCOUNT, user.getId(), null,
@@ -352,6 +396,7 @@ public class PlatformAdminUserService {
         PlatformRole previousRole = user.getPlatformRole();
         PlatformRole newRole = parsePlatformRole(request.getPlatformRole());
         user.changePlatformRole(newRole);
+        recordUserHistory(user);
 
         auditLogRecorder.record(
                 actingUserId, PlatformAdminAction.UPDATE_ACCOUNT_ROLE, userId, null,
@@ -374,6 +419,7 @@ public class PlatformAdminUserService {
         }
         PlatformRole previousRole = user.getPlatformRole();
         user.revokePlatformRole();
+        recordUserHistory(user);
 
         auditLogRecorder.record(
                 actingUserId, PlatformAdminAction.REVOKE_ACCOUNT, userId, null, "platformRole was " + previousRole

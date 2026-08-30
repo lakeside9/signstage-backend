@@ -4,12 +4,14 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
+import com.eformworks.signstage.backend.feature.organization.dto.OrganizationDto;
 import com.eformworks.signstage.backend.feature.organization.entity.OrganizationStatus;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminOrganizationDto;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminOrganizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -91,6 +93,36 @@ public class PlatformAdminOrganizationController {
     ) {
         PlatformAdminOrganizationDto.Response.OrganizationSummary response = platformAdminOrganizationService
                 .updateOrganizationStatus(organizationId, currentUser.userId(), currentUser.platformRole(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "파트너 정보 수정",
+            description = "이름/기본 언어를 수정한다. 코드는 이 API로 바꿀 수 없다. 지금까지는 OWNER만 가능했으나 "
+                    + "플랫폼 관리자도 직접 수정할 수 있다(2026-08-30). PLATFORM_OPS 이상만 호출할 수 있다."
+    )
+    @PutMapping("/{organizationId}/info")
+    public ApiResponse<PlatformAdminOrganizationDto.Response.OrganizationSummary> updateOrganizationInfo(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @Valid @RequestBody PlatformAdminOrganizationDto.Request.UpdateOrganizationInfo request
+    ) {
+        PlatformAdminOrganizationDto.Response.OrganizationSummary response = platformAdminOrganizationService
+                .updateOrganizationInfo(organizationId, currentUser.userId(), currentUser.platformRole(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "파트너 정보 변경 이력 조회",
+            description = "최신순. 생성 시점 1건 + 이후 정보/상태가 바뀔 때마다 1건씩(사용자 본인·플랫폼 관리자 구분 없이 "
+                    + "모두 포함, createdBy로 누가 바꿨는지 구분한다)."
+    )
+    @GetMapping("/{organizationId}/history")
+    public ApiResponse<List<OrganizationDto.Response.OrganizationHistorySummary>> findOrganizationHistory(
+            @PathVariable Long organizationId
+    ) {
+        List<OrganizationDto.Response.OrganizationHistorySummary> response =
+                platformAdminOrganizationService.findOrganizationHistory(organizationId);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }

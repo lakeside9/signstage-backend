@@ -5,11 +5,13 @@ import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.organization.dto.OrganizationDto;
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
+import com.eformworks.signstage.backend.feature.organization.repository.OrganizationHistoryRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
+import com.eformworks.signstage.backend.feature.organization.entity.OrganizationHistory;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ public class OrganizationService {
 
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
+    private final OrganizationHistoryRepository organizationHistoryRepository;
 
     public OrganizationDto.Response.Organization retrieveOrganization(Long organizationId, Long currentUserId) {
         Organization organization = findOrganizationOrThrow(organizationId);
@@ -58,7 +61,40 @@ public class OrganizationService {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
         organization.updateInfo(request.getName(), request.getDefaultLocale());
+        recordOrganizationHistory(organization);
         return toOrganizationResponse(organization, member.getRole());
+    }
+
+    /**
+     * 변경 이력 조회. 조직 정보를 사용자 본인이 바꿨는지 플랫폼 관리자가 바꿨는지는 각 행의
+     * {@code createdBy}로 구분한다(2026-08-30 요청 — "사용자가 변경하거나 관리자가 변경하거나
+     * 모두 남겨주세요"). ACTIVE 멤버라면 누구나 조회할 수 있다 — 수정 자체는 OWNER 전용이지만
+     * 이력 열람까지 OWNER로 좁힐 이유는 없다.
+     */
+    public List<OrganizationDto.Response.OrganizationHistorySummary> findOrganizationHistory(
+            Long organizationId,
+            Long currentUserId
+    ) {
+        findActiveMemberOrThrow(organizationId, currentUserId);
+        return organizationHistoryRepository.findAllByOrganizationIdOrderByCreatedAtDesc(organizationId).stream()
+                .map(this::toHistorySummary)
+                .toList();
+    }
+
+    private void recordOrganizationHistory(Organization organization) {
+        organizationHistoryRepository.save(OrganizationHistory.builder().organization(organization).build());
+    }
+
+    private OrganizationDto.Response.OrganizationHistorySummary toHistorySummary(OrganizationHistory history) {
+        return new OrganizationDto.Response.OrganizationHistorySummary(
+                history.getId(),
+                history.getName(),
+                history.getCode(),
+                history.getStatus().name(),
+                history.getDefaultLocale(),
+                history.getCreatedBy(),
+                history.getCreatedAt()
+        );
     }
 
     private Member findActiveMemberOrThrow(Long organizationId, Long userId) {

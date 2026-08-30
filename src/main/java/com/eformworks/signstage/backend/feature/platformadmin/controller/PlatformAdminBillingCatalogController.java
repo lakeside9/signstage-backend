@@ -51,7 +51,11 @@ public class PlatformAdminBillingCatalogController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "과금 플랜 수정", description = "PLATFORM_OPS 이상만 호출할 수 있다. 선택옵션 구성은 생성 후 불변이라 여기서 바꿀 수 없다.")
+    @Operation(
+            summary = "과금 플랜 수정",
+            description = "PLATFORM_OPS 이상만 호출할 수 있다. 선택옵션 구성(optionalFeatureIds)과 구매 가능 용량 "
+                    + "추가구매 상품 구성(capacityAddOnIds)도 여기서 통째로 교체할 수 있다."
+    )
     @PutMapping("/billing-plans/{id}")
     public ApiResponse<BillingPlanDto.Response.BillingPlanSummary> updatePlan(
             @AuthenticationPrincipal CurrentUser currentUser,

@@ -63,4 +63,19 @@ public class OrganizationController {
                 organizationService.updateOrganization(organizationId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
+
+    @Operation(
+            summary = "조직 정보 변경 이력 조회",
+            description = "최신순. 생성 시점 1건 + 이후 정보/상태가 바뀔 때마다 1건씩(사용자 본인·플랫폼 관리자 구분 없이 "
+                    + "모두 포함). 호출자가 해당 조직의 ACTIVE 멤버이면 누구나 조회할 수 있다."
+    )
+    @GetMapping("/{organizationId}/history")
+    public ApiResponse<List<OrganizationDto.Response.OrganizationHistorySummary>> findOrganizationHistory(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId
+    ) {
+        List<OrganizationDto.Response.OrganizationHistorySummary> response =
+                organizationService.findOrganizationHistory(organizationId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
 }
