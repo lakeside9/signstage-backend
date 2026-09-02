@@ -275,6 +275,21 @@ public class CeremonyEventController {
         return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 
+    @Operation(
+            summary = "서명 일괄 초기화 (테스트/리허설 전용)",
+            description = "진행 중(STARTED)인 테스트 또는 리허설 행사에서 매핑된 모든 서명자의 서명을 한 번에 초기화한다. MAIN에는 허용하지 않는다."
+    )
+    @PostMapping("/{eventId}/reset-signatures")
+    public ApiResponse<Void> resetAllSignatures(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        ceremonyEventService.resetAllSignatures(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
     @Operation(summary = "감사 로그 조회")
     @GetMapping("/{eventId}/logs")
     public ApiResponse<List<CeremonyEventLogDto.Response.CeremonyEventLogSummary>> findEventLogs(

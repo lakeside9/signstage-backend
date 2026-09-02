@@ -61,6 +61,23 @@ public class TemplateFieldController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
+    @Operation(
+            summary = "서명란 복제",
+            description = "같은 협약 내 같은 문서 역할(documentRole)의 다른 문서에서 서명란 배치를 통째로 가져와 이 문서의 기존 서명란을 교체한다."
+    )
+    @PostMapping("/clone-from/{sourceTemplateId}")
+    public ApiResponse<List<TemplateFieldDto.Response.TemplateFieldSummary>> cloneTemplateFields(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long templateId,
+            @PathVariable Long sourceTemplateId
+    ) {
+        List<TemplateFieldDto.Response.TemplateFieldSummary> response = templateFieldService
+                .cloneFields(organizationId, ceremonyId, templateId, sourceTemplateId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
     @Operation(summary = "서명란 목록 조회")
     @GetMapping
     public ApiResponse<List<TemplateFieldDto.Response.TemplateFieldSummary>> findTemplateFields(
