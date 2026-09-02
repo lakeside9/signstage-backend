@@ -564,6 +564,51 @@ public class CeremonyEventService {
         ceremonyRealtimeNotifier.notifySignatureReplaced(eventId, signerId, signer.getName());
     }
 
+    /**
+     * SIGNATURE_BULK_RESET — TEST/REHEARSAL 행사에서 매핑된 모든 서명자의 서명을 한 번에
+     * 초기화한다({@link #replaceSignerSignature}를 서명자별로 반복 호출하는 것과 같은 효과).
+     * MAIN에는 허용하지 않는다 — {@link #forceFinishEvent}와 같은 이유로, 실제 협약식 서명을
+     * 관리자가 통째로 지우면 결과물/청구 근거가 어긋나기 때문이다(2026-09-02 legacy 포팅).
+     */
+    @Transactional
+    public void resetAllSignatures(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        if (event.getStatus() != CeremonyEventStatus.STARTED
+                || event.getEventType() == CeremonyEventType.MAIN) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_BULK_RESET_NOT_ALLOWED);
+        }
+
+        for (Long signerId : collectFinishRequiredSignerIds(event)) {
+            Signer signer = signerRepository.findById(signerId).orElse(null);
+            if (signer == null) {
+                continue;
+            }
+
+            strokeDataRepository.deleteAllByCeremonyEventIdAndSignerId(eventId, signerId);
+            ceremonyEventLogRepository.save(
+                    CeremonyEventLog.builder()
+                            .ceremonyEvent(event)
+                            .actorType(ActorType.ADMIN)
+                            .actorId(currentUserId)
+                            .eventAction(CeremonyEventAction.SIGNATURE_REPLACE)
+                            .targetSigner(signer)
+                            .message("bulk-reset")
+                            .build()
+            );
+            ceremonyRealtimeNotifier.notifySignatureReplaced(eventId, signerId, signer.getName());
+        }
+    }
+
     public List<CeremonyEventLogDto.Response.CeremonyEventLogSummary> findEventLogs(
             Long organizationId,
             Long ceremonyId,

@@ -387,6 +387,93 @@ class CeremonyEventServiceTest {
                 .isEqualTo(CeremonyErrorCode.EVENT_FORCE_FINISH_NOT_ALLOWED);
     }
 
+    /**
+     * 서명 일괄 초기화(SIGNATURE_BULK_RESET, 2026-09-02 legacy 포팅) — STARTED인 TEST/REHEARSAL
+     * 행사에서 매핑된 모든 서명자의 서명을 한 번에 초기화한다({@link CeremonyEventService#resetAllSignatures}).
+     */
+    @Test
+    @DisplayName("STARTED 상태의 리허설 행사는 매핑된 모든 서명자의 서명을 일괄 초기화할 수 있다")
+    void resetAllSignatures_startedRehearsalEvent_success() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = CeremonyEvent.builder()
+                .ceremony(ceremony).name("리허설").eventType(CeremonyEventType.REHEARSAL).accessKey("access-key").build();
+        ReflectionTestUtils.setField(event, "id", EVENT_ID);
+        event.transitionToReady();
+        event.transitionToStarted();
+
+        Signer signer = signer(1L, ceremony, "서명자1");
+        Template contractTemplate = template(101L, ceremony, TemplateDocumentRole.CONTRACT);
+        Template exhibitionTemplate = template(102L, ceremony, TemplateDocumentRole.EXHIBITION);
+        TemplateField contractField = TemplateField.builder()
+                .template(contractTemplate).signer(signer).fieldKey("f1")
+                .pageIndex(0).fieldIndex(0).fieldName("서명").isRequired(true).build();
+        TemplateField exhibitionField = TemplateField.builder()
+                .template(exhibitionTemplate).signer(signer).fieldKey("f1")
+                .pageIndex(0).fieldIndex(0).fieldName("서명").isRequired(true).build();
+        CeremonyTemplate contractMapping = CeremonyTemplate.builder()
+                .ceremonyEvent(event).template(contractTemplate).documentRole(TemplateDocumentRole.CONTRACT).build();
+        CeremonyTemplate exhibitionMapping = CeremonyTemplate.builder()
+                .ceremonyEvent(event).template(exhibitionTemplate).documentRole(TemplateDocumentRole.EXHIBITION).build();
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyTemplateRepository.findAllByCeremonyEventIdAndDocumentRole(EVENT_ID, TemplateDocumentRole.CONTRACT))
+                .willReturn(List.of(contractMapping));
+        given(ceremonyTemplateRepository.findAllByCeremonyEventIdAndDocumentRole(EVENT_ID, TemplateDocumentRole.EXHIBITION))
+                .willReturn(List.of(exhibitionMapping));
+        given(templateFieldRepository.findAllByTemplateId(101L)).willReturn(List.of(contractField));
+        given(templateFieldRepository.findAllByTemplateId(102L)).willReturn(List.of(exhibitionField));
+        given(signerRepository.findById(1L)).willReturn(Optional.of(signer));
+
+        // when
+        eventService.resetAllSignatures(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID);
+
+        // then
+        verify(strokeDataRepository).deleteAllByCeremonyEventIdAndSignerId(EVENT_ID, 1L);
+        verify(ceremonyRealtimeNotifier).notifySignatureReplaced(EVENT_ID, 1L, "서명자1");
+    }
+
+    @Test
+    @DisplayName("본행사(MAIN)는 서명을 일괄 초기화할 수 없다")
+    void resetAllSignatures_mainEvent_fail() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony); // eventType == MAIN
+        event.transitionToReady();
+        event.transitionToStarted();
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+
+        // when & then
+        assertThatThrownBy(() -> eventService.resetAllSignatures(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.EVENT_BULK_RESET_NOT_ALLOWED);
+        verify(strokeDataRepository, never()).deleteAllByCeremonyEventIdAndSignerId(any(), any());
+    }
+
+    @Test
+    @DisplayName("진행 중(STARTED)이 아닌 행사는 서명을 일괄 초기화할 수 없다")
+    void resetAllSignatures_notStarted_fail() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = CeremonyEvent.builder()
+                .ceremony(ceremony).name("리허설").eventType(CeremonyEventType.REHEARSAL).accessKey("access-key").build();
+        ReflectionTestUtils.setField(event, "id", EVENT_ID); // DRAFT
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+
+        // when & then
+        assertThatThrownBy(() -> eventService.resetAllSignatures(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.EVENT_BULK_RESET_NOT_ALLOWED);
+        verify(strokeDataRepository, never()).deleteAllByCeremonyEventIdAndSignerId(any(), any());
+    }
+
     @Test
     @DisplayName("하위 행사 표시 순서를 일괄 변경하면 그 순서대로 목록이 정렬돼 돌아온다")
     void updateEventDisplayOrders_success() {

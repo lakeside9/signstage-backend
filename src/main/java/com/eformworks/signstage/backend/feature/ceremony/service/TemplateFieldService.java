@@ -126,6 +126,65 @@ public class TemplateFieldService {
         return saved.stream().map(this::toSummary).toList();
     }
 
+    /**
+     * 서명란 복제 — 같은 협약 내 같은 문서 역할(documentRole)의 다른 문서에서 서명란 배치를
+     * 통째로 가져와 이 문서의 기존 서명란을 교체한다(2026-09-02 legacy 포팅. legacy
+     * ~/Works/eform/source/signstage/signstage-backend TemplateService#cloneFields 참고). 서명자
+     * 지정도 그대로 가져온다 — 같은 협약이라 Signer가 그대로 유효하다. {@link #setFields}와
+     * 같은 규칙으로, 설정 완료(COMPLETED)된 대상 문서는 막는다.
+     */
+    @Transactional
+    public List<TemplateFieldDto.Response.TemplateFieldSummary> cloneFields(
+            Long organizationId,
+            Long ceremonyId,
+            Long templateId,
+            Long sourceTemplateId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        Template target = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        checkNotLocked(target);
+        Template source = findTemplateInCeremonyOrThrow(ceremonyId, sourceTemplateId);
+
+        if (target.getId().equals(source.getId())) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+        if (target.getDocumentRole() != source.getDocumentRole()) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_DOCUMENT_ROLE_MISMATCH);
+        }
+
+        List<TemplateField> sourceFields = templateFieldRepository.findAllByTemplateId(source.getId());
+        if (sourceFields.isEmpty()) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+
+        templateFieldRepository.deleteAllByTemplateId(templateId);
+        List<TemplateField> cloned = sourceFields.stream()
+                .map(field -> TemplateField.builder()
+                        .template(target)
+                        .signer(field.getSigner())
+                        .fieldKey(field.getFieldKey())
+                        .pageIndex(field.getPageIndex())
+                        .fieldIndex(field.getFieldIndex())
+                        .fieldName(field.getFieldName())
+                        .roleCode(field.getRoleCode())
+                        .signOrder(field.getSignOrder())
+                        .isRequired(field.getIsRequired())
+                        .xRatio(field.getXRatio())
+                        .yRatio(field.getYRatio())
+                        .widthRatio(field.getWidthRatio())
+                        .heightRatio(field.getHeightRatio())
+                        .build())
+                .toList();
+        templateFieldRepository.saveAll(cloned);
+
+        return cloned.stream().map(this::toSummary).toList();
+    }
+
     private void checkNotLocked(Template template) {
         if (template.getStatus() == TemplateStatus.COMPLETED) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_LOCKED);

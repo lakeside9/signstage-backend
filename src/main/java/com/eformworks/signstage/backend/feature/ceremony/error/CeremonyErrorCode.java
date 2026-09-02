@@ -123,6 +123,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "설정 완료된 문서 양식은 서명란을 수정할 수 없습니다."
     ),
+    TEMPLATE_DOCUMENT_ROLE_MISMATCH(
+            "CEREMONY_TEMPLATE_DOCUMENT_ROLE_MISMATCH",
+            HttpStatus.BAD_REQUEST,
+            "같은 유형(전시용/서명용)의 문서에서만 서명란을 복제할 수 있습니다."
+    ),
     EVENT_LOCKED(
             "CEREMONY_EVENT_LOCKED",
             HttpStatus.CONFLICT,
@@ -250,6 +255,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_EVENT_FORCE_FINISH_NOT_ALLOWED",
             HttpStatus.CONFLICT,
             "진행 중(STARTED)인 테스트 또는 리허설 행사만 강제종료할 수 있습니다."
+    ),
+    EVENT_BULK_RESET_NOT_ALLOWED(
+            "CEREMONY_EVENT_BULK_RESET_NOT_ALLOWED",
+            HttpStatus.CONFLICT,
+            "진행 중(STARTED)인 테스트 또는 리허설 행사만 서명을 일괄 초기화할 수 있습니다."
     );
 
     private final String code;
