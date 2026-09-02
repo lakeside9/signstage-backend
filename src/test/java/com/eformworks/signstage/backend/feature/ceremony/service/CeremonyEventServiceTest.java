@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -19,6 +20,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
+import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
@@ -40,6 +42,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -472,6 +475,120 @@ class CeremonyEventServiceTest {
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CeremonyErrorCode.EVENT_BULK_RESET_NOT_ALLOWED);
         verify(strokeDataRepository, never()).deleteAllByCeremonyEventIdAndSignerId(any(), any());
+    }
+
+    /**
+     * 서명매핑확인(2026-09-02 legacy 포팅) — STARTED인 TEST/REHEARSAL 행사에서 매핑된 서명란마다
+     * 소속명 5자 텍스트를 채워 넣는다({@link CeremonyEventService#runSignatureMappingCheck}).
+     */
+    @Test
+    @DisplayName("STARTED 상태의 테스트 행사는 매핑된 서명란마다 소속명 5자 텍스트를 채워 넣는다")
+    void runSignatureMappingCheck_startedTestEvent_success() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = CeremonyEvent.builder()
+                .ceremony(ceremony).name("테스트").eventType(CeremonyEventType.TEST).accessKey("access-key").build();
+        ReflectionTestUtils.setField(event, "id", EVENT_ID);
+        event.transitionToReady();
+        event.transitionToStarted();
+
+        Signer signer = Signer.builder().ceremony(ceremony).name("서명자1").affiliation("경기도청소속기관").accessKey("signer-1").build();
+        ReflectionTestUtils.setField(signer, "id", 1L);
+        Template contractTemplate = template(101L, ceremony, TemplateDocumentRole.CONTRACT);
+        TemplateField contractField = TemplateField.builder()
+                .template(contractTemplate).signer(signer).fieldKey("f1")
+                .pageIndex(0).fieldIndex(0).fieldName("서명").isRequired(true).build();
+        ReflectionTestUtils.setField(contractField, "id", 501L);
+        CeremonyTemplate contractMapping = CeremonyTemplate.builder()
+                .ceremonyEvent(event).template(contractTemplate).documentRole(TemplateDocumentRole.CONTRACT).build();
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyTemplateRepository.findAllByCeremonyEventId(EVENT_ID)).willReturn(List.of(contractMapping));
+        given(templateFieldRepository.findAllByTemplateId(101L)).willReturn(List.of(contractField));
+
+        // when
+        eventService.runSignatureMappingCheck(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID);
+
+        // then
+        ArgumentCaptor<StrokeData> captor = ArgumentCaptor.forClass(StrokeData.class);
+        verify(strokeDataRepository).save(captor.capture());
+        assertThat(captor.getValue().getRawData()).isEqualTo("{\"text\":\"경기도청소\"}");
+        verify(ceremonyRealtimeNotifier).notifyStrokeSubmitted(eq(EVENT_ID), eq(1L), eq(501L), eq(1), eq("{\"text\":\"경기도청소\"}"));
+    }
+
+    @Test
+    @DisplayName("서명매핑확인 - 본행사(MAIN)는 실행할 수 없다")
+    void runSignatureMappingCheck_mainEvent_fail() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony); // eventType == MAIN
+        event.transitionToReady();
+        event.transitionToStarted();
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+
+        // when & then
+        assertThatThrownBy(() -> eventService.runSignatureMappingCheck(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.EVENT_MAPPING_CHECK_NOT_ALLOWED);
+        verify(strokeDataRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("서명매핑확인 - 진행 중(STARTED)이 아닌 행사는 실행할 수 없다")
+    void runSignatureMappingCheck_notStarted_fail() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = CeremonyEvent.builder()
+                .ceremony(ceremony).name("테스트").eventType(CeremonyEventType.TEST).accessKey("access-key").build();
+        ReflectionTestUtils.setField(event, "id", EVENT_ID); // DRAFT
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+
+        // when & then
+        assertThatThrownBy(() -> eventService.runSignatureMappingCheck(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.EVENT_MAPPING_CHECK_NOT_ALLOWED);
+        verify(strokeDataRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("서명매핑확인 - 이미 획이 있는 서명란(실 서명자가 그렸거나 이전 확인 결과)은 건드리지 않는다")
+    void runSignatureMappingCheck_skipsFieldsWithExistingStrokes() {
+        // given
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = CeremonyEvent.builder()
+                .ceremony(ceremony).name("테스트").eventType(CeremonyEventType.TEST).accessKey("access-key").build();
+        ReflectionTestUtils.setField(event, "id", EVENT_ID);
+        event.transitionToReady();
+        event.transitionToStarted();
+
+        Signer signer = signer(1L, ceremony, "서명자1");
+        Template contractTemplate = template(101L, ceremony, TemplateDocumentRole.CONTRACT);
+        TemplateField contractField = TemplateField.builder()
+                .template(contractTemplate).signer(signer).fieldKey("f1")
+                .pageIndex(0).fieldIndex(0).fieldName("서명").isRequired(true).build();
+        ReflectionTestUtils.setField(contractField, "id", 501L);
+        CeremonyTemplate contractMapping = CeremonyTemplate.builder()
+                .ceremonyEvent(event).template(contractTemplate).documentRole(TemplateDocumentRole.CONTRACT).build();
+
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyTemplateRepository.findAllByCeremonyEventId(EVENT_ID)).willReturn(List.of(contractMapping));
+        given(templateFieldRepository.findAllByTemplateId(101L)).willReturn(List.of(contractField));
+        given(strokeDataRepository.existsByCeremonyEventIdAndSignerIdAndTemplateFieldId(EVENT_ID, 1L, 501L)).willReturn(true);
+
+        // when
+        eventService.runSignatureMappingCheck(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID);
+
+        // then
+        verify(strokeDataRepository, never()).save(any());
+        verify(ceremonyRealtimeNotifier, never()).notifyStrokeSubmitted(any(), any(), any(), any(), any());
     }
 
     @Test

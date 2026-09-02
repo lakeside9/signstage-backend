@@ -2,6 +2,8 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
@@ -606,6 +608,82 @@ public class CeremonyEventService {
                             .build()
             );
             ceremonyRealtimeNotifier.notifySignatureReplaced(eventId, signerId, signer.getName());
+        }
+    }
+
+    /**
+     * 서명매핑확인(2026-09-02 legacy 포팅) — TEST/REHEARSAL 행사에서, 매핑된 서명란마다
+     * 배정된 서명자의 소속(5자까지)을 텍스트로 채워 넣어 프로젝터/서명자 화면에서
+     * 필드-서명자 매핑이 맞는지 눈으로 바로 확인할 수 있게 한다. SIGNATURE_COMPLETE 로그를
+     * 남기지 않아 "행사 종료" 가능 여부나 실제 서명 진행 상황에는 전혀 영향이 없다. 이미
+     * 획이 있는 서명란(실 서명자가 그렸거나 이전 확인 결과)은 절대 덮어쓰지 않고 건너뛴다.
+     */
+    @Transactional
+    public void runSignatureMappingCheck(
+            Long organizationId,
+            Long ceremonyId,
+            Long eventId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+
+        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        if (event.getStatus() != CeremonyEventStatus.STARTED
+                || event.getEventType() == CeremonyEventType.MAIN) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_MAPPING_CHECK_NOT_ALLOWED);
+        }
+
+        for (CeremonyTemplate mapping : ceremonyTemplateRepository.findAllByCeremonyEventId(eventId)) {
+            for (TemplateField field : templateFieldRepository.findAllByTemplateId(mapping.getTemplate().getId())) {
+                Signer signer = field.getSigner();
+                if (signer == null) {
+                    continue;
+                }
+                if (strokeDataRepository.existsByCeremonyEventIdAndSignerIdAndTemplateFieldId(eventId, signer.getId(), field.getId())) {
+                    continue;
+                }
+
+                String rawData = writeMappingCheckRawData(mappingCheckLabel(signer));
+                strokeDataRepository.save(
+                        StrokeData.builder()
+                                .ceremonyEvent(event)
+                                .signer(signer)
+                                .templateField(field)
+                                .strokeSeq(1)
+                                .rawData(rawData)
+                                .build()
+                );
+                ceremonyRealtimeNotifier.notifyStrokeSubmitted(eventId, signer.getId(), field.getId(), 1, rawData);
+            }
+        }
+    }
+
+    private String mappingCheckLabel(Signer signer) {
+        String affiliation = signer.getAffiliation();
+        String source = (affiliation != null && !affiliation.isBlank()) ? affiliation : signer.getName();
+        if (source == null) {
+            return "";
+        }
+        return source.length() > 5 ? source.substring(0, 5) : source;
+    }
+
+    /**
+     * 손글씨 획(rawData가 좌표쌍 배열 JSON)과 구분되도록 {@code {"text": "..."}} 형태로 저장한다
+     * — 프론트엔드({@code MappedDocumentPreview}/{@code PortalSignCanvas}) 렌더링이 이 모양이면
+     * 텍스트로, 아니면 좌표 배열로 해석한다. Jackson은 다른 서비스({@code CeremonyResultService})가
+     * 정적 인스턴스로 쓰는 관례를 그대로 따른다 — 이 메서드 하나만 쓰는 값이라 필드 주입 없이
+     * static final로 둔다(테스트 목(mock) 목록에 새 의존성을 추가하지 않아도 된다).
+     */
+    private static final ObjectMapper MAPPING_CHECK_OBJECT_MAPPER = new ObjectMapper();
+
+    private String writeMappingCheckRawData(String text) {
+        try {
+            return MAPPING_CHECK_OBJECT_MAPPER.writeValueAsString(Map.of("text", text));
+        } catch (JsonProcessingException e) {
+            return "{\"text\":\"\"}";
         }
     }
 

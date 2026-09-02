@@ -260,6 +260,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_EVENT_BULK_RESET_NOT_ALLOWED",
             HttpStatus.CONFLICT,
             "진행 중(STARTED)인 테스트 또는 리허설 행사만 서명을 일괄 초기화할 수 있습니다."
+    ),
+    EVENT_MAPPING_CHECK_NOT_ALLOWED(
+            "CEREMONY_EVENT_MAPPING_CHECK_NOT_ALLOWED",
+            HttpStatus.CONFLICT,
+            "진행 중(STARTED)인 테스트 또는 리허설 행사만 서명매핑확인을 실행할 수 있습니다."
     );
 
     private final String code;
