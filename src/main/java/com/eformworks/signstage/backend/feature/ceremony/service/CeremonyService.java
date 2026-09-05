@@ -44,6 +44,7 @@ import com.eformworks.signstage.backend.feature.organization.entity.Organization
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminCeremonyPurchaseDto;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
@@ -99,6 +100,7 @@ public class CeremonyService {
     private final OrganizationDiscountService organizationDiscountService;
     private final MoneyCalculator moneyCalculator;
     private final TaxPolicyResolver taxPolicyResolver;
+    private final RolePermissionService rolePermissionService;
 
     @Transactional
     public CeremonyDto.Response.CeremonySummary createCeremony(
@@ -711,9 +713,11 @@ public class CeremonyService {
      * "행사(Ceremony) 생성/수정/삭제").
      */
     void checkCeremonyManageAccess(Ceremony ceremony, Member actingMember, Long currentUserId) {
-        if (actingMember.getRole() == MemberRole.VIEWER) {
+        if (!rolePermissionService.isAllowed(actingMember.getRole().name(), "ACTION_CEREMONY_MANAGE")) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
+        // OPERATOR의 "본인/배정 건만" 제약은 소유권 기반 불변식이라 role_permissions로 옮기지
+        // 않는다(signstage-docs business/menu-and-action-permission-management-review.md 3장).
         if (actingMember.getRole() == MemberRole.OPERATOR) {
             checkAssigned(ceremony, currentUserId);
         }
@@ -1120,7 +1124,7 @@ public class CeremonyService {
     }
 
     private void checkCanCreateCeremony(Member actingMember) {
-        if (actingMember.getRole() == MemberRole.VIEWER) {
+        if (!rolePermissionService.isAllowed(actingMember.getRole().name(), "ACTION_CEREMONY_CREATE")) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
     }

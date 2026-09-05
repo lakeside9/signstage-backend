@@ -18,6 +18,7 @@ import com.eformworks.signstage.backend.feature.organization.entity.Organization
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,8 @@ class MemberServiceTest {
     private OrganizationRepository organizationRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private RolePermissionService rolePermissionService;
 
     @InjectMocks
     private MemberService memberService;
@@ -70,6 +73,7 @@ class MemberServiceTest {
         request.setLoginId(targetUser.getLoginId());
         request.setRole(MemberRole.VIEWER.name());
 
+        given(rolePermissionService.isAllowed("OWNER", "ACTION_MEMBER_MANAGE")).willReturn(true);
         given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(organization));
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(actingMember));

@@ -12,6 +12,7 @@ import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.organization.entity.OrganizationHistory;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class OrganizationService {
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final OrganizationHistoryRepository organizationHistoryRepository;
+    private final RolePermissionService rolePermissionService;
 
     public OrganizationDto.Response.Organization retrieveOrganization(Long organizationId, Long currentUserId) {
         Organization organization = findOrganizationOrThrow(organizationId);
@@ -57,7 +59,7 @@ public class OrganizationService {
     ) {
         Organization organization = findOrganizationOrThrow(organizationId);
         Member member = findActiveMemberOrThrow(organizationId, currentUserId);
-        if (member.getRole() != MemberRole.OWNER) {
+        if (!rolePermissionService.isAllowed(member.getRole().name(), "ACTION_COMPANY_INFO_EDIT")) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
         try {

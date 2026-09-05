@@ -2,7 +2,10 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -41,10 +44,12 @@ import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -109,12 +114,21 @@ class CeremonyServiceTest {
     private MoneyCalculator moneyCalculator = new MoneyCalculator();
     @Mock
     private TaxPolicyResolver taxPolicyResolver;
+    @Mock
+    private RolePermissionService rolePermissionService;
 
     @InjectMocks
     private CeremonyService ceremonyService;
 
     private static final Long ORGANIZATION_ID = 1L;
     private static final Long CURRENT_USER_ID = 1L;
+
+    @BeforeEach
+    void setUpPermissions() {
+        // 이 테스트 파일의 시나리오는 전부 OWNER라 생성/관리 액션이 항상 허용된다고 가정한다 —
+        // 권한 자체의 허용/거부 판단은 RolePermissionServiceTest가 검증한다.
+        lenient().when(rolePermissionService.isAllowed(eq("OWNER"), anyString())).thenReturn(true);
+    }
 
     private Organization organization() {
         Organization organization = Organization.builder().name("조직").code("ORG1").build();

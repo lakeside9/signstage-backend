@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -46,22 +47,34 @@ public class PermissionController {
         );
     }
 
-    @Operation(summary = "역할×권한 매트릭스 조회", description = "PLATFORM_SUPER만 호출할 수 있다.")
+    @Operation(
+            summary = "역할×권한 매트릭스 조회",
+            description = "PLATFORM_SUPER만 호출할 수 있다. axis 생략 시 PLATFORM(관리자 콘솔) — "
+                    + "ORGANIZATION을 넘기면 조직 사용자 콘솔(MemberRole) 매트릭스를 돌려준다."
+    )
     @GetMapping
-    public ApiResponse<List<PermissionDto.Response.PermissionMatrixRow>> getMatrix(@AuthenticationPrincipal CurrentUser currentUser) {
+    public ApiResponse<List<PermissionDto.Response.PermissionMatrixRow>> getMatrix(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @RequestParam(defaultValue = "PLATFORM") RoleAxis axis
+    ) {
         checkSuperRole(currentUser.platformRole());
-        return ApiResponse.success(rolePermissionService.matrixFor(RoleAxis.PLATFORM), traceIdProvider.getTraceId());
+        return ApiResponse.success(rolePermissionService.matrixFor(axis), traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "역할별 허용 여부 변경", description = "PLATFORM_SUPER만 호출할 수 있다. 변경은 role_permission_histories에 append-only로 남는다.")
+    @Operation(
+            summary = "역할별 허용 여부 변경",
+            description = "PLATFORM_SUPER만 호출할 수 있다. 변경은 role_permission_histories에 append-only로 남는다. "
+                    + "axis는 대상 permissionDefinitionId의 role_axis와 일치해야 한다."
+    )
     @PutMapping("/{permissionDefinitionId}")
     public ApiResponse<Void> setAllowed(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long permissionDefinitionId,
+            @RequestParam(defaultValue = "PLATFORM") RoleAxis axis,
             @Valid @RequestBody PermissionDto.Request.SetAllowed request
     ) {
         rolePermissionService.setAllowed(
-                currentUser.platformRole(), RoleAxis.PLATFORM, permissionDefinitionId,
+                currentUser.platformRole(), axis, permissionDefinitionId,
                 request.getRoleValue(), request.getAllowed()
         );
         return ApiResponse.success(null, traceIdProvider.getTraceId());
