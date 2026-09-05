@@ -47,6 +47,30 @@ public class MenuService {
     private final RolePermissionService rolePermissionService;
     private final MessageTranslator messageTranslator;
 
+    /**
+     * 관리 화면(메뉴 관리, 12장 결정 #10) 전용 — 역할 필터링 없이 이 콘솔의 메뉴 전체(비활성
+     * 포함)를 평면 목록으로 반환한다. 호출자가 {@code PLATFORM_SUPER}인지는 컨트롤러가 먼저
+     * 검사한다(11장, {@link RolePermissionService#setAllowed}와 같은 이유로 하드코딩만으로
+     * 지킨다).
+     */
+    public List<MenuDto.Response.MenuAdminRow> getAllMenus(RoleAxis console) {
+        List<Menu> menus = menuRepository.findAllByConsoleOrderByDisplayOrderAsc(console);
+        Map<Long, String> labels = resolveLabels(menus);
+        return menus.stream()
+                .map(menu -> new MenuDto.Response.MenuAdminRow(
+                        menu.getId(),
+                        menu.getParentMenu() == null ? null : menu.getParentMenu().getId(),
+                        menu.getMenuKey(),
+                        menu.getLabelKey(),
+                        labels.get(menu.getId()),
+                        menu.getPath(),
+                        menu.getIconKey(),
+                        menu.getDisplayOrder(),
+                        menu.isActive()
+                ))
+                .toList();
+    }
+
     /** 호출자의 역할이 허용된 메뉴만 걸러 트리로 묶어 반환한다 — 프런트가 다시 걸러낼 필요가 없다(10장). */
     public List<MenuDto.Response.MenuNode> getMenuTree(RoleAxis console, String roleValue) {
         List<Menu> activeMenus = menuRepository.findAllByConsoleOrderByDisplayOrderAsc(console).stream()
@@ -68,11 +92,7 @@ public class MenuService {
                 })
                 .toList();
 
-        String languageCode = LocaleContextHolder.getLocale().getLanguage();
-        List<Long> visibleMenuIds = visibleMenus.stream().map(Menu::getId).toList();
-        Map<Long, String> overrideLabels = menuTranslationRepository.findAllByMenuIdIn(visibleMenuIds).stream()
-                .filter(translation -> translation.getLanguageCode().equals(languageCode))
-                .collect(Collectors.toMap(translation -> translation.getMenu().getId(), MenuTranslation::getLabel));
+        Map<Long, String> labels = resolveLabels(visibleMenus);
 
         Map<Long, List<Menu>> childrenByParentId = visibleMenus.stream()
                 .filter(menu -> menu.getParentMenu() != null)
@@ -80,20 +100,37 @@ public class MenuService {
 
         return visibleMenus.stream()
                 .filter(menu -> menu.getParentMenu() == null)
-                .map(menu -> toNode(menu, childrenByParentId, overrideLabels))
+                .map(menu -> toNode(menu, childrenByParentId, labels))
                 .toList();
     }
 
-    private MenuDto.Response.MenuNode toNode(Menu menu, Map<Long, List<Menu>> childrenByParentId, Map<Long, String> overrideLabels) {
+    private MenuDto.Response.MenuNode toNode(Menu menu, Map<Long, List<Menu>> childrenByParentId, Map<Long, String> labels) {
         List<MenuDto.Response.MenuNode> children = childrenByParentId.getOrDefault(menu.getId(), List.of()).stream()
-                .map(child -> toNode(child, childrenByParentId, overrideLabels))
+                .map(child -> toNode(child, childrenByParentId, labels))
                 .toList();
-        String label = overrideLabels.getOrDefault(
-                menu.getId(), messageTranslator.translate(menu.getLabelKey(), Map.of(), menu.getLabelKey()));
         return new MenuDto.Response.MenuNode(
-                menu.getId(), menu.getMenuKey(), menu.getLabelKey(), label, menu.getPath(), menu.getIconKey(),
-                menu.getDisplayOrder(), children
+                menu.getId(), menu.getMenuKey(), menu.getLabelKey(), labels.get(menu.getId()), menu.getPath(),
+                menu.getIconKey(), menu.getDisplayOrder(), children
         );
+    }
+
+    /**
+     * 현재 Accept-Language에 해당하는 {@link MenuTranslation}이 있으면 그 값을, 없으면
+     * {@code label_key}를 {@link MessageTranslator}로 번역한 값을(그마저 없으면 label_key
+     * 문자열 자체를) 메뉴 id별로 돌려준다.
+     */
+    private Map<Long, String> resolveLabels(List<Menu> menus) {
+        String languageCode = LocaleContextHolder.getLocale().getLanguage();
+        List<Long> menuIds = menus.stream().map(Menu::getId).toList();
+        Map<Long, String> overrideLabels = menuTranslationRepository.findAllByMenuIdIn(menuIds).stream()
+                .filter(translation -> translation.getLanguageCode().equals(languageCode))
+                .collect(Collectors.toMap(translation -> translation.getMenu().getId(), MenuTranslation::getLabel));
+
+        return menus.stream().collect(Collectors.toMap(
+                Menu::getId,
+                menu -> overrideLabels.getOrDefault(
+                        menu.getId(), messageTranslator.translate(menu.getLabelKey(), Map.of(), menu.getLabelKey()))
+        ));
     }
 
     /**

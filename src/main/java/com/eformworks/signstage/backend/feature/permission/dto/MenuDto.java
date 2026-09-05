@@ -57,5 +57,23 @@ public final class MenuDto {
             private int displayOrder;
             private List<MenuNode> children;
         }
+
+        /**
+         * 메뉴 관리 화면(12장 결정 #10) 전용 — 역할 필터링 없이 평면 목록으로 내려준다.
+         * {@code parentMenuId}로 프런트가 계층을 재구성한다.
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class MenuAdminRow {
+            private Long id;
+            private Long parentMenuId;
+            private String menuKey;
+            private String labelKey;
+            private String label;
+            private String path;
+            private String iconKey;
+            private int displayOrder;
+            private boolean active;
+        }
     }
 }

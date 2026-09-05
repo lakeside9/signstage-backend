@@ -101,4 +101,27 @@ class MenuServiceTest {
 
         assertThat(tree).extracting(MenuDto.Response.MenuNode::getMenuKey).containsExactly("MENU_DASHBOARD");
     }
+
+    @Test
+    void getAllMenus_returnsFlatListIncludingInactive_forAdminScreen() {
+        Menu dashboard = Menu.builder().console(RoleAxis.PLATFORM).menuKey("MENU_DASHBOARD")
+                .labelKey("navigation.dashboard").path("/admin").displayOrder(0).build();
+        Menu accounts = Menu.builder().console(RoleAxis.PLATFORM).menuKey("MENU_ACCOUNTS")
+                .labelKey("navigation.adminAccounts").path("/admin/accounts").displayOrder(1).build();
+        accounts.updateStructure("/admin/accounts", "ShieldCheck", 1, false);
+        ReflectionTestUtils.setField(dashboard, "id", 1L);
+        ReflectionTestUtils.setField(accounts, "id", 2L);
+        given(menuRepository.findAllByConsoleOrderByDisplayOrderAsc(RoleAxis.PLATFORM))
+                .willReturn(List.of(dashboard, accounts));
+        given(messageTranslator.translate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+                .willAnswer(invocation -> invocation.getArgument(2));
+
+        List<MenuDto.Response.MenuAdminRow> rows = menuService.getAllMenus(RoleAxis.PLATFORM);
+
+        assertThat(rows).extracting(MenuDto.Response.MenuAdminRow::getMenuKey)
+                .containsExactly("MENU_DASHBOARD", "MENU_ACCOUNTS");
+        assertThat(rows).filteredOn(row -> row.getMenuKey().equals("MENU_ACCOUNTS"))
+                .extracting(MenuDto.Response.MenuAdminRow::isActive)
+                .containsExactly(false);
+    }
 }
