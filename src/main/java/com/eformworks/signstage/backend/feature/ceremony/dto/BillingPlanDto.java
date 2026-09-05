@@ -30,6 +30,8 @@ public final class BillingPlanDto {
             @NotBlank
             private String name;
 
+            private String currencyCode;
+
             @NotNull
             private BigDecimal supplyPrice;
 
@@ -41,6 +43,8 @@ public final class BillingPlanDto {
 
             @NotNull
             private BigDecimal discountValue;
+
+            private String taxCode;
 
             @NotNull
             @Min(0)
@@ -90,6 +94,8 @@ public final class BillingPlanDto {
             @NotBlank
             private String name;
 
+            private String currencyCode;
+
             @NotNull
             private BigDecimal supplyPrice;
 
@@ -101,6 +107,8 @@ public final class BillingPlanDto {
 
             @NotNull
             private BigDecimal discountValue;
+
+            private String taxCode;
 
             @NotNull
             @Min(0)
@@ -145,10 +153,12 @@ public final class BillingPlanDto {
 
             private final Long id;
             private final String name;
+            private final String currencyCode;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final String taxCode;
             private final Integer maxSigners;
             private final Integer maxTemplates;
             private final Integer maxTestEvents;
@@ -170,10 +180,12 @@ public final class BillingPlanDto {
 
             private final Long id;
             private final String name;
+            private final String currencyCode;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final String taxCode;
             private final Integer maxSigners;
             private final Integer maxTemplates;
             private final Integer maxTestEvents;

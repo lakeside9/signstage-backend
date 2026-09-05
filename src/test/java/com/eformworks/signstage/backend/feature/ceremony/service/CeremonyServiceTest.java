@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
+import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
@@ -18,6 +20,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TaxPolicy;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
@@ -48,6 +51,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -101,6 +105,10 @@ class CeremonyServiceTest {
     private PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     @Mock
     private OrganizationDiscountService organizationDiscountService;
+    @Spy
+    private MoneyCalculator moneyCalculator = new MoneyCalculator();
+    @Mock
+    private TaxPolicyResolver taxPolicyResolver;
 
     @InjectMocks
     private CeremonyService ceremonyService;
@@ -118,6 +126,42 @@ class CeremonyServiceTest {
         Ceremony ceremony = Ceremony.builder().organization(organization).title("행사").build();
         ReflectionTestUtils.setField(ceremony, "id", id);
         return ceremony;
+    }
+
+    @Test
+    @DisplayName("KRW 예상 청구액은 통화 0자리 반올림 후 유효 세금 정책의 VAT를 합산한다")
+    void calculateEstimatedTotal_appliesCurrencyRoundingAndTaxPolicy() {
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder()
+                .name("기본")
+                .supplyPrice(new BigDecimal("10000"))
+                .salePrice(new BigDecimal("10005"))
+                .discountType(DiscountType.FIXED_AMOUNT)
+                .discountValue(BigDecimal.ZERO)
+                .maxSigners(1).maxTemplates(1).maxTestEvents(1).maxRehearsalEvents(1).maxMainEvents(1)
+                .build();
+        Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        TaxPolicy taxPolicy = mock(TaxPolicy.class);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(Optional.empty());
+        given(ceremonyCapacityPurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(List.of());
+        given(ceremonyOptionalFeaturePurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(List.of());
+        given(taxPolicyResolver.resolve(any(), any(), any())).willReturn(taxPolicy);
+        given(taxPolicy.getRatePercent()).willReturn(new BigDecimal("10.0000"));
+
+        CeremonyDto.Response.EstimatedTotal result =
+                ceremonyService.calculateEstimatedTotal(ORGANIZATION_ID, 10L, CURRENT_USER_ID);
+
+        assertThat(result.getNetAmount()).isEqualByComparingTo("10005");
+        assertThat(result.getTaxAmount()).isEqualByComparingTo("1001");
+        assertThat(result.getGrossAmount()).isEqualByComparingTo("11006");
+        assertThat(result.getCurrencyCode()).isEqualTo("KRW");
+        assertThat(result.getFractionDigits()).isZero();
     }
 
     @Test

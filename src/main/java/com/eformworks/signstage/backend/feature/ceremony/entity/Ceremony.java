@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,6 +15,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Currency;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -61,6 +64,18 @@ public class Ceremony extends BaseEntity {
     @JoinColumn(name = "billing_plan_id")
     private BillingPlan billingPlan;
 
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
+    @Column(name = "currency_fraction_digits", nullable = false)
+    private short currencyFractionDigits;
+
+    @Column(name = "currency_rounding_mode", nullable = false, length = 20)
+    private String currencyRoundingMode;
+
+    @Column(name = "time_zone_id", nullable = false, length = 50)
+    private String timeZoneId;
+
     @Column(nullable = false, length = 200)
     private String title;
 
@@ -95,13 +110,21 @@ public class Ceremony extends BaseEntity {
     @Column(name = "final_discount_type", nullable = false, length = 20)
     private DiscountType finalDiscountType;
 
-    @Column(name = "final_discount_value", nullable = false, precision = 12, scale = 2)
+    @Column(name = "final_discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal finalDiscountValue;
 
     @Builder
     private Ceremony(Organization organization, BillingPlan billingPlan, String title) {
         this.organization = organization;
         this.billingPlan = billingPlan;
+        this.currencyCode = organization == null
+                ? com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults.CURRENCY_CODE
+                : organization.getBillingCurrencyCode();
+        this.currencyFractionDigits = (short) Currency.getInstance(this.currencyCode).getDefaultFractionDigits();
+        this.currencyRoundingMode = RoundingMode.HALF_UP.name();
+        this.timeZoneId = organization == null
+                ? com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults.TIME_ZONE_ID
+                : organization.getDefaultTimeZoneId();
         this.title = title;
         this.status = CeremonyStatus.DRAFT;
         this.finalDiscountType = DiscountType.FIXED_AMOUNT;
@@ -168,5 +191,9 @@ public class Ceremony extends BaseEntity {
      */
     public void confirmPlan() {
         this.status = CeremonyStatus.IN_PROGRESS;
+    }
+
+    public CurrencyPolicy currencyPolicy() {
+        return new CurrencyPolicy(currencyCode, currencyFractionDigits, RoundingMode.valueOf(currencyRoundingMode));
     }
 }

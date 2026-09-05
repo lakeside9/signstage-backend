@@ -16,6 +16,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * 하위 행사 append-only 감사 로그. 서명 완료 판정("이 서명자의 SIGNATURE_COMPLETE/
@@ -33,6 +34,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "ceremony_event_logs")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class CeremonyEventLog extends BaseEntity {
 
     @Id

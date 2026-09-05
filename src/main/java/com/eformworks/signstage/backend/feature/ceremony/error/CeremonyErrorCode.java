@@ -13,6 +13,16 @@ public enum CeremonyErrorCode implements ErrorCode {
     BILLING_PLAN_NOT_FOUND("CEREMONY_BILLING_PLAN_NOT_FOUND", HttpStatus.NOT_FOUND, "과금 플랜을 찾을 수 없습니다."),
     OPTIONAL_FEATURE_NOT_FOUND("CEREMONY_OPTIONAL_FEATURE_NOT_FOUND", HttpStatus.NOT_FOUND, "선택옵션을 찾을 수 없습니다."),
     CAPACITY_ADDON_NOT_FOUND("CEREMONY_CAPACITY_ADDON_NOT_FOUND", HttpStatus.NOT_FOUND, "용량 추가구매 상품을 찾을 수 없습니다."),
+    CURRENCY_MISMATCH(
+            "CEREMONY_CURRENCY_MISMATCH",
+            HttpStatus.CONFLICT,
+            "행사와 과금 상품의 통화가 일치하지 않습니다."
+    ),
+    TAX_POLICY_NOT_FOUND(
+            "CEREMONY_TAX_POLICY_NOT_FOUND",
+            HttpStatus.CONFLICT,
+            "거래일에 적용할 수 있는 세금 정책을 찾을 수 없습니다."
+    ),
     OPTIONAL_FEATURE_CODE_DUPLICATE(
             "CEREMONY_OPTIONAL_FEATURE_CODE_DUPLICATE",
             HttpStatus.CONFLICT,

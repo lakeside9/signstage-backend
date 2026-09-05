@@ -17,6 +17,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * 선택옵션(OptionalFeature)의 값/사용여부 변경 이력. append-only다 — {@link BillingPlanHistory}와
@@ -27,6 +28,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "optional_feature_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class OptionalFeatureHistory extends BaseEntity {
 
     @Id
@@ -44,18 +46,24 @@ public class OptionalFeatureHistory extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "supply_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
+    @Column(name = "supply_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal supplyPrice;
 
-    @Column(name = "sale_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "sale_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal salePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "discount_type", nullable = false, length = 20)
     private DiscountType discountType;
 
-    @Column(name = "discount_value", nullable = false, precision = 12, scale = 2)
+    @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal discountValue;
+
+    @Column(name = "tax_code", nullable = false, length = 50)
+    private String taxCode;
 
     @Column(nullable = false)
     private boolean active;
@@ -71,10 +79,12 @@ public class OptionalFeatureHistory extends BaseEntity {
         this.optionalFeature = optionalFeature;
         this.code = optionalFeature.getCode();
         this.name = optionalFeature.getName();
+        this.currencyCode = optionalFeature.getCurrencyCode();
         this.supplyPrice = optionalFeature.getSupplyPrice();
         this.salePrice = optionalFeature.getSalePrice();
         this.discountType = optionalFeature.getDiscountType();
         this.discountValue = optionalFeature.getDiscountValue();
+        this.taxCode = optionalFeature.getTaxCode();
         this.active = optionalFeature.isActive();
         this.projectorEffect = optionalFeature.isProjectorEffect();
         this.exclusivityGroup = optionalFeature.getExclusivityGroup();

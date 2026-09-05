@@ -59,18 +59,24 @@ public class CeremonyOptionalFeaturePurchase extends BaseEntity {
     @JoinColumn(name = "optional_feature_id", nullable = false)
     private OptionalFeature optionalFeature;
 
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
     @Column(name = "purchased_name", nullable = false, length = 100)
     private String purchasedName;
 
-    @Column(name = "purchased_sale_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "purchased_sale_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal purchasedSalePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "purchased_discount_type", nullable = false, length = 20)
     private DiscountType purchasedDiscountType;
 
-    @Column(name = "purchased_discount_value", nullable = false, precision = 12, scale = 2)
+    @Column(name = "purchased_discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal purchasedDiscountValue;
+
+    @Column(name = "purchased_tax_code", nullable = false, length = 50)
+    private String purchasedTaxCode;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -97,10 +103,12 @@ public class CeremonyOptionalFeaturePurchase extends BaseEntity {
     ) {
         this.ceremony = ceremony;
         this.optionalFeature = optionalFeature;
+        this.currencyCode = optionalFeature.getCurrencyCode();
         this.purchasedName = purchasedName;
         this.purchasedSalePrice = purchasedSalePrice;
         this.purchasedDiscountType = purchasedDiscountType;
         this.purchasedDiscountValue = purchasedDiscountValue;
+        this.purchasedTaxCode = optionalFeature.getTaxCode();
         this.status = PurchaseStatus.PENDING;
     }
 

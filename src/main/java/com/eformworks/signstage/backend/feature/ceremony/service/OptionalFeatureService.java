@@ -55,10 +55,12 @@ public class OptionalFeatureService {
         OptionalFeature optionalFeature = OptionalFeature.builder()
                 .code(code)
                 .name(request.getName())
+                .currencyCode(request.getCurrencyCode())
                 .supplyPrice(request.getSupplyPrice())
                 .salePrice(request.getSalePrice())
                 .discountType(parseDiscountType(request.getDiscountType()))
                 .discountValue(request.getDiscountValue())
+                .taxCode(request.getTaxCode())
                 .projectorEffect(request.getProjectorEffect())
                 .exclusivityGroup(request.getExclusivityGroup())
                 .build();
@@ -96,10 +98,12 @@ public class OptionalFeatureService {
 
         optionalFeature.updateInfo(
                 request.getName(),
+                request.getCurrencyCode(),
                 request.getSupplyPrice(),
                 request.getSalePrice(),
                 parseDiscountType(request.getDiscountType()),
                 request.getDiscountValue(),
+                request.getTaxCode(),
                 request.getActive(),
                 request.getProjectorEffect(),
                 request.getExclusivityGroup()
@@ -155,10 +159,12 @@ public class OptionalFeatureService {
                 optionalFeature.getId(),
                 optionalFeature.getCode().name(),
                 optionalFeature.getName(),
+                optionalFeature.getCurrencyCode(),
                 optionalFeature.getSupplyPrice(),
                 optionalFeature.getSalePrice(),
                 optionalFeature.getDiscountType().name(),
                 optionalFeature.getDiscountValue(),
+                optionalFeature.getTaxCode(),
                 optionalFeature.isActive(),
                 optionalFeature.isProjectorEffect(),
                 optionalFeature.getExclusivityGroup(),
@@ -174,10 +180,12 @@ public class OptionalFeatureService {
                 history.getId(),
                 history.getCode().name(),
                 history.getName(),
+                history.getCurrencyCode(),
                 history.getSupplyPrice(),
                 history.getSalePrice(),
                 history.getDiscountType().name(),
                 history.getDiscountValue(),
+                history.getTaxCode(),
                 history.isActive(),
                 history.isProjectorEffect(),
                 history.getExclusivityGroup(),

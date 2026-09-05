@@ -39,6 +39,8 @@ public final class CapacityAddOnDto {
             @Min(1)
             private Integer secondaryUnitAmount;
 
+            private String currencyCode;
+
             @NotNull
             private BigDecimal supplyPrice;
 
@@ -50,6 +52,23 @@ public final class CapacityAddOnDto {
 
             @NotNull
             private BigDecimal discountValue;
+
+            private String taxCode;
+
+            /** 기존 KRW API 호출/테스트 호환 생성자. */
+            public CreateCapacityAddOn(
+                    String capacityType,
+                    Integer unitAmount,
+                    String secondaryCapacityType,
+                    Integer secondaryUnitAmount,
+                    BigDecimal supplyPrice,
+                    BigDecimal salePrice,
+                    String discountType,
+                    BigDecimal discountValue
+            ) {
+                this(capacityType, unitAmount, secondaryCapacityType, secondaryUnitAmount, null,
+                        supplyPrice, salePrice, discountType, discountValue, null);
+            }
         }
 
         /**
@@ -71,6 +90,8 @@ public final class CapacityAddOnDto {
             @Min(1)
             private Integer secondaryUnitAmount;
 
+            private String currencyCode;
+
             @NotNull
             private BigDecimal supplyPrice;
 
@@ -83,9 +104,25 @@ public final class CapacityAddOnDto {
             @NotNull
             private BigDecimal discountValue;
 
+            private String taxCode;
+
             /** 사용여부. false면 새 추가구매 대상에서 제외된다. */
             @NotNull
             private Boolean active;
+
+            /** 기존 KRW API 호출/테스트 호환 생성자. */
+            public UpdateCapacityAddOn(
+                    Integer unitAmount,
+                    Integer secondaryUnitAmount,
+                    BigDecimal supplyPrice,
+                    BigDecimal salePrice,
+                    String discountType,
+                    BigDecimal discountValue,
+                    Boolean active
+            ) {
+                this(unitAmount, secondaryUnitAmount, null, supplyPrice, salePrice,
+                        discountType, discountValue, null, active);
+            }
         }
     }
 
@@ -104,10 +141,12 @@ public final class CapacityAddOnDto {
             /** 묶음 상품이면 두 번째로 늘어나는 용량 유형. 단일 상품이면 null. */
             private final String secondaryCapacityType;
             private final Integer secondaryUnitAmount;
+            private final String currencyCode;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final String taxCode;
             private final Boolean active;
             /** 이 상품을 승인받아 쓰는 구매 건수 — 카탈로그 관리 화면의 "사용 중" 경고용. */
             private final Long usageCount;
@@ -124,10 +163,12 @@ public final class CapacityAddOnDto {
             private final Integer unitAmount;
             private final String secondaryCapacityType;
             private final Integer secondaryUnitAmount;
+            private final String currencyCode;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final String taxCode;
             private final Boolean active;
             private final Long createdBy;
             private final LocalDateTime createdAt;

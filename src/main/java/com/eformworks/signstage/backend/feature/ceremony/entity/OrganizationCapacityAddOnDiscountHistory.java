@@ -18,6 +18,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * 조직×용량 추가구매 상품 할인 오버라이드({@link OrganizationCapacityAddOnDiscount})의 변경
@@ -28,6 +29,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "organization_capacity_addon_discount_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class OrganizationCapacityAddOnDiscountHistory extends BaseEntity {
 
     @Id

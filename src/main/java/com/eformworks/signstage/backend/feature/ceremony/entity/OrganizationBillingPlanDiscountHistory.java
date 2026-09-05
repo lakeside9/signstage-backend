@@ -18,6 +18,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * 조직×플랜 할인 오버라이드({@link OrganizationBillingPlanDiscount})의 변경 이력. append-only다
@@ -36,6 +37,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "organization_billing_plan_discount_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class OrganizationBillingPlanDiscountHistory extends BaseEntity {
 
     @Id

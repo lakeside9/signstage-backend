@@ -2,6 +2,8 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
+import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CapacityAddOnDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
@@ -46,7 +48,9 @@ import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminC
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -93,6 +97,8 @@ public class CeremonyService {
     private final UserRepository userRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     private final OrganizationDiscountService organizationDiscountService;
+    private final MoneyCalculator moneyCalculator;
+    private final TaxPolicyResolver taxPolicyResolver;
 
     @Transactional
     public CeremonyDto.Response.CeremonySummary createCeremony(
@@ -107,6 +113,7 @@ public class CeremonyService {
         BillingPlan plan = billingPlanRepository.findById(request.getBillingPlanId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
         checkPlanActive(plan);
+        checkCurrencyMatches(organization.getBillingCurrencyCode(), plan.getCurrencyCode());
 
         Ceremony ceremony = Ceremony.builder()
                 .organization(organization)
@@ -216,6 +223,7 @@ public class CeremonyService {
         BillingPlan newPlan = billingPlanRepository.findById(request.getBillingPlanId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
         checkPlanActive(newPlan);
+        checkCurrencyMatches(ceremony.getCurrencyCode(), newPlan.getCurrencyCode());
 
         ceremony.changePlan(newPlan);
         recordPlanHistory(ceremony, newPlan);
@@ -275,6 +283,7 @@ public class CeremonyService {
         if (!addOn.isActive()) {
             throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_INACTIVE);
         }
+        checkCurrencyMatches(ceremony.getCurrencyCode(), addOn.getCurrencyCode());
         // 안 A(구매 가능 상품 큐레이션) — 이 Ceremony의 플랜에서 구매 후보로 열어두지 않은 상품은
         // 거부한다. 플랜이 없는 행사(4.8절 예외)는 제한 없이 전부 허용한다 — signstage-docs
         // business/optional-feature-display-scope-and-plan-capacity-addon-review.md 5장.
@@ -335,6 +344,7 @@ public class CeremonyService {
         if (!feature.isActive()) {
             throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_INACTIVE);
         }
+        checkCurrencyMatches(ceremony.getCurrencyCode(), feature.getCurrencyCode());
 
         boolean alreadyRequested = ceremonyOptionalFeaturePurchaseRepository.existsByCeremonyIdAndOptionalFeatureIdAndStatusIn(
                 ceremonyId, feature.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
@@ -414,10 +424,12 @@ public class CeremonyService {
                             feature.getId(),
                             feature.getCode().name(),
                             purchase != null ? purchase.getPurchasedName() : feature.getName(),
+                            purchase != null ? purchase.getCurrencyCode() : feature.getCurrencyCode(),
                             feature.getSupplyPrice(),
                             purchase != null ? purchase.getPurchasedSalePrice() : feature.getSalePrice(),
                             purchase != null ? purchase.getPurchasedDiscountType().name() : feature.getDiscountType().name(),
                             purchase != null ? purchase.getPurchasedDiscountValue() : feature.getDiscountValue(),
+                            purchase != null ? purchase.getPurchasedTaxCode() : feature.getTaxCode(),
                             feature.isActive(),
                             feature.isProjectorEffect(),
                             feature.getExclusivityGroup(),
@@ -833,36 +845,63 @@ public class CeremonyService {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
+        CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
         BigDecimal planApplied = BigDecimal.ZERO;
+        List<TaxableLine> taxableLines = new ArrayList<>();
         BillingPlan plan = ceremony.getBillingPlan();
         if (plan != null) {
             Optional<CeremonyPlanHistory> snapshot =
                     ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
             planApplied = snapshot
-                    .map(history -> applyDiscount(history.getPlanSalePrice(), history.getPlanDiscountType(), history.getPlanDiscountValue()))
-                    .orElseGet(() -> applyDiscount(plan.getSalePrice(), plan.getDiscountType(), plan.getDiscountValue()));
+                    .map(history -> moneyCalculator.applyDiscount(
+                            history.getPlanSalePrice(), history.getPlanDiscountType(), history.getPlanDiscountValue(), currencyPolicy
+                    ))
+                    .orElseGet(() -> moneyCalculator.applyDiscount(
+                            plan.getSalePrice(), plan.getDiscountType(), plan.getDiscountValue(), currencyPolicy
+                    ));
+            String planTaxCode = snapshot.map(CeremonyPlanHistory::getTaxCode).orElse(plan.getTaxCode());
+            taxableLines.add(new TaxableLine(planApplied, planTaxCode));
         }
 
-        BigDecimal capacityTotal = ceremonyCapacityPurchaseRepository
+        List<TaxableLine> capacityLines = ceremonyCapacityPurchaseRepository
                 .findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
                 .filter(purchase -> purchase.getStatus() == PurchaseStatus.APPROVED)
-                .map(purchase -> applyDiscount(
-                        purchase.getPurchasedSalePrice().multiply(BigDecimal.valueOf(purchase.getQuantity())),
-                        purchase.getPurchasedDiscountType(),
-                        purchase.getPurchasedDiscountValue()
+                .map(purchase -> new TaxableLine(
+                        moneyCalculator.applyDiscount(
+                                purchase.getPurchasedSalePrice().multiply(BigDecimal.valueOf(purchase.getQuantity())),
+                                purchase.getPurchasedDiscountType(),
+                                purchase.getPurchasedDiscountValue(),
+                                currencyPolicy
+                        ),
+                        purchase.getPurchasedTaxCode()
                 ))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .toList();
+        taxableLines.addAll(capacityLines);
+        BigDecimal capacityTotal = capacityLines.stream().map(TaxableLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal featureTotal = ceremonyOptionalFeaturePurchaseRepository
+        List<TaxableLine> featureLines = ceremonyOptionalFeaturePurchaseRepository
                 .findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
                 .filter(purchase -> purchase.getStatus() == PurchaseStatus.APPROVED)
-                .map(purchase -> applyDiscount(
-                        purchase.getPurchasedSalePrice(), purchase.getPurchasedDiscountType(), purchase.getPurchasedDiscountValue()
+                .map(purchase -> new TaxableLine(
+                        moneyCalculator.applyDiscount(
+                                purchase.getPurchasedSalePrice(), purchase.getPurchasedDiscountType(),
+                                purchase.getPurchasedDiscountValue(), currencyPolicy
+                        ),
+                        purchase.getPurchasedTaxCode()
                 ))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .toList();
+        taxableLines.addAll(featureLines);
+        BigDecimal featureTotal = featureLines.stream().map(TaxableLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal subtotal = planApplied.add(capacityTotal).add(featureTotal);
-        BigDecimal finalTotal = applyDiscount(subtotal, ceremony.getFinalDiscountType(), ceremony.getFinalDiscountValue());
+        BigDecimal netAmount = moneyCalculator.applyDiscount(
+                subtotal, ceremony.getFinalDiscountType(), ceremony.getFinalDiscountValue(), currencyPolicy
+        );
+        BigDecimal taxAmount = calculateLineRoundedTax(
+                taxableLines, subtotal, netAmount, currencyPolicy,
+                LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()))
+        );
+        BigDecimal grossAmount = moneyCalculator.normalize(netAmount.add(taxAmount), currencyPolicy);
 
         return new CeremonyDto.Response.EstimatedTotal(
                 planApplied,
@@ -871,16 +910,46 @@ public class CeremonyService {
                 subtotal,
                 ceremony.getFinalDiscountType().name(),
                 ceremony.getFinalDiscountValue(),
-                finalTotal
+                ceremony.getCurrencyCode(),
+                ceremony.getCurrencyFractionDigits(),
+                netAmount,
+                taxAmount,
+                grossAmount,
+                grossAmount
         );
     }
 
-    /** 정률(PERCENT)/정액(FIXED_AMOUNT) 할인을 적용한다 — 결과가 0 밑으로 내려가지 않게 막는다. */
-    private BigDecimal applyDiscount(BigDecimal amount, DiscountType discountType, BigDecimal discountValue) {
-        BigDecimal discount = discountType == DiscountType.PERCENT
-                ? amount.multiply(discountValue).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
-                : discountValue;
-        return amount.subtract(discount).max(BigDecimal.ZERO);
+    /** 행사 최종 할인 후 금액을 실제 구매 라인에 비례 배분하고 유효한 세금 정책으로 라인별 반올림한다. */
+    private BigDecimal calculateLineRoundedTax(
+            List<TaxableLine> lines,
+            BigDecimal subtotal,
+            BigDecimal netAmount,
+            CurrencyPolicy currencyPolicy,
+            LocalDate taxPointDate
+    ) {
+        if (subtotal.signum() == 0) {
+            return moneyCalculator.normalize(BigDecimal.ZERO, currencyPolicy);
+        }
+        BigDecimal allocated = BigDecimal.ZERO;
+        BigDecimal tax = BigDecimal.ZERO;
+        for (int index = 0; index < lines.size(); index++) {
+            BigDecimal lineNet;
+            if (index == lines.size() - 1) {
+                lineNet = netAmount.subtract(allocated);
+            } else {
+                lineNet = moneyCalculator.normalize(
+                        lines.get(index).amount().multiply(netAmount).divide(subtotal, 12, currencyPolicy.roundingMode()),
+                        currencyPolicy
+                );
+                allocated = allocated.add(lineNet);
+            }
+            BigDecimal rate = taxPolicyResolver.resolve("KR", lines.get(index).taxCode(), taxPointDate).getRatePercent();
+            tax = tax.add(moneyCalculator.calculateExclusiveTax(lineNet, rate, currencyPolicy));
+        }
+        return moneyCalculator.normalize(tax, currencyPolicy);
+    }
+
+    private record TaxableLine(BigDecimal amount, String taxCode) {
     }
 
     /**
@@ -1032,10 +1101,12 @@ public class CeremonyService {
                 addOn.getUnitAmount(),
                 addOn.getSecondaryCapacityType() == null ? null : addOn.getSecondaryCapacityType().name(),
                 addOn.getSecondaryUnitAmount(),
+                addOn.getCurrencyCode(),
                 addOn.getSupplyPrice(),
                 addOn.getSalePrice(),
                 addOn.getDiscountType().name(),
                 addOn.getDiscountValue(),
+                addOn.getTaxCode(),
                 addOn.isActive(),
                 ceremonyCapacityPurchaseRepository.countByCapacityAddOnIdAndStatus(addOn.getId(), PurchaseStatus.APPROVED),
                 addOn.getCreatedAt()
@@ -1054,6 +1125,12 @@ public class CeremonyService {
         }
     }
 
+    private void checkCurrencyMatches(String ceremonyCurrencyCode, String itemCurrencyCode) {
+        if (!Objects.equals(ceremonyCurrencyCode, itemCurrencyCode)) {
+            throw new ApplicationException(CeremonyErrorCode.CURRENCY_MISMATCH);
+        }
+    }
+
     private Organization findOrganizationOrThrow(Long organizationId) {
         return organizationRepository.findById(organizationId)
                 .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_NOT_FOUND));
@@ -1064,6 +1141,9 @@ public class CeremonyService {
                 ceremony.getId(),
                 ceremony.getOrganization().getId(),
                 ceremony.getBillingPlan() != null ? ceremony.getBillingPlan().getId() : null,
+                ceremony.getCurrencyCode(),
+                ceremony.getCurrencyFractionDigits(),
+                ceremony.getTimeZoneId(),
                 ceremony.getTitle(),
                 ceremony.getDescription(),
                 ceremony.getStatus().name(),
@@ -1085,10 +1165,12 @@ public class CeremonyService {
                 history.getId(),
                 history.getBillingPlan().getId(),
                 history.getPlanName(),
+                history.getCurrencyCode(),
                 history.getPlanSupplyPrice(),
                 history.getPlanSalePrice(),
                 history.getPlanDiscountType().name(),
                 history.getPlanDiscountValue(),
+                history.getTaxCode(),
                 history.getPlanMaxSigners(),
                 history.getPlanMaxTemplates(),
                 history.getPlanMaxTestEvents(),
@@ -1107,9 +1189,11 @@ public class CeremonyService {
                 purchase.getQuantity(),
                 purchase.getPurchasedUnitAmount(),
                 purchase.getPurchasedSecondaryUnitAmount(),
+                purchase.getCurrencyCode(),
                 purchase.getPurchasedSalePrice(),
                 purchase.getPurchasedDiscountType().name(),
                 purchase.getPurchasedDiscountValue(),
+                purchase.getPurchasedTaxCode(),
                 purchase.getStatus().name(),
                 purchase.getRejectionReason(),
                 purchase.getReviewedAt(),
@@ -1125,9 +1209,11 @@ public class CeremonyService {
                 purchase.getCeremony().getId(),
                 purchase.getOptionalFeature().getId(),
                 purchase.getPurchasedName(),
+                purchase.getCurrencyCode(),
                 purchase.getPurchasedSalePrice(),
                 purchase.getPurchasedDiscountType().name(),
                 purchase.getPurchasedDiscountValue(),
+                purchase.getPurchasedTaxCode(),
                 purchase.getStatus().name(),
                 purchase.getRejectionReason(),
                 purchase.getReviewedAt(),

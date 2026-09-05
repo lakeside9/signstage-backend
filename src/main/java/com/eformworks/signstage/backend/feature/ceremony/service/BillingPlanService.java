@@ -71,10 +71,12 @@ public class BillingPlanService {
 
         BillingPlan plan = BillingPlan.builder()
                 .name(request.getName())
+                .currencyCode(request.getCurrencyCode())
                 .supplyPrice(request.getSupplyPrice())
                 .salePrice(request.getSalePrice())
                 .discountType(parseDiscountType(request.getDiscountType()))
                 .discountValue(request.getDiscountValue())
+                .taxCode(request.getTaxCode())
                 .maxSigners(request.getMaxSigners())
                 .maxTemplates(request.getMaxTemplates())
                 .maxTestEvents(request.getMaxTestEvents())
@@ -144,10 +146,12 @@ public class BillingPlanService {
 
         plan.updateInfo(
                 request.getName(),
+                request.getCurrencyCode(),
                 request.getSupplyPrice(),
                 request.getSalePrice(),
                 parseDiscountType(request.getDiscountType()),
                 request.getDiscountValue(),
+                request.getTaxCode(),
                 request.getMaxSigners(),
                 request.getMaxTemplates(),
                 request.getMaxTestEvents(),
@@ -253,10 +257,12 @@ public class BillingPlanService {
         return new BillingPlanDto.Response.BillingPlanSummary(
                 plan.getId(),
                 plan.getName(),
+                plan.getCurrencyCode(),
                 plan.getSupplyPrice(),
                 plan.getSalePrice(),
                 plan.getDiscountType().name(),
                 plan.getDiscountValue(),
+                plan.getTaxCode(),
                 plan.getMaxSigners(),
                 plan.getMaxTemplates(),
                 plan.getMaxTestEvents(),
@@ -274,10 +280,12 @@ public class BillingPlanService {
         return new BillingPlanDto.Response.BillingPlanHistorySummary(
                 history.getId(),
                 history.getName(),
+                history.getCurrencyCode(),
                 history.getSupplyPrice(),
                 history.getSalePrice(),
                 history.getDiscountType().name(),
                 history.getDiscountValue(),
+                history.getTaxCode(),
                 history.getMaxSigners(),
                 history.getMaxTemplates(),
                 history.getMaxTestEvents(),

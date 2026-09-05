@@ -31,8 +31,14 @@ public final class OrganizationDto {
             @NotBlank
             private String name;
 
+            private String defaultLanguageCode;
+
             @NotBlank
             private String defaultLocale;
+
+            private String defaultTimeZoneId;
+
+            private String billingCurrencyCode;
         }
     }
 
@@ -48,7 +54,10 @@ public final class OrganizationDto {
             private final String name;
             private final String code;
             private final String status;
+            private final String defaultLanguageCode;
             private final String defaultLocale;
+            private final String defaultTimeZoneId;
+            private final String billingCurrencyCode;
             private final LocalDateTime createdAt;
             /** 호출한 사용자가 이 조직에서 가진 역할(OWNER/ADMIN/OPERATOR/VIEWER). 조직 설정 수정 가능 여부를 프런트에서 판단하는 데 쓴다. */
             private final String myRole;
@@ -68,7 +77,10 @@ public final class OrganizationDto {
             private final String name;
             private final String code;
             private final String status;
+            private final String defaultLanguageCode;
             private final String defaultLocale;
+            private final String defaultTimeZoneId;
+            private final String billingCurrencyCode;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }

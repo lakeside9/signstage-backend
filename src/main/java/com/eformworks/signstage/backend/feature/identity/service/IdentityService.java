@@ -115,7 +115,9 @@ public class IdentityService {
                 .name(request.getName())
                 .email(request.getEmail())
                 .phone(request.getPhone())
+                .languageCode(request.getLanguageCode())
                 .locale(request.getLocale())
+                .timeZoneId(request.getTimeZoneId())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .status(UserStatus.PENDING)
                 .build();
@@ -161,7 +163,18 @@ public class IdentityService {
             throw new ApplicationException(IdentityErrorCode.DUPLICATE_EMAIL);
         }
 
-        user.changeProfile(request.getName(), request.getEmail(), request.getPhone(), request.getLocale());
+        try {
+            user.changeProfile(
+                    request.getName(),
+                    request.getEmail(),
+                    request.getPhone(),
+                    request.getLanguageCode(),
+                    request.getLocale(),
+                    request.getTimeZoneId()
+            );
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(com.eformworks.signstage.backend.core.error.CommonErrorCode.INVALID_REQUEST);
+        }
         recordUserHistory(user);
         return toMeResponse(user);
     }
@@ -197,7 +210,9 @@ public class IdentityService {
                 user.getName(),
                 user.getEmail(),
                 user.getPhone(),
+                user.getLanguageCode(),
                 user.getLocale(),
+                user.getTimeZoneId(),
                 user.getPlatformRole() != null ? user.getPlatformRole().name() : null
         );
     }

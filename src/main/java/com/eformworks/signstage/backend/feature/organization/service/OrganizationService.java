@@ -60,7 +60,17 @@ public class OrganizationService {
         if (member.getRole() != MemberRole.OWNER) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
-        organization.updateInfo(request.getName(), request.getDefaultLocale());
+        try {
+            organization.updateInfo(
+                    request.getName(),
+                    request.getDefaultLanguageCode(),
+                    request.getDefaultLocale(),
+                    request.getDefaultTimeZoneId(),
+                    request.getBillingCurrencyCode()
+            );
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
         recordOrganizationHistory(organization);
         return toOrganizationResponse(organization, member.getRole());
     }
@@ -91,7 +101,10 @@ public class OrganizationService {
                 history.getName(),
                 history.getCode(),
                 history.getStatus().name(),
+                history.getDefaultLanguageCode(),
                 history.getDefaultLocale(),
+                history.getDefaultTimeZoneId(),
+                history.getBillingCurrencyCode(),
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );
@@ -113,7 +126,10 @@ public class OrganizationService {
                 organization.getName(),
                 organization.getCode(),
                 organization.getStatus().name(),
+                organization.getDefaultLanguageCode(),
                 organization.getDefaultLocale(),
+                organization.getDefaultTimeZoneId(),
+                organization.getBillingCurrencyCode(),
                 organization.getCreatedAt(),
                 myRole.name()
         );

@@ -17,6 +17,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * 과금 플랜(BillingPlan)의 값/사용여부 변경 이력. append-only다 — 수정/삭제 메서드를 두지
@@ -29,6 +30,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "billing_plan_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class BillingPlanHistory extends BaseEntity {
 
     @Id
@@ -42,18 +44,24 @@ public class BillingPlanHistory extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "supply_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
+    @Column(name = "supply_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal supplyPrice;
 
-    @Column(name = "sale_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "sale_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal salePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "discount_type", nullable = false, length = 20)
     private DiscountType discountType;
 
-    @Column(name = "discount_value", nullable = false, precision = 12, scale = 2)
+    @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal discountValue;
+
+    @Column(name = "tax_code", nullable = false, length = 50)
+    private String taxCode;
 
     @Column(name = "max_signers", nullable = false)
     private Integer maxSigners;
@@ -77,10 +85,12 @@ public class BillingPlanHistory extends BaseEntity {
     private BillingPlanHistory(BillingPlan billingPlan) {
         this.billingPlan = billingPlan;
         this.name = billingPlan.getName();
+        this.currencyCode = billingPlan.getCurrencyCode();
         this.supplyPrice = billingPlan.getSupplyPrice();
         this.salePrice = billingPlan.getSalePrice();
         this.discountType = billingPlan.getDiscountType();
         this.discountValue = billingPlan.getDiscountValue();
+        this.taxCode = billingPlan.getTaxCode();
         this.maxSigners = billingPlan.getMaxSigners();
         this.maxTemplates = billingPlan.getMaxTemplates();
         this.maxTestEvents = billingPlan.getMaxTestEvents();

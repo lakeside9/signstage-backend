@@ -144,6 +144,9 @@ public final class CeremonyDto {
             private final Long id;
             private final Long organizationId;
             private final Long billingPlanId;
+            private final String currencyCode;
+            private final Short currencyFractionDigits;
+            private final String timeZoneId;
             private final String title;
             private final String description;
             private final String status;
@@ -170,9 +173,11 @@ public final class CeremonyDto {
             private final Integer purchasedUnitAmount;
             /** 묶음 상품(예: "서명자+태블릿")이었을 때만 값이 있다 — 구매 시점 보조 용량 단가 스냅샷. */
             private final Integer purchasedSecondaryUnitAmount;
+            private final String currencyCode;
             private final BigDecimal purchasedSalePrice;
             private final String purchasedDiscountType;
             private final BigDecimal purchasedDiscountValue;
+            private final String purchasedTaxCode;
             private final String status;
             private final String rejectionReason;
             private final LocalDateTime reviewedAt;
@@ -187,9 +192,11 @@ public final class CeremonyDto {
             private final Long ceremonyId;
             private final Long optionalFeatureId;
             private final String purchasedName;
+            private final String currencyCode;
             private final BigDecimal purchasedSalePrice;
             private final String purchasedDiscountType;
             private final BigDecimal purchasedDiscountValue;
+            private final String purchasedTaxCode;
             private final String status;
             private final String rejectionReason;
             private final LocalDateTime reviewedAt;
@@ -228,6 +235,11 @@ public final class CeremonyDto {
             private final BigDecimal subtotal;
             private final String finalDiscountType;
             private final BigDecimal finalDiscountValue;
+            private final String currencyCode;
+            private final Short fractionDigits;
+            private final BigDecimal netAmount;
+            private final BigDecimal taxAmount;
+            private final BigDecimal grossAmount;
             private final BigDecimal finalTotal;
         }
 
@@ -243,10 +255,12 @@ public final class CeremonyDto {
             private final Long id;
             private final Long billingPlanId;
             private final String planName;
+            private final String currencyCode;
             private final BigDecimal planSupplyPrice;
             private final BigDecimal planSalePrice;
             private final String planDiscountType;
             private final BigDecimal planDiscountValue;
+            private final String taxCode;
             private final Integer planMaxSigners;
             private final Integer planMaxTemplates;
             private final Integer planMaxTestEvents;

@@ -48,6 +48,9 @@ public class CeremonyCapacityPurchase extends BaseEntity {
     @Column(nullable = false)
     private Integer quantity;
 
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
     @Column(name = "purchased_unit_amount", nullable = false)
     private Integer purchasedUnitAmount;
 
@@ -58,15 +61,18 @@ public class CeremonyCapacityPurchase extends BaseEntity {
     @Column(name = "purchased_secondary_unit_amount")
     private Integer purchasedSecondaryUnitAmount;
 
-    @Column(name = "purchased_sale_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "purchased_sale_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal purchasedSalePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "purchased_discount_type", nullable = false, length = 20)
     private DiscountType purchasedDiscountType;
 
-    @Column(name = "purchased_discount_value", nullable = false, precision = 12, scale = 2)
+    @Column(name = "purchased_discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal purchasedDiscountValue;
+
+    @Column(name = "purchased_tax_code", nullable = false, length = 50)
+    private String purchasedTaxCode;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -96,11 +102,13 @@ public class CeremonyCapacityPurchase extends BaseEntity {
         this.ceremony = ceremony;
         this.capacityAddOn = capacityAddOn;
         this.quantity = quantity;
+        this.currencyCode = capacityAddOn.getCurrencyCode();
         this.purchasedUnitAmount = purchasedUnitAmount;
         this.purchasedSecondaryUnitAmount = purchasedSecondaryUnitAmount;
         this.purchasedSalePrice = purchasedSalePrice;
         this.purchasedDiscountType = purchasedDiscountType;
         this.purchasedDiscountValue = purchasedDiscountValue;
+        this.purchasedTaxCode = capacityAddOn.getTaxCode();
         this.status = PurchaseStatus.PENDING;
     }
 

@@ -56,10 +56,12 @@ public class CapacityAddOnService {
                 .unitAmount(request.getUnitAmount())
                 .secondaryCapacityType(secondaryCapacityType)
                 .secondaryUnitAmount(secondaryCapacityType == null ? null : request.getSecondaryUnitAmount())
+                .currencyCode(request.getCurrencyCode())
                 .supplyPrice(request.getSupplyPrice())
                 .salePrice(request.getSalePrice())
                 .discountType(parseDiscountType(request.getDiscountType()))
                 .discountValue(request.getDiscountValue())
+                .taxCode(request.getTaxCode())
                 .build();
         capacityAddOnRepository.save(capacityAddOn);
         recordAddOnHistory(capacityAddOn);
@@ -106,10 +108,12 @@ public class CapacityAddOnService {
         capacityAddOn.updateInfo(
                 request.getUnitAmount(),
                 secondaryUnitAmount,
+                request.getCurrencyCode(),
                 request.getSupplyPrice(),
                 request.getSalePrice(),
                 parseDiscountType(request.getDiscountType()),
                 request.getDiscountValue(),
+                request.getTaxCode(),
                 request.getActive()
         );
         recordAddOnHistory(capacityAddOn);
@@ -189,10 +193,12 @@ public class CapacityAddOnService {
                 capacityAddOn.getUnitAmount(),
                 capacityAddOn.getSecondaryCapacityType() == null ? null : capacityAddOn.getSecondaryCapacityType().name(),
                 capacityAddOn.getSecondaryUnitAmount(),
+                capacityAddOn.getCurrencyCode(),
                 capacityAddOn.getSupplyPrice(),
                 capacityAddOn.getSalePrice(),
                 capacityAddOn.getDiscountType().name(),
                 capacityAddOn.getDiscountValue(),
+                capacityAddOn.getTaxCode(),
                 capacityAddOn.isActive(),
                 ceremonyCapacityPurchaseRepository.countByCapacityAddOnIdAndStatus(
                         capacityAddOn.getId(), PurchaseStatus.APPROVED
@@ -208,10 +214,12 @@ public class CapacityAddOnService {
                 history.getUnitAmount(),
                 history.getSecondaryCapacityType() == null ? null : history.getSecondaryCapacityType().name(),
                 history.getSecondaryUnitAmount(),
+                history.getCurrencyCode(),
                 history.getSupplyPrice(),
                 history.getSalePrice(),
                 history.getDiscountType().name(),
                 history.getDiscountValue(),
+                history.getTaxCode(),
                 history.isActive(),
                 history.getCreatedBy(),
                 history.getCreatedAt()

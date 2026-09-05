@@ -84,7 +84,9 @@ public class PlatformAdminUserService {
                 .name(request.getName())
                 .email(request.getEmail())
                 .phone(request.getPhone())
+                .languageCode(request.getLanguageCode())
                 .locale(request.getLocale())
+                .timeZoneId(request.getTimeZoneId())
                 .password(passwordEncoder.encode(temporaryPassword))
                 .status(UserStatus.ACTIVE)
                 .passwordResetRequired(true)
@@ -252,9 +254,8 @@ public class PlatformAdminUserService {
         String unusablePasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
         user.withdraw(unusablePasswordHash);
         activeMemberships.forEach(Member::remove);
-        // 이미 쌓여 있던 이력 행의 PII도 함께 지운다 — 그러지 않으면 이력 테이블이 방금 지운
-        // PII를 되살릴 수 있는 우회로가 된다(UserHistoryRepository#maskPiiForUser 참고).
-        userHistoryRepository.maskPiiForUser(userId, user.getName());
+        // user_histories는 업무 트랜잭션에서 기존 행을 고치지 않는 append-only 스냅샷이다.
+        // 과거 이력의 PII 보존기간 만료 처리는 이 탈퇴 트랜잭션이 아니라 별도 정리 배치가 맡는다.
         recordUserHistory(user);
 
         auditLogRecorder.record(actingUserId, PlatformAdminAction.FORCE_WITHDRAW_USER, userId, null, "loginId was " + originalLoginId);
@@ -285,7 +286,9 @@ public class PlatformAdminUserService {
                 history.getName(),
                 history.getEmail(),
                 history.getPhone(),
+                history.getLanguageCode(),
                 history.getLocale(),
+                history.getTimeZoneId(),
                 history.getStatus().name(),
                 history.getPlatformRole() != null ? history.getPlatformRole().name() : null,
                 history.isPasswordResetRequired(),
@@ -471,7 +474,9 @@ public class PlatformAdminUserService {
                 user.getName(),
                 user.getEmail(),
                 user.getPhone(),
+                user.getLanguageCode(),
                 user.getLocale(),
+                user.getTimeZoneId(),
                 user.getStatus().name(),
                 user.getPlatformRole() != null ? user.getPlatformRole().name() : null,
                 user.isLocked(),

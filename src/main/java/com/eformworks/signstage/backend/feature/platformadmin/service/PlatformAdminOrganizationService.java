@@ -207,7 +207,13 @@ public class PlatformAdminOrganizationService {
                 + ", name: " + organization.getName() + " -> " + request.getOrganizationName()
                 + ", defaultLocale: " + organization.getDefaultLocale() + " -> " + request.getDefaultLocale();
 
-        organization.updateInfo(request.getOrganizationName(), request.getDefaultLocale());
+        organization.updateInfo(
+                request.getOrganizationName(),
+                organization.getDefaultLanguageCode(),
+                request.getDefaultLocale(),
+                organization.getDefaultTimeZoneId(),
+                organization.getBillingCurrencyCode()
+        );
         recordOrganizationHistory(organization);
 
         auditLogRecorder.record(actingUserId, PlatformAdminAction.UPDATE_ORGANIZATION_INFO, null, organizationId, detail);
@@ -236,7 +242,10 @@ public class PlatformAdminOrganizationService {
                 history.getName(),
                 history.getCode(),
                 history.getStatus().name(),
+                history.getDefaultLanguageCode(),
                 history.getDefaultLocale(),
+                history.getDefaultTimeZoneId(),
+                history.getBillingCurrencyCode(),
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );
