@@ -20,9 +20,9 @@ import com.eformworks.signstage.backend.feature.organization.entity.Organization
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminOrganizationDto;
 import com.eformworks.signstage.backend.feature.platformadmin.error.PlatformAdminErrorCode;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -42,8 +42,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PlatformAdminOrganizationService {
 
-    private static final Set<String> ORGANIZATION_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
-
     /** 한 사용자가 OWNER로 보유할 수 있는 ACTIVE 조직 최대 개수(organization-creation-approval-review.md 7.3절). */
     static final int MAX_OWNED_ORGANIZATIONS = 10;
 
@@ -53,6 +51,7 @@ public class PlatformAdminOrganizationService {
     private final OrganizationCreationRequestRepository organizationCreationRequestRepository;
     private final OrganizationHistoryRepository organizationHistoryRepository;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
+    private final RolePermissionService rolePermissionService;
 
     /**
      * 관리자가 조직을 직접 만든다. 계정을 새로 만들지 않고 {@code ownerLoginId}로 지정한 기존 사용자를
@@ -69,9 +68,7 @@ public class PlatformAdminOrganizationService {
             String actingPlatformRole,
             PlatformAdminOrganizationDto.Request.CreateOrganization request
     ) {
-        if (!ORGANIZATION_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_PARTNER_CREATE");
         if (organizationRepository.existsByCode(request.getCode())) {
             throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_CODE_DUPLICATE);
         }
@@ -168,9 +165,7 @@ public class PlatformAdminOrganizationService {
             String actingPlatformRole,
             PlatformAdminOrganizationDto.Request.UpdateStatus request
     ) {
-        if (!ORGANIZATION_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_PARTNER_STATUS_CHANGE");
 
         Organization organization = findOrganizationOrThrow(organizationId);
         OrganizationStatus previousStatus = organization.getStatus();
@@ -198,9 +193,7 @@ public class PlatformAdminOrganizationService {
             String actingPlatformRole,
             PlatformAdminOrganizationDto.Request.UpdateOrganizationInfo request
     ) {
-        if (!ORGANIZATION_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_PARTNER_INFO_EDIT");
 
         Organization organization = findOrganizationOrThrow(organizationId);
         String detail = "organizationId=" + organizationId
@@ -230,6 +223,13 @@ public class PlatformAdminOrganizationService {
         return organizationHistoryRepository.findAllByOrganizationIdOrderByCreatedAtDesc(organizationId).stream()
                 .map(this::toHistorySummary)
                 .toList();
+    }
+
+    /** signstage-docs business/menu-and-action-permission-management-review.md 10장 참고. */
+    private void checkAllowed(String actingPlatformRole, String permissionKey) {
+        if (!rolePermissionService.isAllowed(actingPlatformRole, permissionKey)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
     }
 
     private void recordOrganizationHistory(Organization organization) {

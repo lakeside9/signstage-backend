@@ -22,8 +22,8 @@ import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminL
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminUserDto;
 import com.eformworks.signstage.backend.feature.platformadmin.error.PlatformAdminErrorCode;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -44,9 +44,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PlatformAdminUserService {
 
-    /** 회원 상태 변경/잠금 해제/강제 비밀번호 재설정 등 "제어" 기능에 공통으로 적용되는 최소 등급. */
-    private static final Set<String> MEMBER_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
-
     private final UserRepository userRepository;
     private final MemberRepository memberRepository;
     private final LoginHistoryRepository loginHistoryRepository;
@@ -54,6 +51,7 @@ public class PlatformAdminUserService {
     private final PasswordEncoder passwordEncoder;
     private final TemporaryPasswordGenerator temporaryPasswordGenerator;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
+    private final RolePermissionService rolePermissionService;
 
     /**
      * 관리자가 회원 계정을 직접 만든다. 회원가입(PENDING)→승인 경로를 거치지 않는 대신,
@@ -68,9 +66,7 @@ public class PlatformAdminUserService {
             String actingPlatformRole,
             PlatformAdminUserDto.Request.CreateUser request
     ) {
-        if (!MEMBER_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_MEMBER_FORCE_CONTROL");
         if (userRepository.existsByLoginId(request.getEmail())) {
             throw new ApplicationException(IdentityErrorCode.DUPLICATE_LOGIN_ID);
         }
@@ -147,9 +143,7 @@ public class PlatformAdminUserService {
             String actingPlatformRole,
             Pageable pageable
     ) {
-        if (!MEMBER_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_MEMBER_FORCE_CONTROL");
         findUserOrThrow(userId);
         return loginHistoryRepository.findAllByUserId(userId, pageable).map(this::toLoginHistoryEntry);
     }
@@ -225,7 +219,7 @@ public class PlatformAdminUserService {
      */
     @Transactional
     public PlatformAdminUserDto.Response.UserSummary forceWithdrawUser(Long userId, Long actingUserId, String actingPlatformRole) {
-        checkSuperRole(actingPlatformRole);
+        checkAllowed(actingPlatformRole, "ACTION_USER_FORCE_WITHDRAW");
         if (userId.equals(actingUserId)) {
             throw new ApplicationException(PlatformAdminErrorCode.CANNOT_TARGET_SELF);
         }
@@ -298,9 +292,7 @@ public class PlatformAdminUserService {
     }
 
     private void checkCanManage(Long targetUserId, Long actingUserId, String actingPlatformRole) {
-        if (!MEMBER_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_MEMBER_FORCE_CONTROL");
         if (targetUserId.equals(actingUserId)) {
             throw new ApplicationException(PlatformAdminErrorCode.CANNOT_TARGET_SELF);
         }
@@ -345,7 +337,7 @@ public class PlatformAdminUserService {
             String actingPlatformRole,
             PlatformAdminAccountDto.Request.CreateAccount request
     ) {
-        checkSuperRole(actingPlatformRole);
+        checkAllowed(actingPlatformRole, "ACTION_ACCOUNT_CREATE");
         if (userRepository.existsByLoginId(request.getLoginId())) {
             throw new ApplicationException(IdentityErrorCode.DUPLICATE_LOGIN_ID);
         }
@@ -387,7 +379,7 @@ public class PlatformAdminUserService {
             String actingPlatformRole,
             PlatformAdminAccountDto.Request.UpdateRole request
     ) {
-        checkSuperRole(actingPlatformRole);
+        checkAllowed(actingPlatformRole, "ACTION_ACCOUNT_ROLE_CHANGE");
         if (userId.equals(actingUserId)) {
             throw new ApplicationException(PlatformAdminErrorCode.CANNOT_TARGET_SELF);
         }
@@ -411,7 +403,7 @@ public class PlatformAdminUserService {
     /** platform_role만 비워 일반 사용자로 되돌린다. 계정 자체(status)는 건드리지 않는다. */
     @Transactional
     public PlatformAdminUserDto.Response.UserSummary revokeAccount(Long userId, Long actingUserId, String actingPlatformRole) {
-        checkSuperRole(actingPlatformRole);
+        checkAllowed(actingPlatformRole, "ACTION_ACCOUNT_REVOKE");
         if (userId.equals(actingUserId)) {
             throw new ApplicationException(PlatformAdminErrorCode.CANNOT_TARGET_SELF);
         }
@@ -430,8 +422,14 @@ public class PlatformAdminUserService {
         return toUserSummary(user);
     }
 
-    private void checkSuperRole(String actingPlatformRole) {
-        if (!"PLATFORM_SUPER".equals(actingPlatformRole)) {
+    /**
+     * signstage-docs business/menu-and-action-permission-management-review.md 10장 —
+     * 지금까지 서비스마다 흩어져 있던 {@code Set.of(...).contains(...)}/하드코딩된 등급 비교를
+     * {@code RolePermissionService.isAllowed(...)} 호출로 옮긴다. 실제 허용 역할은 배포가
+     * role_permissions에 시딩한 값을 따른다({@code V202609051200} 마이그레이션).
+     */
+    private void checkAllowed(String actingPlatformRole, String permissionKey) {
+        if (!rolePermissionService.isAllowed(actingPlatformRole, permissionKey)) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
     }

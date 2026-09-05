@@ -12,10 +12,10 @@ import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,12 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class CapacityAddOnService {
 
-    private static final Set<String> CATALOG_MANAGE_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
-
     private final CapacityAddOnRepository capacityAddOnRepository;
     private final CapacityAddOnHistoryRepository capacityAddOnHistoryRepository;
     private final CeremonyCapacityPurchaseRepository ceremonyCapacityPurchaseRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
+    private final RolePermissionService rolePermissionService;
 
     @Transactional
     public CapacityAddOnDto.Response.CapacityAddOnSummary createCapacityAddOn(
@@ -43,9 +42,7 @@ public class CapacityAddOnService {
             Long adminUserId,
             CapacityAddOnDto.Request.CreateCapacityAddOn request
     ) {
-        if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
 
         CapacityType capacityType = parseCapacityType(request.getCapacityType());
         CapacityType secondaryCapacityType = parseOptionalCapacityType(request.getSecondaryCapacityType());
@@ -84,9 +81,7 @@ public class CapacityAddOnService {
             Long adminUserId,
             CapacityAddOnDto.Request.UpdateCapacityAddOn request
     ) {
-        if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
 
         CapacityAddOn capacityAddOn = capacityAddOnRepository.findById(capacityAddOnId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND));
@@ -224,5 +219,12 @@ public class CapacityAddOnService {
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );
+    }
+
+    /** signstage-docs business/menu-and-action-permission-management-review.md 10장 참고. */
+    private void checkAllowed(String actingPlatformRole, String permissionKey) {
+        if (!rolePermissionService.isAllowed(actingPlatformRole, permissionKey)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
     }
 }
