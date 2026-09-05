@@ -39,6 +39,22 @@ class MessageTranslatorTest {
                 .isEqualTo("email 항목은 필수입니다.");
     }
 
+    /**
+     * 메뉴 label_key(예: navigation.dashboard)도 messages.properties에 있어야 한다 —
+     * 빠지면 MenuService가 번역 대신 키 문자열 자체를 그대로 내려줘 화면에 "navigation.dashboard"가
+     * 노출되는 결함이 났었다(2026-09-05 발견·수정).
+     */
+    @Test
+    void translatesMenuNavigationLabelKeys() {
+        LocaleContextHolder.setLocale(Locale.KOREAN);
+        assertThat(translator.translate("navigation.dashboard", Map.of(), "navigation.dashboard"))
+                .isEqualTo("대시보드");
+
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        assertThat(translator.translate("navigation.dashboard", Map.of(), "navigation.dashboard"))
+                .isEqualTo("Dashboard");
+    }
+
     private static ResourceBundleMessageSource messageSource() {
         ResourceBundleMessageSource source = new ResourceBundleMessageSource();
         source.setBasename("messages");
