@@ -17,7 +17,12 @@ public final class MenuDto {
         private Request() {
         }
 
-        /** 12장 결정 #10(2026-09-05) — 이름/경로/순서까지 관리 화면에서 편집 가능하다. */
+        /**
+         * 12장 결정 #10(2026-09-05) — 이름/경로/순서까지 관리 화면에서 편집 가능하다.
+         * 레벨 이동(상위↔하위, 2026-09-05 후속) 추가로 {@code parentMenuId}도 담는다 —
+         * {@code path}/{@code iconKey}/{@code displayOrder}/{@code active}와 같은 방식으로
+         * "지금 원하는 최종 상태"를 항상 그대로 보낸다(최상위로 옮기면 {@code null}).
+         */
         @Getter
         @Setter
         @NoArgsConstructor
@@ -26,6 +31,9 @@ public final class MenuDto {
 
             /** 생략하면(null) 현재 언어 라벨을 바꾸지 않는다. */
             private String label;
+
+            /** 최상위 메뉴로 옮기면 null. */
+            private Long parentMenuId;
 
             private String path;
 

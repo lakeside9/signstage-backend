@@ -135,7 +135,8 @@ public class MenuService {
 
     /**
      * 12장 결정 #10(2026-09-05) — 이름(현재 언어)/경로/순서/사용여부까지 관리 화면에서 편집한다.
-     * 구조 변경은 {@link MenuHistory}에, 이름 변경은 {@link MenuTranslation}(+이력)에 각각 남긴다.
+     * 후속(2026-09-05)으로 상위 메뉴(레벨) 이동도 같은 API에서 다룬다. 구조 변경은
+     * {@link MenuHistory}에, 이름 변경은 {@link MenuTranslation}(+이력)에 각각 남긴다.
      */
     @Transactional
     public void updateMenu(String actingPlatformRole, Long menuId, String languageCode, MenuDto.Request.UpdateMenu request) {
@@ -143,6 +144,8 @@ public class MenuService {
         Menu menu = menuRepository.findById(menuId)
                 .orElseThrow(() -> new ApplicationException(PermissionErrorCode.MENU_NOT_FOUND));
 
+        Menu newParent = resolveNewParent(menu, request.getParentMenuId());
+        menu.changeParent(newParent);
         menu.updateStructure(request.getPath(), request.getIconKey(), request.getDisplayOrder(), request.getActive());
         menuHistoryRepository.save(MenuHistory.builder().menu(menu).build());
 
@@ -153,6 +156,31 @@ public class MenuService {
             translation.changeLabel(request.getLabel());
             menuTranslationHistoryRepository.save(MenuTranslationHistory.builder().menuTranslation(translation).build());
         }
+    }
+
+    /**
+     * 상위 메뉴 후보를 검증한다 — 자기 자신, 다른 콘솔의 메뉴, 자기 하위 트리(순환)는 상위로
+     * 지정할 수 없다. {@code null}(최상위로 이동)은 항상 허용한다.
+     */
+    private Menu resolveNewParent(Menu menu, Long requestedParentId) {
+        if (requestedParentId == null) {
+            return null;
+        }
+        if (requestedParentId.equals(menu.getId())) {
+            throw new ApplicationException(PermissionErrorCode.MENU_PARENT_INVALID);
+        }
+        Menu candidate = menuRepository.findById(requestedParentId)
+                .orElseThrow(() -> new ApplicationException(PermissionErrorCode.MENU_NOT_FOUND));
+        if (candidate.getConsole() != menu.getConsole()) {
+            throw new ApplicationException(PermissionErrorCode.MENU_PARENT_INVALID);
+        }
+        for (Menu cursor = candidate; cursor != null; cursor = cursor.getParentMenu()) {
+            if (cursor.getId().equals(menu.getId())) {
+                // candidate가 menu 자신의 하위 트리에 있다 — 순환이 생긴다.
+                throw new ApplicationException(PermissionErrorCode.MENU_PARENT_INVALID);
+            }
+        }
+        return candidate;
     }
 
     /** {@link RolePermissionService#setAllowed}와 같은 이유로 하드코딩만으로 지킨다. */

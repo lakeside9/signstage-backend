@@ -20,6 +20,10 @@ public enum PermissionErrorCode implements ErrorCode {
     ROLE_VALUE_INVALID(
             "PERMISSION_ROLE_VALUE_INVALID", HttpStatus.BAD_REQUEST,
             "권한 축과 역할값이 일치하지 않습니다."
+    ),
+    MENU_PARENT_INVALID(
+            "PERMISSION_MENU_PARENT_INVALID", HttpStatus.BAD_REQUEST,
+            "상위 메뉴로 지정할 수 없습니다. 자기 자신, 하위 메뉴, 다른 콘솔의 메뉴는 상위로 지정할 수 없습니다."
     );
 
     private final String code;

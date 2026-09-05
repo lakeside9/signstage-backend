@@ -90,4 +90,13 @@ public class Menu extends BaseEntity {
         this.displayOrder = displayOrder;
         this.active = active;
     }
+
+    /**
+     * 상위 메뉴를 바꾼다(레벨 이동 — 상위 메뉴로 승격/하위 메뉴로 편입). 순환·콘솔 불일치 등
+     * 유효성 검사는 호출자({@link com.eformworks.signstage.backend.feature.permission.service.MenuService})
+     * 책임이다 — 엔티티는 배정된 값을 그대로 반영한다.
+     */
+    public void changeParent(Menu newParent) {
+        this.parentMenu = newParent;
+    }
 }

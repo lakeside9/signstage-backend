@@ -1,14 +1,20 @@
 package com.eformworks.signstage.backend.feature.permission.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
+import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.i18n.MessageTranslator;
 import com.eformworks.signstage.backend.feature.permission.dto.MenuDto;
 import com.eformworks.signstage.backend.feature.permission.entity.Menu;
 import com.eformworks.signstage.backend.feature.permission.entity.PermissionDefinition;
 import com.eformworks.signstage.backend.feature.permission.entity.PermissionType;
 import com.eformworks.signstage.backend.feature.permission.entity.RoleAxis;
+import com.eformworks.signstage.backend.feature.permission.error.PermissionErrorCode;
 import com.eformworks.signstage.backend.feature.permission.repository.MenuHistoryRepository;
 import com.eformworks.signstage.backend.feature.permission.repository.MenuRepository;
 import com.eformworks.signstage.backend.feature.permission.repository.MenuTranslationHistoryRepository;
@@ -17,6 +23,7 @@ import com.eformworks.signstage.backend.feature.permission.repository.Permission
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -123,5 +130,94 @@ class MenuServiceTest {
         assertThat(rows).filteredOn(row -> row.getMenuKey().equals("MENU_ACCOUNTS"))
                 .extracting(MenuDto.Response.MenuAdminRow::isActive)
                 .containsExactly(false);
+    }
+
+    private static MenuDto.Request.UpdateMenu updateRequest(Menu current, Long parentMenuId) {
+        MenuDto.Request.UpdateMenu request = new MenuDto.Request.UpdateMenu();
+        request.setParentMenuId(parentMenuId);
+        request.setPath(current.getPath());
+        request.setIconKey(current.getIconKey());
+        request.setDisplayOrder(current.getDisplayOrder());
+        request.setActive(current.isActive());
+        return request;
+    }
+
+    @Test
+    void updateMenu_movesTopLevelMenuUnderAnotherMenu_whenActorIsSuper() {
+        Menu menuA = Menu.builder().console(RoleAxis.PLATFORM).menuKey("MENU_A").labelKey("k1").path("/a").displayOrder(0).build();
+        Menu menuB = Menu.builder().console(RoleAxis.PLATFORM).menuKey("MENU_B").labelKey("k2").path("/b").displayOrder(1).build();
+        ReflectionTestUtils.setField(menuA, "id", 1L);
+        ReflectionTestUtils.setField(menuB, "id", 2L);
+        given(menuRepository.findById(1L)).willReturn(Optional.of(menuA));
+        given(menuRepository.findById(2L)).willReturn(Optional.of(menuB));
+
+        menuService.updateMenu("PLATFORM_SUPER", 1L, "ko", updateRequest(menuA, 2L));
+
+        assertThat(menuA.getParentMenu()).isEqualTo(menuB);
+        verify(menuHistoryRepository).save(any());
+    }
+
+    @Test
+    void updateMenu_movesChildBackToTopLevel_whenParentMenuIdIsNull() {
+        Menu parent = Menu.builder().console(RoleAxis.PLATFORM).menuKey("MENU_PARENT").labelKey("k1").displayOrder(0).build();
+        ReflectionTestUtils.setField(parent, "id", 1L);
+        Menu child = Menu.builder().console(RoleAxis.PLATFORM).parentMenu(parent).menuKey("MENU_CHILD").labelKey("k2").path("/c").displayOrder(0).build();
+        ReflectionTestUtils.setField(child, "id", 2L);
+        given(menuRepository.findById(2L)).willReturn(Optional.of(child));
+
+        menuService.updateMenu("PLATFORM_SUPER", 2L, "ko", updateRequest(child, null));
+
+        assertThat(child.getParentMenu()).isNull();
+    }
+
+    @Test
+    void updateMenu_rejectsSelfAsParent() {
+        Menu menu = Menu.builder().console(RoleAxis.PLATFORM).menuKey("MENU_A").labelKey("k1").path("/a").displayOrder(0).build();
+        ReflectionTestUtils.setField(menu, "id", 1L);
+        given(menuRepository.findById(1L)).willReturn(Optional.of(menu));
+
+        assertThatThrownBy(() -> menuService.updateMenu("PLATFORM_SUPER", 1L, "ko", updateRequest(menu, 1L)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(PermissionErrorCode.MENU_PARENT_INVALID);
+    }
+
+    @Test
+    void updateMenu_rejectsOwnDescendantAsParent_toPreventCycle() {
+        Menu top = Menu.builder().console(RoleAxis.PLATFORM).menuKey("MENU_TOP").labelKey("k1").displayOrder(0).build();
+        ReflectionTestUtils.setField(top, "id", 1L);
+        Menu child = Menu.builder().console(RoleAxis.PLATFORM).parentMenu(top).menuKey("MENU_CHILD").labelKey("k2").path("/c").displayOrder(0).build();
+        ReflectionTestUtils.setField(child, "id", 2L);
+        given(menuRepository.findById(1L)).willReturn(Optional.of(top));
+        given(menuRepository.findById(2L)).willReturn(Optional.of(child));
+
+        // top을 그 자신의 하위 메뉴(child) 밑으로 옮기려는 시도 — 순환이라 거부돼야 한다.
+        assertThatThrownBy(() -> menuService.updateMenu("PLATFORM_SUPER", 1L, "ko", updateRequest(top, 2L)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(PermissionErrorCode.MENU_PARENT_INVALID);
+    }
+
+    @Test
+    void updateMenu_rejectsParentFromDifferentConsole() {
+        Menu platformMenu = Menu.builder().console(RoleAxis.PLATFORM).menuKey("MENU_P").labelKey("k1").path("/p").displayOrder(0).build();
+        Menu organizationMenu = Menu.builder().console(RoleAxis.ORGANIZATION).menuKey("MENU_O").labelKey("k2").displayOrder(0).build();
+        ReflectionTestUtils.setField(platformMenu, "id", 1L);
+        ReflectionTestUtils.setField(organizationMenu, "id", 2L);
+        given(menuRepository.findById(1L)).willReturn(Optional.of(platformMenu));
+        given(menuRepository.findById(2L)).willReturn(Optional.of(organizationMenu));
+
+        assertThatThrownBy(() -> menuService.updateMenu("PLATFORM_SUPER", 1L, "ko", updateRequest(platformMenu, 2L)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(PermissionErrorCode.MENU_PARENT_INVALID);
+    }
+
+    @Test
+    void updateMenu_rejectsNonSuperRole_withoutTouchingData() {
+        assertThatThrownBy(() -> menuService.updateMenu("PLATFORM_OPS", 1L, "ko", updateRequest(
+                Menu.builder().console(RoleAxis.PLATFORM).menuKey("MENU_A").labelKey("k1").displayOrder(0).build(), null)))
+                .isInstanceOf(ApplicationException.class);
+        verify(menuRepository, never()).findById(any());
     }
 }
