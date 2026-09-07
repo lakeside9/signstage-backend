@@ -72,6 +72,7 @@ public class CeremonyEventService {
     private final SignerRepository signerRepository;
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
     private final CeremonyService ceremonyService;
+    private final CeremonyEventEffectSettingService ceremonyEventEffectSettingService;
 
     @Transactional
     public CeremonyEventDto.Response.CeremonyEventSummary createCeremonyEvent(
@@ -124,6 +125,12 @@ public class CeremonyEventService {
         List<Long> appliedIds = request.getOptionalFeatureIds() == null
                 ? List.of()
                 : applyOptionalFeatures(ceremony, event, request.getOptionalFeatureIds());
+
+        // 등록 화면에서도 이벤트 효과 프리셋을 바로 선택할 수 있게 한다 — null이면 아무것도
+        // 선택하지 않는다(BE-SETTING-02). 방금 적용한 appliedIds로 entitlement를 검증한다.
+        if (request.getEffectSelections() != null) {
+            ceremonyEventEffectSettingService.applyEffectSelections(event, appliedIds, request.getEffectSelections());
+        }
 
         return toSummary(event, appliedIds);
     }
@@ -220,6 +227,13 @@ public class CeremonyEventService {
                 ? retrieveAppliedOptionalFeatureIds(event)
                 : applyOptionalFeatures(ceremony, event, request.getOptionalFeatureIds());
 
+        // 수정 화면에서도 이벤트 효과 프리셋을 바꿀 수 있게 한다 — null이면 기존 선택을 그대로
+        // 둔다. 빈 리스트를 명시적으로 보내면 전부 해제한다(BE-SETTING-02). 이 메서드 상단의
+        // checkEventNotLocked(event) 호출이 이미 STARTED/FINISHED를 걸러냈다.
+        if (request.getEffectSelections() != null) {
+            ceremonyEventEffectSettingService.applyEffectSelections(event, optionalFeatureIds, request.getEffectSelections());
+        }
+
         return toSummary(event, optionalFeatureIds);
     }
 
@@ -292,6 +306,11 @@ public class CeremonyEventService {
                     CeremonyEventOptionalFeature.builder().ceremonyEvent(event).optionalFeature(feature).build()
             );
         }
+
+        // 옵션 해제 시 그 옵션을 요구하는 이벤트 효과 설정도 함께 정리한다(BE-SETTING-02) — 세
+        // 경로(등록/수정/적용옵션 교체) 모두 이 메서드를 거치므로 별도 연결이 필요 없다. 새
+        // 이벤트(effect 설정이 아직 하나도 없음)에서도 안전하게 no-op이다.
+        ceremonyEventEffectSettingService.pruneSettingsRequiringUnappliedFeatures(event.getId(), requestedIds);
 
         return requestedIds;
     }
@@ -840,9 +859,7 @@ public class CeremonyEventService {
     }
 
     private void checkEventNotLocked(CeremonyEvent event) {
-        if (event.getStatus() == CeremonyEventStatus.STARTED
-                || event.getStatus() == CeremonyEventStatus.FINISHED
-                || event.getStatus() == CeremonyEventStatus.FORCE_FINISHED) {
+        if (event.isLocked()) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_LOCKED);
         }
     }

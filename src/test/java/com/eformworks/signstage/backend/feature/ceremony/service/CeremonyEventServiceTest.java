@@ -78,6 +78,8 @@ class CeremonyEventServiceTest {
     private CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
     @Mock
     private CeremonyService ceremonyService;
+    @Mock
+    private CeremonyEventEffectSettingService ceremonyEventEffectSettingService;
 
     @InjectMocks
     private CeremonyEventService eventService;

@@ -288,6 +288,21 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_EFFECT_DEFINITION_ORDER_GROUP_MISMATCH",
             HttpStatus.CONFLICT,
             "같은 분류(target, trigger) 안에서만 표시 순서를 바꿀 수 있습니다."
+    ),
+    EFFECT_DEFINITION_INACTIVE(
+            "CEREMONY_EFFECT_DEFINITION_INACTIVE",
+            HttpStatus.CONFLICT,
+            "비활성화된 이벤트 효과는 선택할 수 없습니다."
+    ),
+    EFFECT_SELECTION_CLASSIFICATION_MISMATCH(
+            "CEREMONY_EFFECT_SELECTION_CLASSIFICATION_MISMATCH",
+            HttpStatus.CONFLICT,
+            "선택한 효과의 분류(target, trigger)가 요청과 일치하지 않습니다."
+    ),
+    EFFECT_SELECTION_OPTIONAL_FEATURE_NOT_APPLIED(
+            "CEREMONY_EFFECT_SELECTION_OPTIONAL_FEATURE_NOT_APPLIED",
+            HttpStatus.CONFLICT,
+            "이 효과가 필요로 하는 선택옵션이 이 하위 행사에 적용되어 있지 않습니다."
     );
 
     private final String code;

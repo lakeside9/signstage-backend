@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventEffectSettingDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.ProjectorDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto;
@@ -47,6 +48,7 @@ public class ProjectorService {
     private final StrokeDataRepository strokeDataRepository;
     private final CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
     private final TemplateService templateService;
+    private final CeremonyEventEffectSettingService ceremonyEventEffectSettingService;
 
     public ProjectorDto.Response.ProjectorContext retrieveContext(String eventAccessKey) {
         CeremonyEvent event = resolveEvent(eventAccessKey);
@@ -107,6 +109,16 @@ public class ProjectorService {
         return strokeDataRepository.findAllByCeremonyEventId(event.getId()).stream()
                 .map(this::toStrokeSummary)
                 .toList();
+    }
+
+    /**
+     * 공개 이벤트 효과 설정 snapshot(PRE-04) — 조직 스코프 응답과 같은 모양을 그대로 재사용한다
+     * ({@link CeremonyEventEffectSettingService#findSummaries}, 같은 패키지 package-private
+     * 공유). 이미 내부 id/config를 담지 않는 최소 정보라 별도로 값을 더 걷어낼 게 없다.
+     */
+    public List<CeremonyEventEffectSettingDto.Response.EffectSettingSummary> findEffectSettings(String eventAccessKey) {
+        CeremonyEvent event = resolveEvent(eventAccessKey);
+        return ceremonyEventEffectSettingService.findSummaries(event.getId());
     }
 
     private CeremonyEvent resolveEvent(String eventAccessKey) {

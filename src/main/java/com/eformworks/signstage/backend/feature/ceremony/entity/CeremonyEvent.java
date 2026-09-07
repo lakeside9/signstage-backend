@@ -146,4 +146,15 @@ public class CeremonyEvent extends BaseEntity {
             this.displayOrder = displayOrder;
         }
     }
+
+    /**
+     * {@code STARTED}/{@code FINISHED}/{@code FORCE_FINISHED}는 잠긴 상태다 — 기본 정보 수정,
+     * 문서 매핑, 이벤트 효과 프리셋 선택({@code CeremonyEventEffectSettingService})처럼 서명
+     * 시작 전에만 바꿀 수 있어야 하는 조작이 공통으로 쓰는 판정이다.
+     */
+    public boolean isLocked() {
+        return status == CeremonyEventStatus.STARTED
+                || status == CeremonyEventStatus.FINISHED
+                || status == CeremonyEventStatus.FORCE_FINISHED;
+    }
 }

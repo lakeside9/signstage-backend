@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.controller;
 
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
+import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventEffectSettingDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.ProjectorDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.ProjectorService;
@@ -68,6 +69,17 @@ public class ProjectorController {
             @PathVariable String eventAccessKey
     ) {
         List<StrokeDataDto.Response.StrokeSummary> response = projectorService.findStrokes(eventAccessKey);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "이벤트 효과 설정 snapshot 조회", description = "(target, trigger) 분류별로 선택된 프리셋을 돌려준다.")
+    @SecurityRequirements(value = {})
+    @GetMapping("/effects/settings")
+    public ApiResponse<List<CeremonyEventEffectSettingDto.Response.EffectSettingSummary>> findEffectSettings(
+            @PathVariable String eventAccessKey
+    ) {
+        List<CeremonyEventEffectSettingDto.Response.EffectSettingSummary> response =
+                projectorService.findEffectSettings(eventAccessKey);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }
