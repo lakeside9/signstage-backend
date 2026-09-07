@@ -275,6 +275,19 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_EVENT_MAPPING_CHECK_NOT_ALLOWED",
             HttpStatus.CONFLICT,
             "진행 중(STARTED)인 테스트 또는 리허설 행사만 서명매핑확인을 실행할 수 있습니다."
+    ),
+    EFFECT_DEFINITION_NOT_FOUND(
+            "CEREMONY_EFFECT_DEFINITION_NOT_FOUND", HttpStatus.NOT_FOUND, "이벤트 효과 정의를 찾을 수 없습니다."
+    ),
+    EFFECT_DEFINITION_CODE_DUPLICATE(
+            "CEREMONY_EFFECT_DEFINITION_CODE_DUPLICATE",
+            HttpStatus.CONFLICT,
+            "이미 등록된 이벤트 효과 코드입니다."
+    ),
+    EFFECT_DEFINITION_ORDER_GROUP_MISMATCH(
+            "CEREMONY_EFFECT_DEFINITION_ORDER_GROUP_MISMATCH",
+            HttpStatus.CONFLICT,
+            "같은 분류(target, trigger) 안에서만 표시 순서를 바꿀 수 있습니다."
     );
 
     private final String code;
