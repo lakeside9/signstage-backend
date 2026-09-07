@@ -52,6 +52,7 @@ public class SignerPortalService {
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
     private final CeremonyEventService ceremonyEventService;
     private final TemplateService templateService;
+    private final CeremonyEventSignerStateService ceremonyEventSignerStateService;
 
     public SignerPortalDto.Response.PortalContext retrievePortalContext(String eventAccessKey, String signerAccessKey) {
         PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
@@ -232,11 +233,11 @@ public class SignerPortalService {
             throw new ApplicationException(CeremonyErrorCode.SIGNATURE_INCOMPLETE);
         }
 
-        if (isSignerSignatureComplete(context.event().getId(), context.signer().getId())) {
+        if (ceremonyEventSignerStateService.isSignerComplete(context.event().getId(), context.signer().getId())) {
             throw new ApplicationException(CeremonyErrorCode.SIGNATURE_ALREADY_COMPLETED);
         }
 
-        ceremonyEventLogRepository.save(
+        CeremonyEventLog log = ceremonyEventLogRepository.save(
                 CeremonyEventLog.builder()
                         .ceremonyEvent(context.event())
                         .actorType(ActorType.SIGNER)
@@ -245,6 +246,7 @@ public class SignerPortalService {
                         .targetSigner(context.signer())
                         .build()
         );
+        ceremonyEventSignerStateService.markCompleted(context.event(), context.signer(), log.getId());
 
         ceremonyRealtimeNotifier.notifySignatureCompleted(
                 context.event().getId(), context.signer().getId(), context.signer().getName()
@@ -302,28 +304,9 @@ public class SignerPortalService {
                         .message("templateFieldId=" + field.getId())
                         .build()
         );
+        ceremonyEventSignerStateService.markPending(context.event(), context.signer());
 
         ceremonyRealtimeNotifier.notifySignatureCleared(context.event().getId(), context.signer().getId(), field.getId());
-    }
-
-    /**
-     * {@code SIGNATURE_COMPLETE}/{@code SIGNATURE_REPLACE}/{@code SIGNATURE_CLEAR} 중 이
-     * 서명자의 가장 최근 로그가 {@code SIGNATURE_COMPLETE}인지로 "지금 완료 상태인가"를
-     * 판정한다 — 단순 {@code existsBy(...SIGNATURE_COMPLETE)}는 REPLACE/CLEAR 이후에도 예전
-     * 완료 로그가 남아있어 "완료 취소"를 반영하지 못한다(레거시가 못 고친 결함). CLEAR를
-     * 목록에 넣은 건 {@link #clearFieldStroke}가 완료 후에도 self-serve로 지울 수 있게
-     * 바뀌면서다 — 안 넣으면 "완료 → 지움 → 다시 그림 → 완료 재요청"에서 마지막 완료 재요청이
-     * "이미 완료됨"으로 잘못 막힌다(지운 사실이 최신 판정에 반영되지 않아서).
-     */
-    private boolean isSignerSignatureComplete(Long eventId, Long signerId) {
-        return ceremonyEventLogRepository
-                .findTopByCeremonyEventIdAndTargetSignerIdAndEventActionInOrderByCreatedAtDesc(
-                        eventId,
-                        signerId,
-                        List.of(CeremonyEventAction.SIGNATURE_COMPLETE, CeremonyEventAction.SIGNATURE_REPLACE, CeremonyEventAction.SIGNATURE_CLEAR)
-                )
-                .map(log -> log.getEventAction() == CeremonyEventAction.SIGNATURE_COMPLETE)
-                .orElse(false);
     }
 
     private PortalContext resolvePortalContext(String eventAccessKey, String signerAccessKey) {

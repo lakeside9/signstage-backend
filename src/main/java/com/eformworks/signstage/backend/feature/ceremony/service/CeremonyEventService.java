@@ -36,6 +36,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRe
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +74,7 @@ public class CeremonyEventService {
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
     private final CeremonyService ceremonyService;
     private final CeremonyEventEffectSettingService ceremonyEventEffectSettingService;
+    private final CeremonyEventSignerStateService ceremonyEventSignerStateService;
 
     @Transactional
     public CeremonyEventDto.Response.CeremonyEventSummary createCeremonyEvent(
@@ -581,6 +583,7 @@ public class CeremonyEventService {
                         .message("signerId=" + signerId)
                         .build()
         );
+        ceremonyEventSignerStateService.markSigning(event, signer);
 
         ceremonyRealtimeNotifier.notifySignatureReplaced(eventId, signerId, signer.getName());
     }
@@ -609,6 +612,7 @@ public class CeremonyEventService {
             throw new ApplicationException(CeremonyErrorCode.EVENT_BULK_RESET_NOT_ALLOWED);
         }
 
+        List<Signer> resetSigners = new ArrayList<>();
         for (Long signerId : collectFinishRequiredSignerIds(event)) {
             Signer signer = signerRepository.findById(signerId).orElse(null);
             if (signer == null) {
@@ -627,7 +631,12 @@ public class CeremonyEventService {
                             .build()
             );
             ceremonyRealtimeNotifier.notifySignatureReplaced(eventId, signerId, signer.getName());
+            resetSigners.add(signer);
         }
+        // 개별 replaceSignerSignature(markSigning)와 달리 일괄 초기화는 전부 PENDING으로
+        // 되돌린다 — signstage-docs business/ceremony-event-effect-implementation-tasks.md
+        // BE-STATE-02 결정.
+        ceremonyEventSignerStateService.markAllPending(event, resetSigners);
     }
 
     /**
@@ -755,24 +764,21 @@ public class CeremonyEventService {
     }
 
     private void validateFinishConditions(CeremonyEvent event) {
-        for (Long signerId : collectFinishRequiredSignerIds(event)) {
-            if (!isSignerSignatureComplete(event.getId(), signerId)) {
-                throw new ApplicationException(CeremonyErrorCode.EVENT_FINISH_CONDITION_NOT_MET);
-            }
+        if (!ceremonyEventSignerStateService.isAllComplete(event.getId(), collectFinishRequiredSignerIds(event))) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_FINISH_CONDITION_NOT_MET);
         }
     }
 
     /**
-     * {@link #validateFinishConditions}와 정확히 같은 기준(필수 서명자 전원의 최신 감사 로그가
-     * SIGNATURE_COMPLETE인지)으로 "지금 전원 완료 상태인가"만 boolean으로 돌려준다.
-     * {@link SignerPortalService#completeSignature}가 서명 완료 처리 직후 "방금 전원 완료로
-     * 전환됐는가"를 판정해 폭죽(ALL_SIGNED_FIREWORKS) 브로드캐스트 여부를 정하는 데 쓴다 —
-     * 두 서비스가 인가 모델은 다르지만(4.5절), 이 계산 자체는 순수 조회라 조직 스코프 검사가
-     * 없으므로 예외적으로 공유한다(package-private).
+     * {@link #validateFinishConditions}와 정확히 같은 기준(필수 서명자 전원의 상태가
+     * {@code COMPLETED}인지, {@link CeremonyEventSignerStateService})으로 "지금 전원 완료
+     * 상태인가"만 boolean으로 돌려준다. {@link SignerPortalService#completeSignature}가 서명
+     * 완료 처리 직후 "방금 전원 완료로 전환됐는가"를 판정해 폭죽(ALL_SIGNED_FIREWORKS)
+     * 브로드캐스트 여부를 정하는 데 쓴다 — 두 서비스가 인가 모델은 다르지만(4.5절), 이 계산
+     * 자체는 순수 조회라 조직 스코프 검사가 없으므로 예외적으로 공유한다(package-private).
      */
     boolean isAllRequiredSignersComplete(CeremonyEvent event) {
-        return collectFinishRequiredSignerIds(event).stream()
-                .allMatch(signerId -> isSignerSignatureComplete(event.getId(), signerId));
+        return ceremonyEventSignerStateService.isAllComplete(event.getId(), collectFinishRequiredSignerIds(event));
     }
 
     /** {@code POST .../finish}가 완료를 요구하는 서명자 집합 — CONTRACT+EXHIBITION 매핑의 필수 서명란이 참조하는 signerId. */
@@ -809,29 +815,9 @@ public class CeremonyEventService {
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         return collectFinishRequiredSignerIds(event).stream()
                 .map(signerId -> new CeremonyEventDto.Response.SignerCompletionStatus(
-                        signerId, isSignerSignatureComplete(eventId, signerId)
+                        signerId, ceremonyEventSignerStateService.isSignerComplete(eventId, signerId)
                 ))
                 .toList();
-    }
-
-    /**
-     * {@code SIGNATURE_COMPLETE}/{@code SIGNATURE_REPLACE}/{@code SIGNATURE_CLEAR} 중 이
-     * 서명자의 가장 최근 로그가 {@code SIGNATURE_COMPLETE}인지로 "지금 완료 상태인가"를
-     * 판정한다 — {@link SignerPortalService}의 같은 이름 메서드와 동일한 판정이지만, 두
-     * 서비스가 서로 다른 인가 모델(조직 스코프 vs JWT-free 포털)이라 헬퍼를 공유하지 않는
-     * 기존 관례를 따른다. CLEAR를 목록에 넣은 이유도 그쪽과 같다 — 서명자가 완료 후 다시
-     * 지우고 그리는 도중엔(행사 종료 전까지 언제든 가능) 이 이벤트의 완료 조건 검사
-     * ({@link #validateFinishConditions})가 "아직 완료 안 됨"으로 정확히 봐야 한다.
-     */
-    private boolean isSignerSignatureComplete(Long eventId, Long signerId) {
-        return ceremonyEventLogRepository
-                .findTopByCeremonyEventIdAndTargetSignerIdAndEventActionInOrderByCreatedAtDesc(
-                        eventId,
-                        signerId,
-                        List.of(CeremonyEventAction.SIGNATURE_COMPLETE, CeremonyEventAction.SIGNATURE_REPLACE, CeremonyEventAction.SIGNATURE_CLEAR)
-                )
-                .map(log -> log.getEventAction() == CeremonyEventAction.SIGNATURE_COMPLETE)
-                .orElse(false);
     }
 
     private void recordLog(CeremonyEvent event, ActorType actorType, Long actorId, CeremonyEventAction action) {
