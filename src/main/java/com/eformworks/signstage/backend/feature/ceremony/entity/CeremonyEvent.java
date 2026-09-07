@@ -80,6 +80,17 @@ public class CeremonyEvent extends BaseEntity {
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder = 0;
 
+    /**
+     * 전원완료 자동 효과가 최초로 소비됐는지 — null이면 아직이다. 값을 넣는 주체는 이 필드가
+     * 아니라 {@code CeremonyEventRepository#claimAutomaticCelebration}의 조건부
+     * {@code UPDATE ... WHERE auto_celebration_triggered_at IS NULL}뿐이다(BE-RUNTIME-02,
+     * 동시에 마지막 두 서명자가 완료해도 정확히 한 번만 claim되게 하는 원자적 "compare-and-swap").
+     * 그래서 이 클래스에 세터/전용 메서드를 두지 않는다 — 자바 코드로 직접 바꾸면 그 원자성이
+     * 깨진다.
+     */
+    @Column(name = "auto_celebration_triggered_at")
+    private LocalDateTime autoCelebrationTriggeredAt;
+
     @Builder
     private CeremonyEvent(
             Ceremony ceremony,

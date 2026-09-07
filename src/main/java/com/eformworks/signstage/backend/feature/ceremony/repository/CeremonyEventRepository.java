@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -36,4 +37,18 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from CeremonyEvent e where e.id = :id")
     Optional<CeremonyEvent> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * 전원완료 자동 효과의 "최초 1회" 원자적 claim(BE-RUNTIME-02) — 조건부 UPDATE 자체가
+     * compare-and-swap이라 별도 잠금이 필요 없다. 반환값이 1이면 이 호출이 claim에 성공한
+     * 것이고(첫 실행 자격이 있다), 0이면 이미 다른 호출이 먼저 claim한 것이다(경합 패배 또는
+     * 재완료). {@link CeremonyEffectRuntimeService#tryAutomaticCelebration}이 "전원 완료"를
+     * 확인한 뒤 이 메서드를 호출해 실제 방송 여부를 최종 결정한다.
+     */
+    @Modifying
+    @Query(
+            "update CeremonyEvent e set e.autoCelebrationTriggeredAt = CURRENT_TIMESTAMP "
+                    + "where e.id = :eventId and e.autoCelebrationTriggeredAt is null"
+    )
+    int claimAutomaticCelebration(@Param("eventId") Long eventId);
 }

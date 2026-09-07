@@ -28,15 +28,15 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 서명자 포털. JWT를 쓰지 않는다 — {@code eventAccessKey}/{@code signerAccessKey} 소지만으로
  * 접근한다(signstage-docs business/ceremony-feature-migration-review.md 2.3/4.5절 결정).
  * 조직 스코프 검사가 필요 없는 완전히 다른 인가 모델이라 {@link CeremonyService}의 헬퍼를
- * 재사용하지 않고 리포지토리를 직접 쓴다 — 다만 {@link CeremonyEventService#isAllRequiredSignersComplete}는
- * 조직 스코프 검사가 없는 순수 조회 헬퍼라 예외적으로 재사용한다({@link #completeSignature} 참고).
+ * 재사용하지 않고 리포지토리를 직접 쓴다.
  */
 @Service
 @RequiredArgsConstructor
@@ -50,9 +50,9 @@ public class SignerPortalService {
     private final StrokeDataRepository strokeDataRepository;
     private final CeremonyEventLogRepository ceremonyEventLogRepository;
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
-    private final CeremonyEventService ceremonyEventService;
     private final TemplateService templateService;
     private final CeremonyEventSignerStateService ceremonyEventSignerStateService;
+    private final CeremonyEffectRuntimeService ceremonyEffectRuntimeService;
 
     public SignerPortalDto.Response.PortalContext retrievePortalContext(String eventAccessKey, String signerAccessKey) {
         PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
@@ -208,15 +208,14 @@ public class SignerPortalService {
      * 배정된 모든 필수 서명란에 스트로크가 있어야 완료할 수 있다 — 레거시의 "로그 스캔으로
      * 완료 판정" 방식을 그대로 따른다(별도 completed 컬럼 없음).
      *
-     * <p>격리 수준을 {@code READ_COMMITTED}로 명시한다 — 기본(REPEATABLE READ, MySQL) 그대로
-     * 두면 이 트랜잭션이 이미 확립한 스냅샷 때문에, 아래에서 {@code findByIdForUpdate}로 잠금을
-     * 잡은 뒤에도 "전원 완료" 판정 쿼리(ceremony_event_logs 조회)가 그 시점 이후 다른
-     * 트랜잭션이 커밋한 내용을 못 볼 수 있다. READ_COMMITTED면 잠금 획득 이후의 모든 조회가
-     * 항상 그 시점의 최신 커밋 데이터를 보므로, 아래 잠금과 조합하면 동시에 마지막 두 서명자가
-     * 완료해도 폭죽 브로드캐스트가 정확히 한 번만 나간다(signstage-docs
-     * business/ceremony-feature-migration-review.md 8.8절 참고).
+     * <p>전원완료 자동 효과(예전의 "폭죽") 판정은 이 트랜잭션 안에서 하지 않는다 — 이 메서드가
+     * 커밋된 뒤 {@link CeremonyEffectRuntimeService#tryAutomaticCelebration}이 별도
+     * {@code REQUIRES_NEW} 트랜잭션에서 판정한다(BE-RUNTIME-02). 예전엔 {@code CeremonyEvent}
+     * 행 잠금 + {@code READ_COMMITTED}로 커밋 전에 직렬화했지만, 지금은
+     * {@code claimAutomaticCelebration}의 원자적 조건부 UPDATE가 "정확히 한 번"을 보장하므로
+     * 이 트랜잭션의 격리 수준을 더 이상 높일 필요가 없다.
      */
-    @Transactional(isolation = Isolation.READ_COMMITTED)
+    @Transactional
     public void completeSignature(String eventAccessKey, String signerAccessKey) {
         PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
 
@@ -249,20 +248,20 @@ public class SignerPortalService {
         ceremonyEventSignerStateService.markCompleted(context.event(), context.signer(), log.getId());
 
         ceremonyRealtimeNotifier.notifySignatureCompleted(
-                context.event().getId(), context.signer().getId(), context.signer().getName()
+                context.event().getId(), context.signer().getId(), context.signer().getName(), log.getId()
         );
 
-        // 폭죽(ALL_SIGNED_FIREWORKS) — 이 이벤트 행에 먼저 잠금을 잡아 동시 완료 요청들을
-        // 이 구간에서 직렬화한 뒤(클래스 문서 주석 참고), "방금 전원 완료로 전환됐는가"를
-        // 판정한다. 옵션이 적용됐는지는 여기서 검사하지 않는다 — 적용 여부는 프로젝터가
-        // ProjectorContext.appliedOptionalFeatureCodes로 스스로 걸러서 소비하고, 다른 화면은
-        // 이 메시지 타입을 아예 처리하지 않아 무시한다(다른 SIGNATURE_* 브로드캐스트와 같은
-        // "사실은 항상 보내고 화면이 알아서 거른다" 원칙).
-        CeremonyEvent lockedEvent = ceremonyEventRepository.findByIdForUpdate(context.event().getId())
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.PORTAL_EVENT_NOT_FOUND));
-        if (ceremonyEventService.isAllRequiredSignersComplete(lockedEvent)) {
-            ceremonyRealtimeNotifier.notifyAllSignersCompleted(lockedEvent.getId());
-        }
+        // 전원완료 자동 효과 — 이 트랜잭션이 실제로 커밋된 뒤에만 판정해야 한다(그래야
+        // CeremonyEventSignerStateService가 방금 markCompleted한 값을 REQUIRES_NEW 트랜잭션에서
+        // 확실히 읽는다). registerSynchronization의 afterCommit이 그 시점을 정확히 잡아준다 —
+        // 이 트랜잭션이 롤백되면 콜백 자체가 실행되지 않는다.
+        Long eventId = context.event().getId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                ceremonyEffectRuntimeService.tryAutomaticCelebration(eventId);
+            }
+        });
     }
 
     /**

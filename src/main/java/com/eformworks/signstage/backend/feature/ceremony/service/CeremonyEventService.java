@@ -770,19 +770,13 @@ public class CeremonyEventService {
     }
 
     /**
-     * {@link #validateFinishConditions}와 정확히 같은 기준(필수 서명자 전원의 상태가
-     * {@code COMPLETED}인지, {@link CeremonyEventSignerStateService})으로 "지금 전원 완료
-     * 상태인가"만 boolean으로 돌려준다. {@link SignerPortalService#completeSignature}가 서명
-     * 완료 처리 직후 "방금 전원 완료로 전환됐는가"를 판정해 폭죽(ALL_SIGNED_FIREWORKS)
-     * 브로드캐스트 여부를 정하는 데 쓴다 — 두 서비스가 인가 모델은 다르지만(4.5절), 이 계산
-     * 자체는 순수 조회라 조직 스코프 검사가 없으므로 예외적으로 공유한다(package-private).
+     * {@code POST .../finish}가 완료를 요구하는 서명자 집합 — CONTRACT+EXHIBITION 매핑의 필수
+     * 서명란이 참조하는 signerId. {@link CeremonyEffectRuntimeService}도 전원완료 자동 실행
+     * 판정에 그대로 재사용한다(package-private) — 다만 그쪽은 이 집합이 비어 있으면 "전체
+     * 완료 아님"으로 별도 처리한다(빈 집합에 대한 {@code allMatch}의 공허한 참(vacuous
+     * truth)을 자동 실행 판정에서만 막는다, BE-RUNTIME-02).
      */
-    boolean isAllRequiredSignersComplete(CeremonyEvent event) {
-        return ceremonyEventSignerStateService.isAllComplete(event.getId(), collectFinishRequiredSignerIds(event));
-    }
-
-    /** {@code POST .../finish}가 완료를 요구하는 서명자 집합 — CONTRACT+EXHIBITION 매핑의 필수 서명란이 참조하는 signerId. */
-    private Set<Long> collectFinishRequiredSignerIds(CeremonyEvent event) {
+    Set<Long> collectFinishRequiredSignerIds(CeremonyEvent event) {
         List<CeremonyTemplate> contractMappings = ceremonyTemplateRepository
                 .findAllByCeremonyEventIdAndDocumentRole(event.getId(), TemplateDocumentRole.CONTRACT);
         List<CeremonyTemplate> exhibitionMappings = ceremonyTemplateRepository

@@ -52,6 +52,37 @@ public final class CeremonyEventEffectSettingDto {
             @Valid
             private List<EffectSelection> selections;
         }
+
+        /** BE-RUNTIME-03 — runtime ON/OFF 전환. */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateRuntimeEnabled {
+
+            @NotBlank
+            private String targetType;
+
+            @NotBlank
+            private String triggerType;
+
+            @NotNull
+            private Boolean runtimeEnabled;
+        }
+
+        /** BE-RUNTIME-04 — 전체 효과 수동 실행. */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class TriggerManualEffect {
+
+            @NotBlank
+            private String targetType;
+
+            @NotBlank
+            private String triggerType;
+        }
     }
 
     public static final class Response {
