@@ -18,15 +18,12 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventEffectSetting;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
-import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventEffectSettingRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -55,6 +52,8 @@ class CeremonyEventEffectSettingServiceTest {
     @Mock
     private CeremonyEffectDefinitionRepository ceremonyEffectDefinitionRepository;
     @Mock
+    private CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
+    @Mock
     private CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
     @Mock
     private CeremonyEventRepository ceremonyEventRepository;
@@ -82,25 +81,11 @@ class CeremonyEventEffectSettingServiceTest {
         return event;
     }
 
-    private OptionalFeature requiredFeature() {
-        OptionalFeature feature = OptionalFeature.builder()
-                .code(OptionalFeatureCode.SIGNER_FIELD_ZOOM)
-                .name("서명 하이라이트")
-                .currencyCode("KRW")
-                .supplyPrice(BigDecimal.TEN)
-                .salePrice(BigDecimal.TEN)
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(BigDecimal.ZERO)
-                .build();
-        ReflectionTestUtils.setField(feature, "id", REQUIRED_FEATURE_ID);
-        return feature;
-    }
-
     private CeremonyEffectDefinition definition(Long id, boolean enabled) {
         CeremonyEffectDefinition definition = CeremonyEffectDefinition.builder()
                 .code("HIGHLIGHT").targetType(CeremonyEffectTarget.PROJECTOR)
                 .triggerType(CeremonyEffectTrigger.SIGNATURE_COMPLETED)
-                .requiredOptionalFeature(requiredFeature()).displayName("하이라이트").rendererKey("r")
+                .displayName("하이라이트").rendererKey("r")
                 .displayOrder(10)
                 .build();
         ReflectionTestUtils.setField(definition, "id", id);
@@ -177,6 +162,9 @@ class CeremonyEventEffectSettingServiceTest {
         CeremonyEvent event = event(CeremonyEventStatus.DRAFT);
         given(ceremonyEffectDefinitionRepository.findById(1L)).willReturn(Optional.of(definition(1L, true)));
         given(ceremonyEffectDefinitionRepository.findById(2L)).willReturn(Optional.empty());
+        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(
+                1L, List.of(REQUIRED_FEATURE_ID)
+        )).willReturn(true);
 
         assertThatThrownBy(() -> service.applyEffectSelections(
                 event, List.of(REQUIRED_FEATURE_ID), List.of(
@@ -197,6 +185,9 @@ class CeremonyEventEffectSettingServiceTest {
         CeremonyEvent event = event(CeremonyEventStatus.DRAFT);
         given(ceremonyEffectDefinitionRepository.findById(1L)).willReturn(Optional.of(definition(1L, true)));
         given(ceremonyEventEffectSettingRepository.findAllByEventIdWithDefinition(EVENT_ID)).willReturn(List.of());
+        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(
+                1L, List.of(REQUIRED_FEATURE_ID)
+        )).willReturn(true);
 
         service.applyEffectSelections(
                 event, List.of(REQUIRED_FEATURE_ID), List.of(selection("PROJECTOR", "SIGNATURE_COMPLETED", 1L))
@@ -247,13 +238,11 @@ class CeremonyEventEffectSettingServiceTest {
     @Test
     @DisplayName("옵션 해제 시 그 옵션을 요구하는 설정만 지워지고 다른 설정은 유지된다")
     void pruneSettingsRequiringUnappliedFeatures_deletesOnlyDependentSettings() {
-        CeremonyEffectDefinition dependsOnRemoved = definition(1L, true); // requiredFeature = REQUIRED_FEATURE_ID
-        OptionalFeature keptFeature = requiredFeature();
-        ReflectionTestUtils.setField(keptFeature, "id", 30L);
+        CeremonyEffectDefinition dependsOnRemoved = definition(1L, true); // 원래 REQUIRED_FEATURE_ID가 열어주던 효과
         CeremonyEffectDefinition dependsOnKept = CeremonyEffectDefinition.builder()
                 .code("FIREWORKS").targetType(CeremonyEffectTarget.PROJECTOR)
                 .triggerType(CeremonyEffectTrigger.ALL_SIGNATURES_COMPLETED)
-                .requiredOptionalFeature(keptFeature).displayName("폭죽").rendererKey("r2").displayOrder(10)
+                .displayName("폭죽").rendererKey("r2").displayOrder(10)
                 .build();
         ReflectionTestUtils.setField(dependsOnKept, "id", 2L);
 
@@ -264,6 +253,10 @@ class CeremonyEventEffectSettingServiceTest {
 
         given(ceremonyEventEffectSettingRepository.findAllByEventIdWithDefinition(EVENT_ID))
                 .willReturn(List.of(settingToRemove, settingToKeep));
+        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(1L, List.of(30L)))
+                .willReturn(false);
+        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(2L, List.of(30L)))
+                .willReturn(true);
 
         // REQUIRED_FEATURE_ID(하이라이트)는 더 이상 적용되지 않고, 30L(폭죽)만 남았다고 가정.
         service.pruneSettingsRequiringUnappliedFeatures(EVENT_ID, List.of(30L));

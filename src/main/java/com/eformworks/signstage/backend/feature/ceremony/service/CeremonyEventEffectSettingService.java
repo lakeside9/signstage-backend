@@ -10,6 +10,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectTr
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventEffectSetting;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventEffectSettingRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
@@ -38,6 +39,7 @@ public class CeremonyEventEffectSettingService {
 
     private final CeremonyEventEffectSettingRepository ceremonyEventEffectSettingRepository;
     private final CeremonyEffectDefinitionRepository ceremonyEffectDefinitionRepository;
+    private final CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
     private final CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
     private final CeremonyEventRepository ceremonyEventRepository;
     private final CeremonyService ceremonyService;
@@ -109,7 +111,9 @@ public class CeremonyEventEffectSettingService {
             if (definition.getTargetType() != targetType || definition.getTriggerType() != triggerType) {
                 throw new ApplicationException(CeremonyErrorCode.EFFECT_SELECTION_CLASSIFICATION_MISMATCH);
             }
-            if (!appliedFeatureIds.contains(definition.getRequiredOptionalFeature().getId())) {
+            if (!ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(
+                    definition.getId(), List.copyOf(appliedFeatureIds)
+            )) {
                 throw new ApplicationException(CeremonyErrorCode.EFFECT_SELECTION_OPTIONAL_FEATURE_NOT_APPLIED);
             }
             toApply.add(definition);
@@ -132,9 +136,10 @@ public class CeremonyEventEffectSettingService {
      */
     @Transactional
     public void pruneSettingsRequiringUnappliedFeatures(Long eventId, List<Long> appliedOptionalFeatureIds) {
-        Set<Long> appliedFeatureIds = new HashSet<>(appliedOptionalFeatureIds);
         for (CeremonyEventEffectSetting setting : ceremonyEventEffectSettingRepository.findAllByEventIdWithDefinition(eventId)) {
-            if (!appliedFeatureIds.contains(setting.getDefinition().getRequiredOptionalFeature().getId())) {
+            if (!ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(
+                    setting.getDefinition().getId(), appliedOptionalFeatureIds
+            )) {
                 ceremonyEventEffectSettingRepository.delete(setting);
             }
         }

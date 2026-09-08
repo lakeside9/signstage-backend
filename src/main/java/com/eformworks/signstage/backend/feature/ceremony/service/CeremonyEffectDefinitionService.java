@@ -6,10 +6,9 @@ import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEffectDefin
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinition;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectTarget;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectTrigger;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
@@ -48,7 +47,7 @@ public class CeremonyEffectDefinitionService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final CeremonyEffectDefinitionRepository ceremonyEffectDefinitionRepository;
-    private final OptionalFeatureRepository optionalFeatureRepository;
+    private final CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     private final RolePermissionService rolePermissionService;
 
@@ -65,8 +64,6 @@ public class CeremonyEffectDefinitionService {
         }
         CeremonyEffectTarget targetType = parseTarget(request.getTargetType());
         CeremonyEffectTrigger triggerType = parseTrigger(request.getTriggerType());
-        OptionalFeature requiredOptionalFeature = optionalFeatureRepository.findById(request.getRequiredOptionalFeatureId())
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND));
 
         int displayOrder = nextDisplayOrderInGroup(targetType, triggerType);
 
@@ -74,7 +71,6 @@ public class CeremonyEffectDefinitionService {
                 .code(request.getCode())
                 .targetType(targetType)
                 .triggerType(triggerType)
-                .requiredOptionalFeature(requiredOptionalFeature)
                 .displayName(request.getDisplayName())
                 .description(request.getDescription())
                 .rendererKey(request.getRendererKey())
@@ -135,14 +131,17 @@ public class CeremonyEffectDefinitionService {
             Boolean userVisible,
             Pageable pageable
     ) {
-        return ceremonyEffectDefinitionRepository.search(
+        Page<CeremonyEffectDefinition> page = ceremonyEffectDefinitionRepository.search(
                 keyword,
                 targetType == null ? null : parseTarget(targetType),
                 triggerType == null ? null : parseTrigger(triggerType),
                 enabled,
                 userVisible,
                 pageable
-        ).map(this::toSummary);
+        );
+        Map<Long, List<Long>> optionalFeatureIdsByDefinitionId =
+                groupOptionalFeatureIdsByDefinitionId(page.getContent().stream().map(CeremonyEffectDefinition::getId).toList());
+        return page.map(definition -> toSummary(definition, optionalFeatureIdsByDefinitionId));
     }
 
     public CeremonyEffectDefinitionDto.Response.CeremonyEffectDefinitionSummary findDefinition(Long definitionId) {
@@ -152,9 +151,12 @@ public class CeremonyEffectDefinitionService {
 
     /** {@code /api/ceremony-effects} — 인증된 사용자 누구나, 활성+사용자 노출 정의만. */
     public List<CeremonyEffectDefinitionDto.Response.CeremonyEffectDefinitionSummary> findPublicDefinitions() {
-        return ceremonyEffectDefinitionRepository.findAllByEnabledTrueAndUserVisibleTrueOrderByTargetTypeAscTriggerTypeAscDisplayOrderAsc()
-                .stream()
-                .map(this::toSummary)
+        List<CeremonyEffectDefinition> definitions =
+                ceremonyEffectDefinitionRepository.findAllByEnabledTrueAndUserVisibleTrueOrderByTargetTypeAscTriggerTypeAscDisplayOrderAsc();
+        Map<Long, List<Long>> optionalFeatureIdsByDefinitionId =
+                groupOptionalFeatureIdsByDefinitionId(definitions.stream().map(CeremonyEffectDefinition::getId).toList());
+        return definitions.stream()
+                .map(definition -> toSummary(definition, optionalFeatureIdsByDefinitionId))
                 .toList();
     }
 
@@ -198,10 +200,24 @@ public class CeremonyEffectDefinitionService {
                 "targetType=" + targetType + ", triggerType=" + triggerType + ", orderedIds=" + request.getOrderedIds()
         );
 
+        Map<Long, List<Long>> optionalFeatureIdsByDefinitionId =
+                groupOptionalFeatureIdsByDefinitionId(group.stream().map(CeremonyEffectDefinition::getId).toList());
         return group.stream()
                 .sorted(Comparator.comparingInt(CeremonyEffectDefinition::getDisplayOrder))
-                .map(this::toSummary)
+                .map(definition -> toSummary(definition, optionalFeatureIdsByDefinitionId))
                 .toList();
+    }
+
+    /** 효과 정의 여러 건의 "속한 묶음 id" 목록을 한 번에 조회해 N+1 없이 묶는다. */
+    private Map<Long, List<Long>> groupOptionalFeatureIdsByDefinitionId(List<Long> definitionIds) {
+        if (definitionIds.isEmpty()) {
+            return Map.of();
+        }
+        return ceremonyEffectDefinitionOptionRepository.findAllByEffectDefinitionIdIn(definitionIds).stream()
+                .collect(Collectors.groupingBy(
+                        mapping -> mapping.getEffectDefinition().getId(),
+                        Collectors.mapping(mapping -> mapping.getOptionalFeature().getId(), Collectors.toList())
+                ));
     }
 
     private int nextDisplayOrderInGroup(CeremonyEffectTarget targetType, CeremonyEffectTrigger triggerType) {
@@ -252,12 +268,29 @@ public class CeremonyEffectDefinitionService {
     }
 
     private CeremonyEffectDefinitionDto.Response.CeremonyEffectDefinitionSummary toSummary(CeremonyEffectDefinition definition) {
+        List<Long> optionalFeatureIds = ceremonyEffectDefinitionOptionRepository.findAllByEffectDefinitionId(definition.getId())
+                .stream()
+                .map(mapping -> mapping.getOptionalFeature().getId())
+                .toList();
+        return toSummary(definition, optionalFeatureIds);
+    }
+
+    /** 목록 조회에서 미리 묶어온 "속한 묶음 id" 맵을 그대로 써서 N+1을 피한다. */
+    private CeremonyEffectDefinitionDto.Response.CeremonyEffectDefinitionSummary toSummary(
+            CeremonyEffectDefinition definition, Map<Long, List<Long>> optionalFeatureIdsByDefinitionId
+    ) {
+        return toSummary(definition, optionalFeatureIdsByDefinitionId.getOrDefault(definition.getId(), List.of()));
+    }
+
+    private CeremonyEffectDefinitionDto.Response.CeremonyEffectDefinitionSummary toSummary(
+            CeremonyEffectDefinition definition, List<Long> optionalFeatureIds
+    ) {
         return new CeremonyEffectDefinitionDto.Response.CeremonyEffectDefinitionSummary(
                 definition.getId(),
                 definition.getCode(),
                 definition.getTargetType().name(),
                 definition.getTriggerType().name(),
-                definition.getRequiredOptionalFeature().getId(),
+                optionalFeatureIds,
                 definition.getDisplayName(),
                 definition.getDescription(),
                 definition.getRendererKey(),
