@@ -16,6 +16,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.hibernate.annotations.Immutable;
 
 /**
  * 플랫폼 관리자 제어 행위 기록. append-only 로그라 core.jpa.BaseEntity(4종 감사 컬럼)를
@@ -28,6 +29,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
+@Immutable
 public class PlatformAdminAuditLog {
 
     @Id

@@ -14,9 +14,11 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.math.BigDecimal;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,9 +44,16 @@ class CapacityAddOnServiceTest {
     private CeremonyCapacityPurchaseRepository ceremonyCapacityPurchaseRepository;
     @Mock
     private PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
+    @Mock
+    private RolePermissionService rolePermissionService;
 
     @InjectMocks
     private CapacityAddOnService capacityAddOnService;
+
+    @BeforeEach
+    void setUp() {
+        given(rolePermissionService.isAllowed("PLATFORM_OPS", "ACTION_BILLING_CATALOG_MANAGE")).willReturn(true);
+    }
 
     @Test
     @DisplayName("주 용량+보조 용량을 함께 지정하면 묶음 상품(예: 서명자+태블릿)이 등록된다")

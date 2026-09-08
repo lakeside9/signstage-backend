@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -34,18 +35,24 @@ public class BillingPlan extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "supply_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
+    @Column(name = "supply_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal supplyPrice;
 
-    @Column(name = "sale_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "sale_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal salePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "discount_type", nullable = false, length = 20)
     private DiscountType discountType;
 
-    @Column(name = "discount_value", nullable = false, precision = 12, scale = 2)
+    @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal discountValue;
+
+    @Column(name = "tax_code", nullable = false, length = 50)
+    private String taxCode;
 
     @Column(name = "max_signers", nullable = false)
     private Integer maxSigners;
@@ -75,10 +82,12 @@ public class BillingPlan extends BaseEntity {
     @Builder
     private BillingPlan(
             String name,
+            String currencyCode,
             BigDecimal supplyPrice,
             BigDecimal salePrice,
             DiscountType discountType,
             BigDecimal discountValue,
+            String taxCode,
             Integer maxSigners,
             Integer maxTemplates,
             Integer maxTestEvents,
@@ -86,10 +95,12 @@ public class BillingPlan extends BaseEntity {
             Integer maxMainEvents
     ) {
         this.name = name;
+        this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
         this.supplyPrice = supplyPrice;
         this.salePrice = salePrice;
         this.discountType = discountType;
         this.discountValue = discountValue;
+        this.taxCode = taxCode == null || taxCode.isBlank() ? "KR_VAT_STANDARD" : taxCode;
         this.maxSigners = maxSigners;
         this.maxTemplates = maxTemplates;
         this.maxTestEvents = maxTestEvents;
@@ -106,10 +117,12 @@ public class BillingPlan extends BaseEntity {
      */
     public void updateInfo(
             String name,
+            String currencyCode,
             BigDecimal supplyPrice,
             BigDecimal salePrice,
             DiscountType discountType,
             BigDecimal discountValue,
+            String taxCode,
             Integer maxSigners,
             Integer maxTemplates,
             Integer maxTestEvents,
@@ -118,10 +131,12 @@ public class BillingPlan extends BaseEntity {
             boolean active
     ) {
         this.name = name;
+        this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
         this.supplyPrice = supplyPrice;
         this.salePrice = salePrice;
         this.discountType = discountType;
         this.discountValue = discountValue;
+        this.taxCode = taxCode == null || taxCode.isBlank() ? this.taxCode : taxCode;
         this.maxSigners = maxSigners;
         this.maxTemplates = maxTemplates;
         this.maxTestEvents = maxTestEvents;

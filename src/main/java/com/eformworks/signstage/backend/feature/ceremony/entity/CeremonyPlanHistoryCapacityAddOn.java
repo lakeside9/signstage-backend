@@ -13,6 +13,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * {@link CeremonyPlanHistory} 스냅샷 시점에 그 플랜에서 구매 가능했던 용량 추가구매 상품 매핑
@@ -32,6 +33,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "ceremony_plan_history_capacity_addons")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class CeremonyPlanHistoryCapacityAddOn extends BaseEntity {
 
     @Id

@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.organization.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -42,12 +43,31 @@ public class Organization extends BaseEntity {
     @Column(name = "default_locale", nullable = false, length = 10)
     private String defaultLocale;
 
+    @Column(name = "default_language_code", nullable = false, length = 10)
+    private String defaultLanguageCode;
+
+    @Column(name = "default_time_zone_id", nullable = false, length = 50)
+    private String defaultTimeZoneId;
+
+    @Column(name = "billing_currency_code", nullable = false, length = 3)
+    private String billingCurrencyCode;
+
     @Builder
-    private Organization(String name, String code, String defaultLocale) {
+    private Organization(
+            String name,
+            String code,
+            String defaultLanguageCode,
+            String defaultLocale,
+            String defaultTimeZoneId,
+            String billingCurrencyCode
+    ) {
         this.name = name;
         this.code = code;
         this.status = OrganizationStatus.ACTIVE;
-        this.defaultLocale = defaultLocale != null ? defaultLocale : "ko-KR";
+        this.defaultLanguageCode = InternationalizationDefaults.languageCodeOrDefault(defaultLanguageCode);
+        this.defaultLocale = InternationalizationDefaults.formatLocaleOrDefault(defaultLocale);
+        this.defaultTimeZoneId = InternationalizationDefaults.timeZoneIdOrDefault(defaultTimeZoneId);
+        this.billingCurrencyCode = InternationalizationDefaults.currencyCodeOrDefault(billingCurrencyCode);
     }
 
     /**
@@ -62,8 +82,17 @@ public class Organization extends BaseEntity {
      * OWNER가 조직 정보를 수정할 때 사용한다({@code OrganizationService#updateOrganization}).
      * code는 조직을 식별하는 값이라 이 경로로 바꾸지 않는다.
      */
-    public void updateInfo(String name, String defaultLocale) {
+    public void updateInfo(
+            String name,
+            String defaultLanguageCode,
+            String defaultLocale,
+            String defaultTimeZoneId,
+            String billingCurrencyCode
+    ) {
         this.name = name;
-        this.defaultLocale = defaultLocale;
+        this.defaultLanguageCode = InternationalizationDefaults.languageCodeOrDefault(defaultLanguageCode);
+        this.defaultLocale = InternationalizationDefaults.formatLocaleOrDefault(defaultLocale);
+        this.defaultTimeZoneId = InternationalizationDefaults.timeZoneIdOrDefault(defaultTimeZoneId);
+        this.billingCurrencyCode = InternationalizationDefaults.currencyCodeOrDefault(billingCurrencyCode);
     }
 }

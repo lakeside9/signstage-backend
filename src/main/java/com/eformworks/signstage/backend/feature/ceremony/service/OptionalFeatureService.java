@@ -12,10 +12,10 @@ import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOptionalFeaturePurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,12 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class OptionalFeatureService {
 
-    private static final Set<String> CATALOG_MANAGE_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
-
     private final OptionalFeatureRepository optionalFeatureRepository;
     private final OptionalFeatureHistoryRepository optionalFeatureHistoryRepository;
     private final CeremonyOptionalFeaturePurchaseRepository ceremonyOptionalFeaturePurchaseRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
+    private final RolePermissionService rolePermissionService;
 
     @Transactional
     public OptionalFeatureDto.Response.OptionalFeatureSummary createOptionalFeature(
@@ -43,9 +42,7 @@ public class OptionalFeatureService {
             Long adminUserId,
             OptionalFeatureDto.Request.CreateOptionalFeature request
     ) {
-        if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
 
         OptionalFeatureCode code = parseCode(request.getCode());
         if (optionalFeatureRepository.existsByCode(code)) {
@@ -55,10 +52,12 @@ public class OptionalFeatureService {
         OptionalFeature optionalFeature = OptionalFeature.builder()
                 .code(code)
                 .name(request.getName())
+                .currencyCode(request.getCurrencyCode())
                 .supplyPrice(request.getSupplyPrice())
                 .salePrice(request.getSalePrice())
                 .discountType(parseDiscountType(request.getDiscountType()))
                 .discountValue(request.getDiscountValue())
+                .taxCode(request.getTaxCode())
                 .projectorEffect(request.getProjectorEffect())
                 .exclusivityGroup(request.getExclusivityGroup())
                 .build();
@@ -83,9 +82,7 @@ public class OptionalFeatureService {
             Long adminUserId,
             OptionalFeatureDto.Request.UpdateOptionalFeature request
     ) {
-        if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
 
         OptionalFeature optionalFeature = optionalFeatureRepository.findById(optionalFeatureId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND));
@@ -96,10 +93,12 @@ public class OptionalFeatureService {
 
         optionalFeature.updateInfo(
                 request.getName(),
+                request.getCurrencyCode(),
                 request.getSupplyPrice(),
                 request.getSalePrice(),
                 parseDiscountType(request.getDiscountType()),
                 request.getDiscountValue(),
+                request.getTaxCode(),
                 request.getActive(),
                 request.getProjectorEffect(),
                 request.getExclusivityGroup()
@@ -155,10 +154,12 @@ public class OptionalFeatureService {
                 optionalFeature.getId(),
                 optionalFeature.getCode().name(),
                 optionalFeature.getName(),
+                optionalFeature.getCurrencyCode(),
                 optionalFeature.getSupplyPrice(),
                 optionalFeature.getSalePrice(),
                 optionalFeature.getDiscountType().name(),
                 optionalFeature.getDiscountValue(),
+                optionalFeature.getTaxCode(),
                 optionalFeature.isActive(),
                 optionalFeature.isProjectorEffect(),
                 optionalFeature.getExclusivityGroup(),
@@ -174,15 +175,24 @@ public class OptionalFeatureService {
                 history.getId(),
                 history.getCode().name(),
                 history.getName(),
+                history.getCurrencyCode(),
                 history.getSupplyPrice(),
                 history.getSalePrice(),
                 history.getDiscountType().name(),
                 history.getDiscountValue(),
+                history.getTaxCode(),
                 history.isActive(),
                 history.isProjectorEffect(),
                 history.getExclusivityGroup(),
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );
+    }
+
+    /** signstage-docs business/menu-and-action-permission-management-review.md 10장 참고. */
+    private void checkAllowed(String actingPlatformRole, String permissionKey) {
+        if (!rolePermissionService.isAllowed(actingPlatformRole, permissionKey)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
     }
 }

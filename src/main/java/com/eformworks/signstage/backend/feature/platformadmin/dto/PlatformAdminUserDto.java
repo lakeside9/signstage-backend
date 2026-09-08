@@ -51,7 +51,11 @@ public final class PlatformAdminUserDto {
 
             private String phone;
 
+            private String languageCode;
+
             private String locale;
+
+            private String timeZoneId;
         }
     }
 
@@ -68,7 +72,9 @@ public final class PlatformAdminUserDto {
             private final String name;
             private final String email;
             private final String phone;
+            private final String languageCode;
             private final String locale;
+            private final String timeZoneId;
             private final String status;
             private final String platformRole;
             /** 연속 로그인 실패로 현재 잠긴 상태인지(잠금 즉시 해제 버튼 노출 판단용). */
@@ -130,7 +136,9 @@ public final class PlatformAdminUserDto {
             private final String name;
             private final String email;
             private final String phone;
+            private final String languageCode;
             private final String locale;
+            private final String timeZoneId;
             private final String status;
             private final String platformRole;
             private final boolean passwordResetRequired;

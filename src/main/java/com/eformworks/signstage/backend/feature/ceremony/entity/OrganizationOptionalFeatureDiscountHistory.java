@@ -18,6 +18,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * 조직×선택옵션 할인 오버라이드({@link OrganizationOptionalFeatureDiscount})의 변경 이력.
@@ -28,6 +29,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "organization_optional_feature_discount_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class OrganizationOptionalFeatureDiscountHistory extends BaseEntity {
 
     @Id

@@ -4,10 +4,13 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventEffectSettingDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyResultDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
+import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyEffectRuntimeService;
+import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyEventEffectSettingService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyEventService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyResultService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,6 +46,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class CeremonyEventController {
 
     private final CeremonyEventService ceremonyEventService;
+    private final CeremonyEventEffectSettingService ceremonyEventEffectSettingService;
+    private final CeremonyEffectRuntimeService ceremonyEffectRuntimeService;
     private final CeremonyResultService ceremonyResultService;
     private final TraceIdProvider traceIdProvider;
 
@@ -149,6 +154,76 @@ public class CeremonyEventController {
         CeremonyEventDto.Response.CeremonyEventSummary response = ceremonyEventService
                 .updateOptionalFeatures(organizationId, ceremonyId, eventId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "이벤트 효과 설정 조회", description = "(target, trigger) 분류별로 선택된 프리셋을 돌려준다.")
+    @GetMapping("/{eventId}/effects/settings")
+    public ApiResponse<List<CeremonyEventEffectSettingDto.Response.EffectSettingSummary>> findEffectSettings(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId
+    ) {
+        List<CeremonyEventEffectSettingDto.Response.EffectSettingSummary> response = ceremonyEventEffectSettingService
+                .findEffectSettings(organizationId, ceremonyId, eventId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "이벤트 효과 설정 교체",
+            description = "선택 안 한 분류는 전부 해제된다(전체 교체). 선택한 효과가 요구하는 선택옵션이 이 "
+                    + "이벤트에 적용돼 있어야 한다. DRAFT/READY일 때만 가능하다."
+    )
+    @PutMapping("/{eventId}/effects/settings")
+    public ApiResponse<List<CeremonyEventEffectSettingDto.Response.EffectSettingSummary>> updateEffectSettings(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId,
+            @Valid @RequestBody CeremonyEventEffectSettingDto.Request.UpdateEffectSelections request
+    ) {
+        List<CeremonyEventEffectSettingDto.Response.EffectSettingSummary> response = ceremonyEventEffectSettingService
+                .updateEffectSettings(organizationId, ceremonyId, eventId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "이벤트 효과 runtime ON/OFF",
+            description = "STARTED일 때만 가능하다. 비활성 정의는 ON으로 바꿀 수 없다. "
+                    + "재생 명령이 아니라 설정 변경 알림(ceremony.effect.setting.changed)만 방송한다."
+    )
+    @PutMapping("/{eventId}/effects/runtime")
+    public ApiResponse<Void> updateEffectRuntime(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId,
+            @Valid @RequestBody CeremonyEventEffectSettingDto.Request.UpdateRuntimeEnabled request
+    ) {
+        ceremonyEffectRuntimeService.updateRuntimeEnabled(
+                organizationId, ceremonyId, eventId, currentUser.userId(),
+                request.getTargetType(), request.getTriggerType(), request.getRuntimeEnabled()
+        );
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "전체 효과 수동 실행",
+            description = "STARTED, runtime ON, 수동 실행 허용된 효과만 가능하다. 현재 완료 인원·자동 실행 이력과 "
+                    + "무관하게 언제든 다시 재생할 수 있되, 짧은 시간 안에서는 rate limit으로 막는다."
+    )
+    @PostMapping("/{eventId}/effects/trigger")
+    public ApiResponse<Void> triggerManualEffect(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long eventId,
+            @Valid @RequestBody CeremonyEventEffectSettingDto.Request.TriggerManualEffect request
+    ) {
+        ceremonyEffectRuntimeService.triggerManualCelebration(
+                organizationId, ceremonyId, eventId, currentUser.userId(), request.getTargetType(), request.getTriggerType()
+        );
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 
     @Operation(summary = "문서 매핑", description = "DRAFT/READY일 때만 가능하다. STARTED/FINISHED는 잠긴 상태다.")

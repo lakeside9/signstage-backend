@@ -16,6 +16,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * 파트너(조직) 정보 변경 이력. append-only다 — 수정/삭제 메서드를 두지 않는다(카탈로그
@@ -31,6 +32,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "organization_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class OrganizationHistory extends BaseEntity {
 
     @Id
@@ -54,12 +56,24 @@ public class OrganizationHistory extends BaseEntity {
     @Column(name = "default_locale", nullable = false, length = 10)
     private String defaultLocale;
 
+    @Column(name = "default_language_code", nullable = false, length = 10)
+    private String defaultLanguageCode;
+
+    @Column(name = "default_time_zone_id", nullable = false, length = 50)
+    private String defaultTimeZoneId;
+
+    @Column(name = "billing_currency_code", nullable = false, length = 3)
+    private String billingCurrencyCode;
+
     @Builder
     private OrganizationHistory(Organization organization) {
         this.organization = organization;
         this.name = organization.getName();
         this.code = organization.getCode();
         this.status = organization.getStatus();
+        this.defaultLanguageCode = organization.getDefaultLanguageCode();
         this.defaultLocale = organization.getDefaultLocale();
+        this.defaultTimeZoneId = organization.getDefaultTimeZoneId();
+        this.billingCurrencyCode = organization.getBillingCurrencyCode();
     }
 }

@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.identity.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -43,8 +44,14 @@ public class User extends BaseEntity {
     @Column(length = 20)
     private String phone;
 
+    @Column(name = "language_code", nullable = false, length = 10)
+    private String languageCode;
+
     @Column(nullable = false, length = 10)
     private String locale;
+
+    @Column(name = "time_zone_id", nullable = false, length = 50)
+    private String timeZoneId;
 
     @Column(nullable = false, length = 255)
     private String password;
@@ -72,7 +79,9 @@ public class User extends BaseEntity {
             String name,
             String email,
             String phone,
+            String languageCode,
             String locale,
+            String timeZoneId,
             String password,
             UserStatus status,
             PlatformRole platformRole,
@@ -82,7 +91,9 @@ public class User extends BaseEntity {
         this.name = name;
         this.email = email;
         this.phone = phone;
-        this.locale = locale != null ? locale : "ko-KR";
+        this.languageCode = InternationalizationDefaults.languageCodeOrDefault(languageCode);
+        this.locale = InternationalizationDefaults.formatLocaleOrDefault(locale);
+        this.timeZoneId = InternationalizationDefaults.timeZoneIdOrDefault(timeZoneId);
         this.password = password;
         this.status = status != null ? status : UserStatus.ACTIVE;
         this.platformRole = platformRole;
@@ -112,11 +123,20 @@ public class User extends BaseEntity {
         this.passwordResetRequired = false;
     }
 
-    public void changeProfile(String name, String email, String phone, String locale) {
+    public void changeProfile(
+            String name,
+            String email,
+            String phone,
+            String languageCode,
+            String locale,
+            String timeZoneId
+    ) {
         this.name = name;
         this.email = email;
         this.phone = phone;
-        this.locale = locale != null ? locale : this.locale;
+        this.languageCode = InternationalizationDefaults.languageCodeOrDefault(languageCode);
+        this.locale = InternationalizationDefaults.formatLocaleOrDefault(locale);
+        this.timeZoneId = InternationalizationDefaults.timeZoneIdOrDefault(timeZoneId);
     }
 
     /**

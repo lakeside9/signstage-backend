@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -38,18 +39,24 @@ public class OptionalFeature extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "supply_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
+    @Column(name = "supply_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal supplyPrice;
 
-    @Column(name = "sale_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "sale_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal salePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "discount_type", nullable = false, length = 20)
     private DiscountType discountType;
 
-    @Column(name = "discount_value", nullable = false, precision = 12, scale = 2)
+    @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal discountValue;
+
+    @Column(name = "tax_code", nullable = false, length = 50)
+    private String taxCode;
 
     /**
      * 사용여부(비활성화해도 행은 지우지 않는다). 비활성화된 선택옵션은 새 추가구매 대상에서
@@ -85,19 +92,23 @@ public class OptionalFeature extends BaseEntity {
     private OptionalFeature(
             OptionalFeatureCode code,
             String name,
+            String currencyCode,
             BigDecimal supplyPrice,
             BigDecimal salePrice,
             DiscountType discountType,
             BigDecimal discountValue,
+            String taxCode,
             Boolean projectorEffect,
             String exclusivityGroup
     ) {
         this.code = code;
         this.name = name;
+        this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
         this.supplyPrice = supplyPrice;
         this.salePrice = salePrice;
         this.discountType = discountType;
         this.discountValue = discountValue;
+        this.taxCode = taxCode == null || taxCode.isBlank() ? "KR_VAT_STANDARD" : taxCode;
         this.active = true;
         this.projectorEffect = projectorEffect != null ? projectorEffect : true;
         this.exclusivityGroup = exclusivityGroup;
@@ -110,19 +121,23 @@ public class OptionalFeature extends BaseEntity {
      */
     public void updateInfo(
             String name,
+            String currencyCode,
             BigDecimal supplyPrice,
             BigDecimal salePrice,
             DiscountType discountType,
             BigDecimal discountValue,
+            String taxCode,
             boolean active,
             boolean projectorEffect,
             String exclusivityGroup
     ) {
         this.name = name;
+        this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
         this.supplyPrice = supplyPrice;
         this.salePrice = salePrice;
         this.discountType = discountType;
         this.discountValue = discountValue;
+        this.taxCode = taxCode == null || taxCode.isBlank() ? this.taxCode : taxCode;
         this.active = active;
         this.projectorEffect = projectorEffect;
         this.exclusivityGroup = exclusivityGroup;

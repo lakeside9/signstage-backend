@@ -13,6 +13,16 @@ public enum CeremonyErrorCode implements ErrorCode {
     BILLING_PLAN_NOT_FOUND("CEREMONY_BILLING_PLAN_NOT_FOUND", HttpStatus.NOT_FOUND, "과금 플랜을 찾을 수 없습니다."),
     OPTIONAL_FEATURE_NOT_FOUND("CEREMONY_OPTIONAL_FEATURE_NOT_FOUND", HttpStatus.NOT_FOUND, "선택옵션을 찾을 수 없습니다."),
     CAPACITY_ADDON_NOT_FOUND("CEREMONY_CAPACITY_ADDON_NOT_FOUND", HttpStatus.NOT_FOUND, "용량 추가구매 상품을 찾을 수 없습니다."),
+    CURRENCY_MISMATCH(
+            "CEREMONY_CURRENCY_MISMATCH",
+            HttpStatus.CONFLICT,
+            "행사와 과금 상품의 통화가 일치하지 않습니다."
+    ),
+    TAX_POLICY_NOT_FOUND(
+            "CEREMONY_TAX_POLICY_NOT_FOUND",
+            HttpStatus.CONFLICT,
+            "거래일에 적용할 수 있는 세금 정책을 찾을 수 없습니다."
+    ),
     OPTIONAL_FEATURE_CODE_DUPLICATE(
             "CEREMONY_OPTIONAL_FEATURE_CODE_DUPLICATE",
             HttpStatus.CONFLICT,
@@ -265,6 +275,54 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_EVENT_MAPPING_CHECK_NOT_ALLOWED",
             HttpStatus.CONFLICT,
             "진행 중(STARTED)인 테스트 또는 리허설 행사만 서명매핑확인을 실행할 수 있습니다."
+    ),
+    EFFECT_DEFINITION_NOT_FOUND(
+            "CEREMONY_EFFECT_DEFINITION_NOT_FOUND", HttpStatus.NOT_FOUND, "이벤트 효과 정의를 찾을 수 없습니다."
+    ),
+    EFFECT_DEFINITION_CODE_DUPLICATE(
+            "CEREMONY_EFFECT_DEFINITION_CODE_DUPLICATE",
+            HttpStatus.CONFLICT,
+            "이미 등록된 이벤트 효과 코드입니다."
+    ),
+    EFFECT_DEFINITION_ORDER_GROUP_MISMATCH(
+            "CEREMONY_EFFECT_DEFINITION_ORDER_GROUP_MISMATCH",
+            HttpStatus.CONFLICT,
+            "같은 분류(target, trigger) 안에서만 표시 순서를 바꿀 수 있습니다."
+    ),
+    EFFECT_DEFINITION_INACTIVE(
+            "CEREMONY_EFFECT_DEFINITION_INACTIVE",
+            HttpStatus.CONFLICT,
+            "비활성화된 이벤트 효과는 선택할 수 없습니다."
+    ),
+    EFFECT_SELECTION_CLASSIFICATION_MISMATCH(
+            "CEREMONY_EFFECT_SELECTION_CLASSIFICATION_MISMATCH",
+            HttpStatus.CONFLICT,
+            "선택한 효과의 분류(target, trigger)가 요청과 일치하지 않습니다."
+    ),
+    EFFECT_SELECTION_OPTIONAL_FEATURE_NOT_APPLIED(
+            "CEREMONY_EFFECT_SELECTION_OPTIONAL_FEATURE_NOT_APPLIED",
+            HttpStatus.CONFLICT,
+            "이 효과가 필요로 하는 선택옵션이 이 하위 행사에 적용되어 있지 않습니다."
+    ),
+    EFFECT_SETTING_NOT_FOUND(
+            "CEREMONY_EFFECT_SETTING_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "이 분류(target, trigger)에 선택된 이벤트 효과가 없습니다."
+    ),
+    EFFECT_RUNTIME_DISABLED(
+            "CEREMONY_EFFECT_RUNTIME_DISABLED",
+            HttpStatus.CONFLICT,
+            "이 효과는 지금 꺼져 있어(runtime OFF) 실행할 수 없습니다."
+    ),
+    EFFECT_NOT_MANUALLY_TRIGGERABLE(
+            "CEREMONY_EFFECT_NOT_MANUALLY_TRIGGERABLE",
+            HttpStatus.CONFLICT,
+            "이 효과는 수동 실행을 지원하지 않습니다."
+    ),
+    EFFECT_MANUAL_TRIGGER_RATE_LIMITED(
+            "CEREMONY_EFFECT_MANUAL_TRIGGER_RATE_LIMITED",
+            HttpStatus.TOO_MANY_REQUESTS,
+            "효과 수동 실행이 너무 잦습니다. 잠시 후 다시 시도해주세요."
     );
 
     private final String code;

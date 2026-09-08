@@ -12,6 +12,7 @@ import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final OrganizationRepository organizationRepository;
     private final UserRepository userRepository;
+    private final RolePermissionService rolePermissionService;
 
     public List<MemberDto.Response.MemberSummary> findMembers(Long organizationId, Long currentUserId) {
         findActiveMemberOrThrow(organizationId, currentUserId);
@@ -145,7 +147,7 @@ public class MemberService {
     }
 
     private void checkCanManageMembers(Member actingMember) {
-        if (actingMember.getRole() != MemberRole.OWNER && actingMember.getRole() != MemberRole.ADMIN) {
+        if (!rolePermissionService.isAllowed(actingMember.getRole().name(), "ACTION_MEMBER_MANAGE")) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
     }

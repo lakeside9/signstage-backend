@@ -12,6 +12,7 @@ import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.organization.entity.OrganizationHistory;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class OrganizationService {
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final OrganizationHistoryRepository organizationHistoryRepository;
+    private final RolePermissionService rolePermissionService;
 
     public OrganizationDto.Response.Organization retrieveOrganization(Long organizationId, Long currentUserId) {
         Organization organization = findOrganizationOrThrow(organizationId);
@@ -57,10 +59,20 @@ public class OrganizationService {
     ) {
         Organization organization = findOrganizationOrThrow(organizationId);
         Member member = findActiveMemberOrThrow(organizationId, currentUserId);
-        if (member.getRole() != MemberRole.OWNER) {
+        if (!rolePermissionService.isAllowed(member.getRole().name(), "ACTION_COMPANY_INFO_EDIT")) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
-        organization.updateInfo(request.getName(), request.getDefaultLocale());
+        try {
+            organization.updateInfo(
+                    request.getName(),
+                    request.getDefaultLanguageCode(),
+                    request.getDefaultLocale(),
+                    request.getDefaultTimeZoneId(),
+                    request.getBillingCurrencyCode()
+            );
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
         recordOrganizationHistory(organization);
         return toOrganizationResponse(organization, member.getRole());
     }
@@ -91,7 +103,10 @@ public class OrganizationService {
                 history.getName(),
                 history.getCode(),
                 history.getStatus().name(),
+                history.getDefaultLanguageCode(),
                 history.getDefaultLocale(),
+                history.getDefaultTimeZoneId(),
+                history.getBillingCurrencyCode(),
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );
@@ -113,7 +128,10 @@ public class OrganizationService {
                 organization.getName(),
                 organization.getCode(),
                 organization.getStatus().name(),
+                organization.getDefaultLanguageCode(),
                 organization.getDefaultLocale(),
+                organization.getDefaultTimeZoneId(),
+                organization.getBillingCurrencyCode(),
                 organization.getCreatedAt(),
                 myRole.name()
         );

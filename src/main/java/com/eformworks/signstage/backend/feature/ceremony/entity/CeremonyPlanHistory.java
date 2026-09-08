@@ -17,6 +17,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * Ceremony의 플랜 변경 이력. append-only다 — 수정/삭제 메서드를 두지 않는다. Ceremony 생성 시
@@ -33,6 +34,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "ceremony_plan_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class CeremonyPlanHistory extends BaseEntity {
 
     @Id
@@ -50,18 +52,24 @@ public class CeremonyPlanHistory extends BaseEntity {
     @Column(name = "plan_name", nullable = false, length = 100)
     private String planName;
 
-    @Column(name = "plan_supply_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
+    @Column(name = "plan_supply_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal planSupplyPrice;
 
-    @Column(name = "plan_sale_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "plan_sale_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal planSalePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "plan_discount_type", nullable = false, length = 20)
     private DiscountType planDiscountType;
 
-    @Column(name = "plan_discount_value", nullable = false, precision = 12, scale = 2)
+    @Column(name = "plan_discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal planDiscountValue;
+
+    @Column(name = "tax_code", nullable = false, length = 50)
+    private String taxCode;
 
     @Column(name = "plan_max_signers", nullable = false)
     private Integer planMaxSigners;
@@ -89,10 +97,12 @@ public class CeremonyPlanHistory extends BaseEntity {
         this.ceremony = ceremony;
         this.billingPlan = billingPlan;
         this.planName = billingPlan.getName();
+        this.currencyCode = billingPlan.getCurrencyCode();
         this.planSupplyPrice = billingPlan.getSupplyPrice();
         this.planSalePrice = billingPlan.getSalePrice();
         this.planDiscountType = discountType != null ? discountType : billingPlan.getDiscountType();
         this.planDiscountValue = discountValue != null ? discountValue : billingPlan.getDiscountValue();
+        this.taxCode = billingPlan.getTaxCode();
         this.planMaxSigners = billingPlan.getMaxSigners();
         this.planMaxTemplates = billingPlan.getMaxTemplates();
         this.planMaxTestEvents = billingPlan.getMaxTestEvents();

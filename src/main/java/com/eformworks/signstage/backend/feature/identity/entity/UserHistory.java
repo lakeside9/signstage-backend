@@ -16,6 +16,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * 회원(User) 정보 변경 이력. append-only다 — 카탈로그 *History류와 같은 패턴
@@ -27,16 +28,14 @@ import lombok.NoArgsConstructor;
  * 그 순간의 전체 상태를 스냅샷 한 행씩 남긴다(2026-08-30 요청). 비밀번호(해시)는 절대
  * 스냅샷하지 않는다 — 이 테이블은 "회원 정보"이지 인증 정보가 아니다.
  *
- * <p><b>탈퇴 PII 마스킹과의 관계</b>: {@code User#withdraw}가 살아있는 {@code users} 행의
- * 이름/이메일/전화번호를 지우는 것과 같은 원칙을, 회원이 탈퇴할 때는 그 회원의 기존
- * {@code UserHistory} 행들에도 그대로 적용한다({@code UserHistoryRepository#maskPiiForUser})
- * — 그러지 않으면 이력 테이블이 "삭제된 PII를 되살릴 수 있는" 우회로가 되어 탈퇴 마스킹의
- * 취지(signstage-docs business/user-organization-design.md 8.2절)가 무의미해진다.
+ * <p>회원 탈퇴 트랜잭션도 기존 이력을 수정하지 않고 마스킹된 최신 상태를 새 행으로 남긴다.
+ * 과거 이력의 PII 보존기간 만료 처리는 일반 애플리케이션과 권한을 분리한 별도 배치가 맡는다.
  */
 @Entity
 @Table(name = "user_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class UserHistory extends BaseEntity {
 
     @Id
@@ -59,8 +58,14 @@ public class UserHistory extends BaseEntity {
     @Column(length = 20)
     private String phone;
 
+    @Column(name = "language_code", nullable = false, length = 10)
+    private String languageCode;
+
     @Column(nullable = false, length = 10)
     private String locale;
+
+    @Column(name = "time_zone_id", nullable = false, length = 50)
+    private String timeZoneId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -80,7 +85,9 @@ public class UserHistory extends BaseEntity {
         this.name = user.getName();
         this.email = user.getEmail();
         this.phone = user.getPhone();
+        this.languageCode = user.getLanguageCode();
         this.locale = user.getLocale();
+        this.timeZoneId = user.getTimeZoneId();
         this.status = user.getStatus();
         this.platformRole = user.getPlatformRole();
         this.passwordResetRequired = user.isPasswordResetRequired();

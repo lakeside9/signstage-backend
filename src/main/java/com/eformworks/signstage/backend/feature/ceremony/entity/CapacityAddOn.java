@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -53,18 +54,24 @@ public class CapacityAddOn extends BaseEntity {
     @Column(name = "secondary_unit_amount")
     private Integer secondaryUnitAmount;
 
-    @Column(name = "supply_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
+    @Column(name = "supply_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal supplyPrice;
 
-    @Column(name = "sale_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "sale_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal salePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "discount_type", nullable = false, length = 20)
     private DiscountType discountType;
 
-    @Column(name = "discount_value", nullable = false, precision = 12, scale = 2)
+    @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal discountValue;
+
+    @Column(name = "tax_code", nullable = false, length = 50)
+    private String taxCode;
 
     /**
      * 사용여부(비활성화해도 행은 지우지 않는다). 비활성화된 상품은 새 추가구매 대상에서
@@ -80,19 +87,23 @@ public class CapacityAddOn extends BaseEntity {
             Integer unitAmount,
             CapacityType secondaryCapacityType,
             Integer secondaryUnitAmount,
+            String currencyCode,
             BigDecimal supplyPrice,
             BigDecimal salePrice,
             DiscountType discountType,
-            BigDecimal discountValue
+            BigDecimal discountValue,
+            String taxCode
     ) {
         this.capacityType = capacityType;
         this.unitAmount = unitAmount;
         this.secondaryCapacityType = secondaryCapacityType;
         this.secondaryUnitAmount = secondaryUnitAmount;
+        this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
         this.supplyPrice = supplyPrice;
         this.salePrice = salePrice;
         this.discountType = discountType;
         this.discountValue = discountValue;
+        this.taxCode = taxCode == null || taxCode.isBlank() ? "KR_VAT_STANDARD" : taxCode;
         this.active = true;
     }
 
@@ -104,18 +115,22 @@ public class CapacityAddOn extends BaseEntity {
     public void updateInfo(
             Integer unitAmount,
             Integer secondaryUnitAmount,
+            String currencyCode,
             BigDecimal supplyPrice,
             BigDecimal salePrice,
             DiscountType discountType,
             BigDecimal discountValue,
+            String taxCode,
             boolean active
     ) {
         this.unitAmount = unitAmount;
         this.secondaryUnitAmount = secondaryUnitAmount;
+        this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
         this.supplyPrice = supplyPrice;
         this.salePrice = salePrice;
         this.discountType = discountType;
         this.discountValue = discountValue;
+        this.taxCode = taxCode == null || taxCode.isBlank() ? this.taxCode : taxCode;
         this.active = active;
     }
 }

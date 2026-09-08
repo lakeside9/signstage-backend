@@ -18,10 +18,10 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanR
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,8 +38,6 @@ import org.springframework.util.CollectionUtils;
 @Transactional(readOnly = true)
 public class BillingPlanService {
 
-    private static final Set<String> CATALOG_MANAGE_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
-
     private final BillingPlanRepository billingPlanRepository;
     private final OptionalFeatureRepository optionalFeatureRepository;
     private final BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
@@ -48,6 +46,7 @@ public class BillingPlanService {
     private final BillingPlanHistoryRepository billingPlanHistoryRepository;
     private final CeremonyRepository ceremonyRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
+    private final RolePermissionService rolePermissionService;
 
     @Transactional
     public BillingPlanDto.Response.BillingPlanSummary createPlan(
@@ -55,9 +54,7 @@ public class BillingPlanService {
             Long adminUserId,
             BillingPlanDto.Request.CreatePlan request
     ) {
-        if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
 
         List<Long> optionalFeatureIds = request.getOptionalFeatureIds() == null
                 ? List.of()
@@ -71,10 +68,12 @@ public class BillingPlanService {
 
         BillingPlan plan = BillingPlan.builder()
                 .name(request.getName())
+                .currencyCode(request.getCurrencyCode())
                 .supplyPrice(request.getSupplyPrice())
                 .salePrice(request.getSalePrice())
                 .discountType(parseDiscountType(request.getDiscountType()))
                 .discountValue(request.getDiscountValue())
+                .taxCode(request.getTaxCode())
                 .maxSigners(request.getMaxSigners())
                 .maxTemplates(request.getMaxTemplates())
                 .maxTestEvents(request.getMaxTestEvents())
@@ -119,9 +118,7 @@ public class BillingPlanService {
             Long adminUserId,
             BillingPlanDto.Request.UpdatePlan request
     ) {
-        if (!CATALOG_MANAGE_ALLOWED_ROLES.contains(actingPlatformRole)) {
-            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
-        }
+        checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
 
         BillingPlan plan = billingPlanRepository.findById(planId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
@@ -144,10 +141,12 @@ public class BillingPlanService {
 
         plan.updateInfo(
                 request.getName(),
+                request.getCurrencyCode(),
                 request.getSupplyPrice(),
                 request.getSalePrice(),
                 parseDiscountType(request.getDiscountType()),
                 request.getDiscountValue(),
+                request.getTaxCode(),
                 request.getMaxSigners(),
                 request.getMaxTemplates(),
                 request.getMaxTestEvents(),
@@ -253,10 +252,12 @@ public class BillingPlanService {
         return new BillingPlanDto.Response.BillingPlanSummary(
                 plan.getId(),
                 plan.getName(),
+                plan.getCurrencyCode(),
                 plan.getSupplyPrice(),
                 plan.getSalePrice(),
                 plan.getDiscountType().name(),
                 plan.getDiscountValue(),
+                plan.getTaxCode(),
                 plan.getMaxSigners(),
                 plan.getMaxTemplates(),
                 plan.getMaxTestEvents(),
@@ -274,10 +275,12 @@ public class BillingPlanService {
         return new BillingPlanDto.Response.BillingPlanHistorySummary(
                 history.getId(),
                 history.getName(),
+                history.getCurrencyCode(),
                 history.getSupplyPrice(),
                 history.getSalePrice(),
                 history.getDiscountType().name(),
                 history.getDiscountValue(),
+                history.getTaxCode(),
                 history.getMaxSigners(),
                 history.getMaxTemplates(),
                 history.getMaxTestEvents(),
@@ -287,5 +290,12 @@ public class BillingPlanService {
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );
+    }
+
+    /** signstage-docs business/menu-and-action-permission-management-review.md 10장 참고. */
+    private void checkAllowed(String actingPlatformRole, String permissionKey) {
+        if (!rolePermissionService.isAllowed(actingPlatformRole, permissionKey)) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
     }
 }

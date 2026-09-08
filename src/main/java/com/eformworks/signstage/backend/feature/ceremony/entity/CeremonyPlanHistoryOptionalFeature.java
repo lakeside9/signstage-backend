@@ -13,6 +13,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * {@link CeremonyPlanHistory} 스냅샷 시점에 그 플랜에 포함돼 있던 선택옵션 매핑(다대다 조인).
@@ -31,6 +32,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "ceremony_plan_history_optional_features")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class CeremonyPlanHistoryOptionalFeature extends BaseEntity {
 
     @Id

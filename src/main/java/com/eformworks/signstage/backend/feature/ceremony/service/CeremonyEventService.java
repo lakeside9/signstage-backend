@@ -36,6 +36,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRe
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +73,8 @@ public class CeremonyEventService {
     private final SignerRepository signerRepository;
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
     private final CeremonyService ceremonyService;
+    private final CeremonyEventEffectSettingService ceremonyEventEffectSettingService;
+    private final CeremonyEventSignerStateService ceremonyEventSignerStateService;
 
     @Transactional
     public CeremonyEventDto.Response.CeremonyEventSummary createCeremonyEvent(
@@ -124,6 +127,12 @@ public class CeremonyEventService {
         List<Long> appliedIds = request.getOptionalFeatureIds() == null
                 ? List.of()
                 : applyOptionalFeatures(ceremony, event, request.getOptionalFeatureIds());
+
+        // 등록 화면에서도 이벤트 효과 프리셋을 바로 선택할 수 있게 한다 — null이면 아무것도
+        // 선택하지 않는다(BE-SETTING-02). 방금 적용한 appliedIds로 entitlement를 검증한다.
+        if (request.getEffectSelections() != null) {
+            ceremonyEventEffectSettingService.applyEffectSelections(event, appliedIds, request.getEffectSelections());
+        }
 
         return toSummary(event, appliedIds);
     }
@@ -220,6 +229,13 @@ public class CeremonyEventService {
                 ? retrieveAppliedOptionalFeatureIds(event)
                 : applyOptionalFeatures(ceremony, event, request.getOptionalFeatureIds());
 
+        // 수정 화면에서도 이벤트 효과 프리셋을 바꿀 수 있게 한다 — null이면 기존 선택을 그대로
+        // 둔다. 빈 리스트를 명시적으로 보내면 전부 해제한다(BE-SETTING-02). 이 메서드 상단의
+        // checkEventNotLocked(event) 호출이 이미 STARTED/FINISHED를 걸러냈다.
+        if (request.getEffectSelections() != null) {
+            ceremonyEventEffectSettingService.applyEffectSelections(event, optionalFeatureIds, request.getEffectSelections());
+        }
+
         return toSummary(event, optionalFeatureIds);
     }
 
@@ -292,6 +308,11 @@ public class CeremonyEventService {
                     CeremonyEventOptionalFeature.builder().ceremonyEvent(event).optionalFeature(feature).build()
             );
         }
+
+        // 옵션 해제 시 그 옵션을 요구하는 이벤트 효과 설정도 함께 정리한다(BE-SETTING-02) — 세
+        // 경로(등록/수정/적용옵션 교체) 모두 이 메서드를 거치므로 별도 연결이 필요 없다. 새
+        // 이벤트(effect 설정이 아직 하나도 없음)에서도 안전하게 no-op이다.
+        ceremonyEventEffectSettingService.pruneSettingsRequiringUnappliedFeatures(event.getId(), requestedIds);
 
         return requestedIds;
     }
@@ -562,6 +583,7 @@ public class CeremonyEventService {
                         .message("signerId=" + signerId)
                         .build()
         );
+        ceremonyEventSignerStateService.markSigning(event, signer);
 
         ceremonyRealtimeNotifier.notifySignatureReplaced(eventId, signerId, signer.getName());
     }
@@ -590,6 +612,7 @@ public class CeremonyEventService {
             throw new ApplicationException(CeremonyErrorCode.EVENT_BULK_RESET_NOT_ALLOWED);
         }
 
+        List<Signer> resetSigners = new ArrayList<>();
         for (Long signerId : collectFinishRequiredSignerIds(event)) {
             Signer signer = signerRepository.findById(signerId).orElse(null);
             if (signer == null) {
@@ -608,7 +631,12 @@ public class CeremonyEventService {
                             .build()
             );
             ceremonyRealtimeNotifier.notifySignatureReplaced(eventId, signerId, signer.getName());
+            resetSigners.add(signer);
         }
+        // 개별 replaceSignerSignature(markSigning)와 달리 일괄 초기화는 전부 PENDING으로
+        // 되돌린다 — signstage-docs business/ceremony-event-effect-implementation-tasks.md
+        // BE-STATE-02 결정.
+        ceremonyEventSignerStateService.markAllPending(event, resetSigners);
     }
 
     /**
@@ -736,28 +764,19 @@ public class CeremonyEventService {
     }
 
     private void validateFinishConditions(CeremonyEvent event) {
-        for (Long signerId : collectFinishRequiredSignerIds(event)) {
-            if (!isSignerSignatureComplete(event.getId(), signerId)) {
-                throw new ApplicationException(CeremonyErrorCode.EVENT_FINISH_CONDITION_NOT_MET);
-            }
+        if (!ceremonyEventSignerStateService.isAllComplete(event.getId(), collectFinishRequiredSignerIds(event))) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_FINISH_CONDITION_NOT_MET);
         }
     }
 
     /**
-     * {@link #validateFinishConditions}와 정확히 같은 기준(필수 서명자 전원의 최신 감사 로그가
-     * SIGNATURE_COMPLETE인지)으로 "지금 전원 완료 상태인가"만 boolean으로 돌려준다.
-     * {@link SignerPortalService#completeSignature}가 서명 완료 처리 직후 "방금 전원 완료로
-     * 전환됐는가"를 판정해 폭죽(ALL_SIGNED_FIREWORKS) 브로드캐스트 여부를 정하는 데 쓴다 —
-     * 두 서비스가 인가 모델은 다르지만(4.5절), 이 계산 자체는 순수 조회라 조직 스코프 검사가
-     * 없으므로 예외적으로 공유한다(package-private).
+     * {@code POST .../finish}가 완료를 요구하는 서명자 집합 — CONTRACT+EXHIBITION 매핑의 필수
+     * 서명란이 참조하는 signerId. {@link CeremonyEffectRuntimeService}도 전원완료 자동 실행
+     * 판정에 그대로 재사용한다(package-private) — 다만 그쪽은 이 집합이 비어 있으면 "전체
+     * 완료 아님"으로 별도 처리한다(빈 집합에 대한 {@code allMatch}의 공허한 참(vacuous
+     * truth)을 자동 실행 판정에서만 막는다, BE-RUNTIME-02).
      */
-    boolean isAllRequiredSignersComplete(CeremonyEvent event) {
-        return collectFinishRequiredSignerIds(event).stream()
-                .allMatch(signerId -> isSignerSignatureComplete(event.getId(), signerId));
-    }
-
-    /** {@code POST .../finish}가 완료를 요구하는 서명자 집합 — CONTRACT+EXHIBITION 매핑의 필수 서명란이 참조하는 signerId. */
-    private Set<Long> collectFinishRequiredSignerIds(CeremonyEvent event) {
+    Set<Long> collectFinishRequiredSignerIds(CeremonyEvent event) {
         List<CeremonyTemplate> contractMappings = ceremonyTemplateRepository
                 .findAllByCeremonyEventIdAndDocumentRole(event.getId(), TemplateDocumentRole.CONTRACT);
         List<CeremonyTemplate> exhibitionMappings = ceremonyTemplateRepository
@@ -790,29 +809,9 @@ public class CeremonyEventService {
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         return collectFinishRequiredSignerIds(event).stream()
                 .map(signerId -> new CeremonyEventDto.Response.SignerCompletionStatus(
-                        signerId, isSignerSignatureComplete(eventId, signerId)
+                        signerId, ceremonyEventSignerStateService.isSignerComplete(eventId, signerId)
                 ))
                 .toList();
-    }
-
-    /**
-     * {@code SIGNATURE_COMPLETE}/{@code SIGNATURE_REPLACE}/{@code SIGNATURE_CLEAR} 중 이
-     * 서명자의 가장 최근 로그가 {@code SIGNATURE_COMPLETE}인지로 "지금 완료 상태인가"를
-     * 판정한다 — {@link SignerPortalService}의 같은 이름 메서드와 동일한 판정이지만, 두
-     * 서비스가 서로 다른 인가 모델(조직 스코프 vs JWT-free 포털)이라 헬퍼를 공유하지 않는
-     * 기존 관례를 따른다. CLEAR를 목록에 넣은 이유도 그쪽과 같다 — 서명자가 완료 후 다시
-     * 지우고 그리는 도중엔(행사 종료 전까지 언제든 가능) 이 이벤트의 완료 조건 검사
-     * ({@link #validateFinishConditions})가 "아직 완료 안 됨"으로 정확히 봐야 한다.
-     */
-    private boolean isSignerSignatureComplete(Long eventId, Long signerId) {
-        return ceremonyEventLogRepository
-                .findTopByCeremonyEventIdAndTargetSignerIdAndEventActionInOrderByCreatedAtDesc(
-                        eventId,
-                        signerId,
-                        List.of(CeremonyEventAction.SIGNATURE_COMPLETE, CeremonyEventAction.SIGNATURE_REPLACE, CeremonyEventAction.SIGNATURE_CLEAR)
-                )
-                .map(log -> log.getEventAction() == CeremonyEventAction.SIGNATURE_COMPLETE)
-                .orElse(false);
     }
 
     private void recordLog(CeremonyEvent event, ActorType actorType, Long actorId, CeremonyEventAction action) {
@@ -840,9 +839,7 @@ public class CeremonyEventService {
     }
 
     private void checkEventNotLocked(CeremonyEvent event) {
-        if (event.getStatus() == CeremonyEventStatus.STARTED
-                || event.getStatus() == CeremonyEventStatus.FINISHED
-                || event.getStatus() == CeremonyEventStatus.FORCE_FINISHED) {
+        if (event.isLocked()) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_LOCKED);
         }
     }

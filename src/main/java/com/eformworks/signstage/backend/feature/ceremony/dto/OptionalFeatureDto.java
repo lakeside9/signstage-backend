@@ -31,6 +31,8 @@ public final class OptionalFeatureDto {
             @NotBlank
             private String name;
 
+            private String currencyCode;
+
             @NotNull
             private BigDecimal supplyPrice;
 
@@ -42,6 +44,8 @@ public final class OptionalFeatureDto {
 
             @NotNull
             private BigDecimal discountValue;
+
+            private String taxCode;
 
             /** 생략하면(null) true — 프로젝터 화면 효과 옵션으로 등록된다. */
             private Boolean projectorEffect;
@@ -63,6 +67,8 @@ public final class OptionalFeatureDto {
             @NotBlank
             private String name;
 
+            private String currencyCode;
+
             @NotNull
             private BigDecimal supplyPrice;
 
@@ -74,6 +80,8 @@ public final class OptionalFeatureDto {
 
             @NotNull
             private BigDecimal discountValue;
+
+            private String taxCode;
 
             /** 사용여부. false면 새 추가구매 대상에서 제외된다. */
             @NotNull
@@ -99,10 +107,12 @@ public final class OptionalFeatureDto {
             private final Long id;
             private final String code;
             private final String name;
+            private final String currencyCode;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final String taxCode;
             private final Boolean active;
             private final Boolean projectorEffect;
             private final String exclusivityGroup;
@@ -119,10 +129,12 @@ public final class OptionalFeatureDto {
             private final Long id;
             private final String code;
             private final String name;
+            private final String currencyCode;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final String taxCode;
             private final Boolean active;
             private final Boolean projectorEffect;
             private final String exclusivityGroup;

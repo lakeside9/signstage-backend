@@ -60,7 +60,11 @@ public final class IdentityDto {
 
             private String phone;
 
+            private String languageCode;
+
             private String locale;
+
+            private String timeZoneId;
         }
 
         @Getter
@@ -98,7 +102,11 @@ public final class IdentityDto {
 
             private String phone;
 
+            private String languageCode;
+
             private String locale;
+
+            private String timeZoneId;
         }
     }
 
@@ -150,7 +158,9 @@ public final class IdentityDto {
             private final String name;
             private final String email;
             private final String phone;
+            private final String languageCode;
             private final String locale;
+            private final String timeZoneId;
             private final String platformRole;
         }
 

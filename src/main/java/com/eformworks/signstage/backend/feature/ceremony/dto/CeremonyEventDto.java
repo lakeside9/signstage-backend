@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.ceremony.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
@@ -46,6 +47,14 @@ public final class CeremonyEventDto {
              * 검증(구매한 옵션의 부분집합)을 거친다.
              */
             private List<Long> optionalFeatureIds;
+
+            /**
+             * 등록 시점에 바로 선택할 이벤트 효과 프리셋. null이면(필드 자체를 안 보내면)
+             * 아무것도 선택하지 않는다. 각 항목이 요구하는 선택옵션은 위 {@code optionalFeatureIds}에
+             * 포함돼 있어야 한다(같은 요청 안에서 함께 검증된다).
+             */
+            @Valid
+            private List<CeremonyEventEffectSettingDto.Request.EffectSelection> effectSelections;
         }
 
         /** 이름/장소/일정/설명만 바꾼다. 구분(TEST/MAIN)은 한도 계산과 얽혀 있어 여기서 바꾸지 않는다. */
@@ -71,6 +80,15 @@ public final class CeremonyEventDto {
              * 그대로 둔다. 빈 리스트를 명시적으로 보내면 전부 해제한다.
              */
             private List<Long> optionalFeatureIds;
+
+            /**
+             * 수정 시점에 함께 바꿀 이벤트 효과 프리셋. null이면(필드 자체를 안 보내면) 기존
+             * 선택을 그대로 둔다. 빈 리스트를 명시적으로 보내면 전부 해제한다. 선택옵션을 이
+             * 요청에서 함께 해제하면(위 {@code optionalFeatureIds}) 그 옵션을 요구하는 설정은
+             * 여기 값과 무관하게 함께 삭제된다.
+             */
+            @Valid
+            private List<CeremonyEventEffectSettingDto.Request.EffectSelection> effectSelections;
         }
 
         @Getter

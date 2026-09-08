@@ -17,6 +17,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 
 /**
  * 용량 추가구매 상품(CapacityAddOn)의 값/사용여부 변경 이력. append-only다 — {@link BillingPlanHistory}와
@@ -27,6 +28,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "capacity_addon_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
 public class CapacityAddOnHistory extends BaseEntity {
 
     @Id
@@ -51,18 +53,24 @@ public class CapacityAddOnHistory extends BaseEntity {
     @Column(name = "secondary_unit_amount")
     private Integer secondaryUnitAmount;
 
-    @Column(name = "supply_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
+    @Column(name = "supply_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal supplyPrice;
 
-    @Column(name = "sale_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "sale_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal salePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "discount_type", nullable = false, length = 20)
     private DiscountType discountType;
 
-    @Column(name = "discount_value", nullable = false, precision = 12, scale = 2)
+    @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal discountValue;
+
+    @Column(name = "tax_code", nullable = false, length = 50)
+    private String taxCode;
 
     @Column(nullable = false)
     private boolean active;
@@ -74,10 +82,12 @@ public class CapacityAddOnHistory extends BaseEntity {
         this.unitAmount = capacityAddOn.getUnitAmount();
         this.secondaryCapacityType = capacityAddOn.getSecondaryCapacityType();
         this.secondaryUnitAmount = capacityAddOn.getSecondaryUnitAmount();
+        this.currencyCode = capacityAddOn.getCurrencyCode();
         this.supplyPrice = capacityAddOn.getSupplyPrice();
         this.salePrice = capacityAddOn.getSalePrice();
         this.discountType = capacityAddOn.getDiscountType();
         this.discountValue = capacityAddOn.getDiscountValue();
+        this.taxCode = capacityAddOn.getTaxCode();
         this.active = capacityAddOn.isActive();
     }
 }
