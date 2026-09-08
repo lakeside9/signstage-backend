@@ -102,13 +102,13 @@ public class CeremonyCapacityPurchase extends BaseEntity {
         this.ceremony = ceremony;
         this.capacityAddOn = capacityAddOn;
         this.quantity = quantity;
-        this.currencyCode = capacityAddOn.getCurrencyCode();
+        this.currencyCode = capacityAddOn.getPriceInfo().getCurrencyCode();
         this.purchasedUnitAmount = purchasedUnitAmount;
         this.purchasedSecondaryUnitAmount = purchasedSecondaryUnitAmount;
         this.purchasedSalePrice = purchasedSalePrice;
         this.purchasedDiscountType = purchasedDiscountType;
         this.purchasedDiscountValue = purchasedDiscountValue;
-        this.purchasedTaxCode = capacityAddOn.getTaxCode();
+        this.purchasedTaxCode = capacityAddOn.getPriceInfo().getTaxCode();
         this.status = PurchaseStatus.PENDING;
     }
 

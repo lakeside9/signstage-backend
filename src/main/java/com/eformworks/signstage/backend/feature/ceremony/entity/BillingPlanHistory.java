@@ -2,9 +2,8 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -12,7 +11,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -24,7 +22,8 @@ import org.hibernate.annotations.Immutable;
  * 않는다. 생성 시점과 {@code BillingPlanService#updatePlan} 호출 시(값 또는 active가 바뀔 때)
  * 마다 그 순간의 전체 상태를 스냅샷 한 행씩 쌓는다({@link CeremonyPlanHistory}와 같은 패턴).
  * "누가/언제"는 {@link BaseEntity#getCreatedBy()}/{@link BaseEntity#getCreatedAt()}로
- * 충분해 별도 컬럼을 두지 않는다.
+ * 충분해 별도 컬럼을 두지 않는다. 한도(용량) 구성은 이 엔티티의 고정 필드가 아니라
+ * {@link BillingPlanHistoryCapacity}로 별도 스냅샷된다(2026-09-08, 항목 B).
  */
 @Entity
 @Table(name = "billing_plan_histories")
@@ -44,39 +43,8 @@ public class BillingPlanHistory extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
-    private String currencyCode;
-
-    @Column(name = "supply_price", nullable = false, precision = 19, scale = 4)
-    private BigDecimal supplyPrice;
-
-    @Column(name = "sale_price", nullable = false, precision = 19, scale = 4)
-    private BigDecimal salePrice;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "discount_type", nullable = false, length = 20)
-    private DiscountType discountType;
-
-    @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
-    private BigDecimal discountValue;
-
-    @Column(name = "tax_code", nullable = false, length = 50)
-    private String taxCode;
-
-    @Column(name = "max_signers", nullable = false)
-    private Integer maxSigners;
-
-    @Column(name = "max_templates", nullable = false)
-    private Integer maxTemplates;
-
-    @Column(name = "max_test_events", nullable = false)
-    private Integer maxTestEvents;
-
-    @Column(name = "max_rehearsal_events", nullable = false)
-    private Integer maxRehearsalEvents;
-
-    @Column(name = "max_main_events", nullable = false)
-    private Integer maxMainEvents;
+    @Embedded
+    private CatalogPriceInfo priceInfo;
 
     @Column(nullable = false)
     private boolean active;
@@ -85,17 +53,7 @@ public class BillingPlanHistory extends BaseEntity {
     private BillingPlanHistory(BillingPlan billingPlan) {
         this.billingPlan = billingPlan;
         this.name = billingPlan.getName();
-        this.currencyCode = billingPlan.getCurrencyCode();
-        this.supplyPrice = billingPlan.getSupplyPrice();
-        this.salePrice = billingPlan.getSalePrice();
-        this.discountType = billingPlan.getDiscountType();
-        this.discountValue = billingPlan.getDiscountValue();
-        this.taxCode = billingPlan.getTaxCode();
-        this.maxSigners = billingPlan.getMaxSigners();
-        this.maxTemplates = billingPlan.getMaxTemplates();
-        this.maxTestEvents = billingPlan.getMaxTestEvents();
-        this.maxRehearsalEvents = billingPlan.getMaxRehearsalEvents();
-        this.maxMainEvents = billingPlan.getMaxMainEvents();
+        this.priceInfo = billingPlan.getPriceInfo();
         this.active = billingPlan.isActive();
     }
 }

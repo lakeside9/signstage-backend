@@ -25,6 +25,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureC
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TaxPolicy;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityAddOnRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
@@ -32,6 +33,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssi
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOptionalFeaturePurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityAddOnRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
@@ -47,6 +49,7 @@ import com.eformworks.signstage.backend.feature.organization.repository.Organiza
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,6 +93,10 @@ class CeremonyServiceTest {
     private CeremonyPlanHistoryOptionalFeatureRepository ceremonyPlanHistoryOptionalFeatureRepository;
     @Mock
     private CeremonyPlanHistoryCapacityAddOnRepository ceremonyPlanHistoryCapacityAddOnRepository;
+    @Mock
+    private CeremonyPlanHistoryCapacityRepository ceremonyPlanHistoryCapacityRepository;
+    @Mock
+    private BillingPlanCapacityRepository billingPlanCapacityRepository;
     @Mock
     private OrganizationRepository organizationRepository;
     @Mock
@@ -152,7 +159,6 @@ class CeremonyServiceTest {
                 .salePrice(new BigDecimal("10005"))
                 .discountType(DiscountType.FIXED_AMOUNT)
                 .discountValue(BigDecimal.ZERO)
-                .maxSigners(1).maxTemplates(1).maxTestEvents(1).maxRehearsalEvents(1).maxMainEvents(1)
                 .build();
         Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
         ReflectionTestUtils.setField(ceremony, "id", 10L);
@@ -189,10 +195,6 @@ class CeremonyServiceTest {
                 .salePrice(new BigDecimal("90000"))
                 .discountType(DiscountType.FIXED_AMOUNT)
                 .discountValue(new BigDecimal("10000"))
-                .maxSigners(10)
-                .maxTemplates(10)
-                .maxTestEvents(1)
-                .maxMainEvents(1)
                 .build();
         ReflectionTestUtils.setField(plan, "id", 101L);
         Member member = Member.builder().role(MemberRole.OWNER).build();
@@ -206,7 +208,8 @@ class CeremonyServiceTest {
 
         OrganizationDiscountService.EffectiveDiscount overrideDiscount =
                 new OrganizationDiscountService.EffectiveDiscount(DiscountType.PERCENT, new BigDecimal("30"));
-        given(organizationDiscountService.resolveBillingPlanDiscount(organization, plan)).willReturn(overrideDiscount);
+        given(organizationDiscountService.resolveBillingPlanDiscount(eq(organization), eq(plan), any(LocalDate.class)))
+                .willReturn(overrideDiscount);
 
         CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1");
 
@@ -246,7 +249,8 @@ class CeremonyServiceTest {
 
         OrganizationDiscountService.EffectiveDiscount overrideDiscount =
                 new OrganizationDiscountService.EffectiveDiscount(DiscountType.PERCENT, new BigDecimal("20"));
-        given(organizationDiscountService.resolveCapacityAddOnDiscount(organization, addOn)).willReturn(overrideDiscount);
+        given(organizationDiscountService.resolveCapacityAddOnDiscount(eq(organization), eq(addOn), any(LocalDate.class)))
+                .willReturn(overrideDiscount);
 
         CeremonyDto.Request.PurchaseCapacity request = new CeremonyDto.Request.PurchaseCapacity(201L, 2);
 
@@ -285,7 +289,7 @@ class CeremonyServiceTest {
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(member));
         given(capacityAddOnRepository.findById(301L)).willReturn(Optional.of(comboAddOn));
-        given(organizationDiscountService.resolveCapacityAddOnDiscount(organization, comboAddOn))
+        given(organizationDiscountService.resolveCapacityAddOnDiscount(eq(organization), eq(comboAddOn), any(LocalDate.class)))
                 .willReturn(new OrganizationDiscountService.EffectiveDiscount(DiscountType.FIXED_AMOUNT, BigDecimal.ZERO));
 
         CeremonyDto.Request.PurchaseCapacity request = new CeremonyDto.Request.PurchaseCapacity(301L, 2);
@@ -312,10 +316,6 @@ class CeremonyServiceTest {
                 .salePrice(new BigDecimal("90000"))
                 .discountType(DiscountType.FIXED_AMOUNT)
                 .discountValue(BigDecimal.ZERO)
-                .maxSigners(10)
-                .maxTemplates(10)
-                .maxTestEvents(1)
-                .maxMainEvents(1)
                 .build();
         Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
         ReflectionTestUtils.setField(ceremony, "id", 10L);
@@ -378,8 +378,10 @@ class CeremonyServiceTest {
         given(optionalFeatureRepository.findById(301L)).willReturn(Optional.of(feature));
 
         // 오버라이드 없음 — OrganizationDiscountService가 카탈로그 값을 그대로 돌려주는 상황을 흉내낸다.
-        given(organizationDiscountService.resolveOptionalFeatureDiscount(organization, feature))
-                .willReturn(new OrganizationDiscountService.EffectiveDiscount(feature.getDiscountType(), feature.getDiscountValue()));
+        given(organizationDiscountService.resolveOptionalFeatureDiscount(eq(organization), eq(feature), any(LocalDate.class)))
+                .willReturn(new OrganizationDiscountService.EffectiveDiscount(
+                        feature.getPriceInfo().getDiscount().getDiscountType(), feature.getPriceInfo().getDiscount().getDiscountValue()
+                ));
 
         CeremonyDto.Request.PurchaseOptionalFeature request = new CeremonyDto.Request.PurchaseOptionalFeature(301L);
 
@@ -404,7 +406,7 @@ class CeremonyServiceTest {
         Page<Ceremony> page = new PageImpl<>(List.of(ceremony), pageable, 1);
 
         given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(organization));
-        given(ceremonyRepository.search(ORGANIZATION_ID, null, null, null, pageable)).willReturn(page);
+        given(ceremonyRepository.search(ORGANIZATION_ID, null, null, null, null, pageable)).willReturn(page);
 
         // when
         Page<CeremonyDto.Response.CeremonySummary> result =

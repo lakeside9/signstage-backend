@@ -3,7 +3,9 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -37,8 +39,8 @@ import lombok.NoArgsConstructor;
  * 마이그레이션에서 소급 적용 없이 IN_PROGRESS DEFAULT로만 채운다 — signstage-docs
  * business/ceremony-plan-confirmation-review.md 4.1절).
  *
- * <p>{@code finalDiscountType}/{@code finalDiscountValue}는 품목 할인과 별개로 이 행사 건에만
- * 매기는 관리자 재량 할인이다 — signstage-docs
+ * <p>{@code finalDiscount}({@link DiscountInfo})는 품목 할인과 별개로 이 행사 건에만 매기는
+ * 관리자 재량 할인이다 — signstage-docs
  * business/organization-event-discount-pricing-review.md 4.2 결정. NULL sentinel 없이 항상
  * 구체적인 값을 갖고("할인 없음"은 discountValue=0으로 표현), 플랫폼 관리자(PLATFORM_OPS
  * 이상)만 바꿀 수 있다(4.4 결정). 품목 자체의 할인(조직×품목 오버라이드 포함,
@@ -106,12 +108,16 @@ public class Ceremony extends BaseEntity {
     @Column(name = "contact_email", length = 255)
     private String contactEmail;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "final_discount_type", nullable = false, length = 20)
-    private DiscountType finalDiscountType;
-
-    @Column(name = "final_discount_value", nullable = false, precision = 19, scale = 4)
-    private BigDecimal finalDiscountValue;
+    /**
+     * signstage-docs business/organization-discount-override-security-and-validity-period-review.md
+     * 결정 #2(2026-09-08) — 카탈로그/조직 오버라이드가 이미 쓰는 {@link DiscountInfo}로 옮겨
+     * 하한·상한 검증을 한 곳에서 공유한다. 컬럼명은 기존 그대로(final_discount_type/value) 둬서
+     * 마이그레이션이 필요 없다.
+     */
+    @Embedded
+    @AttributeOverride(name = "discountType", column = @Column(name = "final_discount_type"))
+    @AttributeOverride(name = "discountValue", column = @Column(name = "final_discount_value"))
+    private DiscountInfo finalDiscount;
 
     @Builder
     private Ceremony(Organization organization, BillingPlan billingPlan, String title) {
@@ -127,8 +133,7 @@ public class Ceremony extends BaseEntity {
                 : organization.getDefaultTimeZoneId();
         this.title = title;
         this.status = CeremonyStatus.DRAFT;
-        this.finalDiscountType = DiscountType.FIXED_AMOUNT;
-        this.finalDiscountValue = BigDecimal.ZERO;
+        this.finalDiscount = new DiscountInfo(DiscountType.FIXED_AMOUNT, BigDecimal.ZERO);
     }
 
     /**
@@ -170,8 +175,7 @@ public class Ceremony extends BaseEntity {
      * 셀프서비스로 허용하지 않는다.
      */
     public void applyFinalDiscount(DiscountType finalDiscountType, BigDecimal finalDiscountValue) {
-        this.finalDiscountType = finalDiscountType;
-        this.finalDiscountValue = finalDiscountValue;
+        this.finalDiscount = new DiscountInfo(finalDiscountType, finalDiscountValue);
     }
 
     /**

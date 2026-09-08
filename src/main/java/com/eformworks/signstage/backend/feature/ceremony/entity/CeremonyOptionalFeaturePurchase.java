@@ -103,12 +103,12 @@ public class CeremonyOptionalFeaturePurchase extends BaseEntity {
     ) {
         this.ceremony = ceremony;
         this.optionalFeature = optionalFeature;
-        this.currencyCode = optionalFeature.getCurrencyCode();
+        this.currencyCode = optionalFeature.getPriceInfo().getCurrencyCode();
         this.purchasedName = purchasedName;
         this.purchasedSalePrice = purchasedSalePrice;
         this.purchasedDiscountType = purchasedDiscountType;
         this.purchasedDiscountValue = purchasedDiscountValue;
-        this.purchasedTaxCode = optionalFeature.getTaxCode();
+        this.purchasedTaxCode = optionalFeature.getPriceInfo().getTaxCode();
         this.status = PurchaseStatus.PENDING;
     }
 

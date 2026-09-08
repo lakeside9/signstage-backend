@@ -1,11 +1,9 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
-import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -21,6 +19,12 @@ import lombok.NoArgsConstructor;
  * 필수옵션(서명자·템플릿·테스트/본행사 수 한도)은 모든 플랜이 항상 값을 가진다 —
  * signstage-docs business/ceremony-billing-options-review.md 4.9절 결정에 따라
  * "무제한"을 표현하는 별도 sentinel 값이 없다.
+ *
+ * <p>한도(서명자/템플릿/테스트행사/리허설행사/본행사)는 예전엔 이 엔티티의 고정 컬럼 5개였는데,
+ * {@link BillingPlanCapacity} 조인 테이블로 일반화됐다(signstage-docs
+ * business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 B) —
+ * {@code BillingPlanOptionalFeature}/{@code BillingPlanCapacityAddOn}과 같은 패턴으로
+ * {@code BillingPlanService}가 별도 리포지토리로 관리하고, 이 엔티티는 그 구성을 직접 갖지 않는다.
  */
 @Entity
 @Table(name = "billing_plans")
@@ -35,40 +39,12 @@ public class BillingPlan extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
-    private String currencyCode;
-
-    @Column(name = "supply_price", nullable = false, precision = 19, scale = 4)
-    private BigDecimal supplyPrice;
-
-    @Column(name = "sale_price", nullable = false, precision = 19, scale = 4)
-    private BigDecimal salePrice;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "discount_type", nullable = false, length = 20)
-    private DiscountType discountType;
-
-    @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
-    private BigDecimal discountValue;
-
-    @Column(name = "tax_code", nullable = false, length = 50)
-    private String taxCode;
-
-    @Column(name = "max_signers", nullable = false)
-    private Integer maxSigners;
-
-    @Column(name = "max_templates", nullable = false)
-    private Integer maxTemplates;
-
-    @Column(name = "max_test_events", nullable = false)
-    private Integer maxTestEvents;
-
-    /** REHEARSAL 구분 전용 한도(2026-08-27 legacy 포팅) — maxTestEvents와 별도 값이다. */
-    @Column(name = "max_rehearsal_events", nullable = false)
-    private Integer maxRehearsalEvents;
-
-    @Column(name = "max_main_events", nullable = false)
-    private Integer maxMainEvents;
+    /**
+     * 가격정보(통화/공급가/판매가/할인/세금코드) — signstage-docs
+     * business/billing-catalog-zero-base-schema-redesign-review.md 결정 #1(2026-09-08, 항목 A).
+     */
+    @Embedded
+    private CatalogPriceInfo priceInfo;
 
     /**
      * 사용여부(비활성화해도 행은 지우지 않는다 — 이미 이 플랜을 참조하는 Ceremony가 있을 수
@@ -87,25 +63,13 @@ public class BillingPlan extends BaseEntity {
             BigDecimal salePrice,
             DiscountType discountType,
             BigDecimal discountValue,
-            String taxCode,
-            Integer maxSigners,
-            Integer maxTemplates,
-            Integer maxTestEvents,
-            Integer maxRehearsalEvents,
-            Integer maxMainEvents
+            String taxCode
     ) {
         this.name = name;
-        this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
-        this.supplyPrice = supplyPrice;
-        this.salePrice = salePrice;
-        this.discountType = discountType;
-        this.discountValue = discountValue;
-        this.taxCode = taxCode == null || taxCode.isBlank() ? "KR_VAT_STANDARD" : taxCode;
-        this.maxSigners = maxSigners;
-        this.maxTemplates = maxTemplates;
-        this.maxTestEvents = maxTestEvents;
-        this.maxRehearsalEvents = maxRehearsalEvents;
-        this.maxMainEvents = maxMainEvents;
+        this.priceInfo = CatalogPriceInfo.of(
+                currencyCode, supplyPrice, salePrice, discountType, discountValue,
+                taxCode == null || taxCode.isBlank() ? "KR_VAT_STANDARD" : taxCode
+        );
         this.active = true;
     }
 
@@ -113,7 +77,8 @@ public class BillingPlan extends BaseEntity {
      * 플랫폼 관리자 카탈로그 관리 화면의 수정. 이 플랜에 묶인 선택옵션 구성은 생성 시점에만
      * 정해지고 여기서 바꾸지 않는다(교체하려면 새 플랜을 만든다 — 카탈로그 관리 화면 결정).
      * 호출할 때마다 {@code BillingPlanHistory}에 이력 한 행을 남기는 것은 서비스
-     * ({@code BillingPlanService}) 몫이다.
+     * ({@code BillingPlanService}) 몫이다. 한도({@link BillingPlanCapacity}) 구성 교체도
+     * 이 엔티티가 아니라 서비스가 리포지토리로 직접 처리한다.
      */
     public void updateInfo(
             String name,
@@ -123,25 +88,13 @@ public class BillingPlan extends BaseEntity {
             DiscountType discountType,
             BigDecimal discountValue,
             String taxCode,
-            Integer maxSigners,
-            Integer maxTemplates,
-            Integer maxTestEvents,
-            Integer maxRehearsalEvents,
-            Integer maxMainEvents,
             boolean active
     ) {
         this.name = name;
-        this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
-        this.supplyPrice = supplyPrice;
-        this.salePrice = salePrice;
-        this.discountType = discountType;
-        this.discountValue = discountValue;
-        this.taxCode = taxCode == null || taxCode.isBlank() ? this.taxCode : taxCode;
-        this.maxSigners = maxSigners;
-        this.maxTemplates = maxTemplates;
-        this.maxTestEvents = maxTestEvents;
-        this.maxRehearsalEvents = maxRehearsalEvents;
-        this.maxMainEvents = maxMainEvents;
+        this.priceInfo = CatalogPriceInfo.of(
+                currencyCode, supplyPrice, salePrice, discountType, discountValue,
+                taxCode == null || taxCode.isBlank() ? this.priceInfo.getTaxCode() : taxCode
+        );
         this.active = active;
     }
 }

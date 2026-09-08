@@ -87,7 +87,7 @@ public class CapacityAddOnService {
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND));
 
         String detail = "capacityAddOnId=" + capacityAddOnId
-                + ", salePrice: " + capacityAddOn.getSalePrice() + " -> " + request.getSalePrice()
+                + ", salePrice: " + capacityAddOn.getPriceInfo().getSalePrice() + " -> " + request.getSalePrice()
                 + ", active: " + capacityAddOn.isActive() + " -> " + request.getActive();
 
         // secondaryCapacityType은 생성 후 불변이라 수정 요청에 없다 — 원래 묶음 상품이 아니었으면
@@ -188,12 +188,12 @@ public class CapacityAddOnService {
                 capacityAddOn.getUnitAmount(),
                 capacityAddOn.getSecondaryCapacityType() == null ? null : capacityAddOn.getSecondaryCapacityType().name(),
                 capacityAddOn.getSecondaryUnitAmount(),
-                capacityAddOn.getCurrencyCode(),
-                capacityAddOn.getSupplyPrice(),
-                capacityAddOn.getSalePrice(),
-                capacityAddOn.getDiscountType().name(),
-                capacityAddOn.getDiscountValue(),
-                capacityAddOn.getTaxCode(),
+                capacityAddOn.getPriceInfo().getCurrencyCode(),
+                capacityAddOn.getPriceInfo().getSupplyPrice(),
+                capacityAddOn.getPriceInfo().getSalePrice(),
+                capacityAddOn.getPriceInfo().getDiscount().getDiscountType().name(),
+                capacityAddOn.getPriceInfo().getDiscount().getDiscountValue(),
+                capacityAddOn.getPriceInfo().getTaxCode(),
                 capacityAddOn.isActive(),
                 ceremonyCapacityPurchaseRepository.countByCapacityAddOnIdAndStatus(
                         capacityAddOn.getId(), PurchaseStatus.APPROVED
@@ -209,12 +209,12 @@ public class CapacityAddOnService {
                 history.getUnitAmount(),
                 history.getSecondaryCapacityType() == null ? null : history.getSecondaryCapacityType().name(),
                 history.getSecondaryUnitAmount(),
-                history.getCurrencyCode(),
-                history.getSupplyPrice(),
-                history.getSalePrice(),
-                history.getDiscountType().name(),
-                history.getDiscountValue(),
-                history.getTaxCode(),
+                history.getPriceInfo().getCurrencyCode(),
+                history.getPriceInfo().getSupplyPrice(),
+                history.getPriceInfo().getSalePrice(),
+                history.getPriceInfo().getDiscount().getDiscountType().name(),
+                history.getPriceInfo().getDiscount().getDiscountValue(),
+                history.getPriceInfo().getTaxCode(),
                 history.isActive(),
                 history.getCreatedBy(),
                 history.getCreatedAt()

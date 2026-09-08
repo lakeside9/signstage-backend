@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.core.money;
 
+import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountInfo;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -33,6 +34,15 @@ public class MoneyCalculator {
                 ? amount.multiply(discountValue, INTERMEDIATE_CONTEXT).divide(ONE_HUNDRED, INTERMEDIATE_CONTEXT)
                 : discountValue;
         return normalize(amount.subtract(discount).max(BigDecimal.ZERO), policy);
+    }
+
+    /**
+     * {@link DiscountInfo} 값 객체를 그대로 받는 편의 오버로드 — signstage-docs
+     * business/billing-catalog-zero-base-schema-redesign-review.md 결정(2026-09-08, 항목 A)
+     * 이후 카탈로그 품목(플랜/선택옵션/용량추가구매)의 할인 계산 호출부는 이 형태를 쓴다.
+     */
+    public BigDecimal applyDiscount(BigDecimal amount, DiscountInfo discount, CurrencyPolicy policy) {
+        return applyDiscount(amount, discount.getDiscountType(), discount.getDiscountValue(), policy);
     }
 
     /** 세금 별도(EXCLUSIVE) 금액의 라인 세액. */

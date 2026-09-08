@@ -52,5 +52,21 @@ public enum OptionalFeatureCode {
      * 지우지 않는다({@code VIDEO_ATTENDANCE}와 같은 선례) — signstage-docs
      * business/optional-feature-display-scope-and-plan-capacity-addon-review.md 3장 참고.
      */
-    TABLET_RENTAL
+    TABLET_RENTAL,
+    /**
+     * 행사 당일 오프라인 현장에 인력이 나가 설치·운영·트러블슈팅을 지원한다 — {@code TABLET_RENTAL}과
+     * 같은 "표시용 옵션 + 수량 추가구매" 패턴이다(등록 시 {@code projectorEffect=false},
+     * {@code pairedCapacityType=CapacityType.ONSITE_SUPPORT}). 실제 지원 건수는
+     * {@code CapacityType.ONSITE_SUPPORT} 용량 추가구매로 관리하고, 수도권/지방 출장비 차등은
+     * 그 용량 추가구매 상품을 두 개(카탈로그 행)로 나눠 등록하는 방식으로 표현한다(2026-09-08
+     * 결정) — signstage-docs business/ceremony-support-services-billing-review.md 참고.
+     */
+    ONSITE_SUPPORT,
+    /**
+     * 원격으로 기술 문의 응대(전화·채팅·화상 등)를 지원한다 — {@code ONSITE_SUPPORT}와 같은 패턴이되
+     * 원격이라 지역 구분(수도권/지방)이 없다. 실제 지원 건수는 {@code CapacityType.ONLINE_SUPPORT}
+     * 용량 추가구매로 관리한다(2026-09-08 결정) — signstage-docs
+     * business/ceremony-support-services-billing-review.md 참고.
+     */
+    ONLINE_SUPPORT
 }

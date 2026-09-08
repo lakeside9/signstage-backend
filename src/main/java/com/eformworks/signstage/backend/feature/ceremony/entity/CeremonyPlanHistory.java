@@ -28,7 +28,8 @@ import org.hibernate.annotations.Immutable;
  * "그동안 어떤 플랜을 거쳐왔는지"와 "그때 그 플랜의 이름/가격/한도가 뭐였는지"(카탈로그가
  * 나중에 바뀌어도 안 바뀌는 스냅샷)를 보여주는 이력 전용이다 — {@code누가/언제}는
  * {@link BaseEntity#getCreatedBy()}/{@link BaseEntity#getCreatedAt()}로 충분해 별도 컬럼을
- * 두지 않는다.
+ * 두지 않는다. 한도(용량) 구성은 이 엔티티의 고정 필드가 아니라 {@link CeremonyPlanHistoryCapacity}로
+ * 별도 스냅샷된다(2026-09-08, 항목 B).
  */
 @Entity
 @Table(name = "ceremony_plan_histories")
@@ -55,7 +56,8 @@ public class CeremonyPlanHistory extends BaseEntity {
     @Column(name = "currency_code", nullable = false, length = 3)
     private String currencyCode;
 
-    @Column(name = "plan_supply_price", nullable = false, precision = 19, scale = 4)
+    /** nullable — 원가 미상 플랜을 스냅샷할 수 있어야 한다(2026-09-08, 항목 G). */
+    @Column(name = "plan_supply_price", precision = 19, scale = 4)
     private BigDecimal planSupplyPrice;
 
     @Column(name = "plan_sale_price", nullable = false, precision = 19, scale = 4)
@@ -71,21 +73,6 @@ public class CeremonyPlanHistory extends BaseEntity {
     @Column(name = "tax_code", nullable = false, length = 50)
     private String taxCode;
 
-    @Column(name = "plan_max_signers", nullable = false)
-    private Integer planMaxSigners;
-
-    @Column(name = "plan_max_templates", nullable = false)
-    private Integer planMaxTemplates;
-
-    @Column(name = "plan_max_test_events", nullable = false)
-    private Integer planMaxTestEvents;
-
-    @Column(name = "plan_max_rehearsal_events", nullable = false)
-    private Integer planMaxRehearsalEvents;
-
-    @Column(name = "plan_max_main_events", nullable = false)
-    private Integer planMaxMainEvents;
-
     /**
      * {@code discountType}/{@code discountValue}는 보통 {@code billingPlan}에서 그대로 뽑지만,
      * 조직×플랜 오버라이드가 있으면({@link OrganizationBillingPlanDiscount},
@@ -97,16 +84,11 @@ public class CeremonyPlanHistory extends BaseEntity {
         this.ceremony = ceremony;
         this.billingPlan = billingPlan;
         this.planName = billingPlan.getName();
-        this.currencyCode = billingPlan.getCurrencyCode();
-        this.planSupplyPrice = billingPlan.getSupplyPrice();
-        this.planSalePrice = billingPlan.getSalePrice();
-        this.planDiscountType = discountType != null ? discountType : billingPlan.getDiscountType();
-        this.planDiscountValue = discountValue != null ? discountValue : billingPlan.getDiscountValue();
-        this.taxCode = billingPlan.getTaxCode();
-        this.planMaxSigners = billingPlan.getMaxSigners();
-        this.planMaxTemplates = billingPlan.getMaxTemplates();
-        this.planMaxTestEvents = billingPlan.getMaxTestEvents();
-        this.planMaxRehearsalEvents = billingPlan.getMaxRehearsalEvents();
-        this.planMaxMainEvents = billingPlan.getMaxMainEvents();
+        this.currencyCode = billingPlan.getPriceInfo().getCurrencyCode();
+        this.planSupplyPrice = billingPlan.getPriceInfo().getSupplyPrice();
+        this.planSalePrice = billingPlan.getPriceInfo().getSalePrice();
+        this.planDiscountType = discountType != null ? discountType : billingPlan.getPriceInfo().getDiscount().getDiscountType();
+        this.planDiscountValue = discountValue != null ? discountValue : billingPlan.getPriceInfo().getDiscount().getDiscountValue();
+        this.taxCode = billingPlan.getPriceInfo().getTaxCode();
     }
 }
