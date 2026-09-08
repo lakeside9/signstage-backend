@@ -39,3 +39,6 @@ out/
 
 ### 로컬 파일 저장소 (storage.local.base-dir 기본값) ###
 /data/uploads/
+
+### 로컬 서버 로그 (logging.file.name 기본값, application-local.yaml) ###
+/logs/

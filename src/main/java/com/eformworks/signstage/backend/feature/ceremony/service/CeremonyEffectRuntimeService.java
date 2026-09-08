@@ -68,23 +68,32 @@ public class CeremonyEffectRuntimeService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void tryAutomaticCelebration(Long eventId) {
+        log.info("[CUTOVER-DEBUG] tryAutomaticCelebration invoked. eventId={}", eventId);
         try {
             CeremonyEvent event = ceremonyEventRepository.findById(eventId).orElse(null);
             if (event == null || event.getStatus() != CeremonyEventStatus.STARTED) {
+                log.info("[CUTOVER-DEBUG] bail: event null or not STARTED. event={}, status={}",
+                        event == null ? null : event.getId(), event == null ? null : event.getStatus());
                 return;
             }
 
             Set<Long> requiredSignerIds = ceremonyEventService.collectFinishRequiredSignerIds(event);
+            log.info("[CUTOVER-DEBUG] requiredSignerIds={}", requiredSignerIds);
             if (requiredSignerIds.isEmpty()) {
                 // "필수 signer 집합이 비어 있으면 전체 완료로 보지 않는다" — allMatch의 공허한
                 // 참(vacuous truth)이 빈 이벤트를 완료로 오판하지 않게 막는다.
+                log.info("[CUTOVER-DEBUG] bail: requiredSignerIds empty");
                 return;
             }
-            if (!ceremonyEventSignerStateService.isAllComplete(eventId, requiredSignerIds)) {
+            boolean allComplete = ceremonyEventSignerStateService.isAllComplete(eventId, requiredSignerIds);
+            log.info("[CUTOVER-DEBUG] isAllComplete={}", allComplete);
+            if (!allComplete) {
                 return;
             }
 
-            if (ceremonyEventRepository.claimAutomaticCelebration(eventId) == 0) {
+            int claimed = ceremonyEventRepository.claimAutomaticCelebration(eventId);
+            log.info("[CUTOVER-DEBUG] claimAutomaticCelebration affected rows={}", claimed);
+            if (claimed == 0) {
                 return; // 이미 다른 호출(동시 완료 경합, 또는 재완료)이 먼저 claim했다.
             }
 
@@ -93,10 +102,18 @@ public class CeremonyEffectRuntimeService {
             // 나중에 runtime을 켜거나 정의를 다시 활성화해도 지난 완료가 소급 실행되지 않는다.
             ceremonyRealtimeNotifier.notifyAllSignersCompleted(eventId); // 구 frontend 호환(PRE-04)
 
-            ceremonyEventEffectSettingRepository
-                    .findByEventIdAndClassificationWithDefinition(eventId, CELEBRATION_TARGET, CELEBRATION_TRIGGER)
+            var settingOpt = ceremonyEventEffectSettingRepository
+                    .findByEventIdAndClassificationWithDefinition(eventId, CELEBRATION_TARGET, CELEBRATION_TRIGGER);
+            log.info("[CUTOVER-DEBUG] setting present={}, enabled={}, runtimeEnabled={}",
+                    settingOpt.isPresent(),
+                    settingOpt.map(s -> s.getDefinition().isEnabled()).orElse(null),
+                    settingOpt.map(CeremonyEventEffectSetting::isRuntimeEnabled).orElse(null));
+            settingOpt
                     .filter(setting -> setting.getDefinition().isEnabled() && setting.isRuntimeEnabled())
-                    .ifPresent(setting -> recordAndBroadcastRequest(event, setting, ActorType.SYSTEM, 0L, "auto"));
+                    .ifPresent(setting -> {
+                        log.info("[CUTOVER-DEBUG] broadcasting auto celebration. effectCode={}", setting.getDefinition().getCode());
+                        recordAndBroadcastRequest(event, setting, ActorType.SYSTEM, 0L, "auto");
+                    });
         } catch (Exception e) {
             log.warn("전원완료 자동 효과 판정/실행 실패 — 서명 결과에는 영향 없음. eventId={}", eventId, e);
         }
