@@ -21,14 +21,10 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventEff
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventLog;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
-import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventEffectSettingRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
-import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,18 +86,10 @@ class CeremonyEffectRuntimeServiceTest {
     }
 
     private CeremonyEventEffectSetting setting(CeremonyEvent event, boolean definitionEnabled, boolean runtimeEnabled, boolean manuallyTriggerable) {
-        OptionalFeature feature = OptionalFeature.builder()
-                .code(OptionalFeatureCode.ALL_SIGNED_FIREWORKS)
-                .name("폭죽").currencyCode("KRW")
-                .supplyPrice(BigDecimal.TEN).salePrice(BigDecimal.TEN)
-                .discountType(DiscountType.FIXED_AMOUNT).discountValue(BigDecimal.ZERO)
-                .build();
-        ReflectionTestUtils.setField(feature, "id", 11L);
-
         CeremonyEffectDefinition definition = CeremonyEffectDefinition.builder()
                 .code("FIREWORKS").targetType(CeremonyEffectTarget.PROJECTOR)
                 .triggerType(CeremonyEffectTrigger.ALL_SIGNATURES_COMPLETED)
-                .requiredOptionalFeature(feature).displayName("폭죽").rendererKey("projector-fireworks")
+                .displayName("폭죽").rendererKey("projector-fireworks")
                 .manuallyTriggerable(manuallyTriggerable)
                 .displayOrder(10)
                 .build();

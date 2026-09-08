@@ -28,6 +28,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "이미 등록된 선택옵션 코드입니다."
     ),
+    OPTIONAL_FEATURE_EFFECT_BUNDLE_ONLY(
+            "CEREMONY_OPTIONAL_FEATURE_EFFECT_BUNDLE_ONLY",
+            HttpStatus.CONFLICT,
+            "이벤트 효과 목록은 EVENT_EFFECT_BUNDLE 종류의 선택옵션에서만 지정할 수 있습니다."
+    ),
     CEREMONY_NOT_FOUND("CEREMONY_NOT_FOUND", HttpStatus.NOT_FOUND, "행사를 찾을 수 없습니다."),
     CEREMONY_EVENT_NOT_FOUND("CEREMONY_EVENT_NOT_FOUND", HttpStatus.NOT_FOUND, "하위 행사를 찾을 수 없습니다."),
     CEREMONY_EVENT_LIMIT_EXCEEDED(

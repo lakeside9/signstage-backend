@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -52,6 +53,13 @@ public final class OptionalFeatureDto {
 
             /** 같은 값을 가진 다른 선택옵션과 한 CeremonyEvent에 동시 적용할 수 없다. 생략하면(null) 배타 관계 없음. */
             private String exclusivityGroup;
+
+            /**
+             * 이 묶음이 열어주는 이벤트 효과 목록 — {@code code='EVENT_EFFECT_BUNDLE'}일 때만
+             * 의미가 있다(그 외 종류에서 값이 오면 무시하지 않고 거부한다). 생략하면(null)
+             * 빈 묶음으로 시작한다(2026-09-08 결정).
+             */
+            private List<Long> effectDefinitionIds;
         }
 
         /**
@@ -92,6 +100,13 @@ public final class OptionalFeatureDto {
 
             /** 같은 값을 가진 다른 선택옵션과 한 CeremonyEvent에 동시 적용할 수 없다. null이면 배타 관계 없음. */
             private String exclusivityGroup;
+
+            /**
+             * 이 묶음이 열어주는 이벤트 효과 목록을 통째로 교체한다(delete-all-then-recreate) —
+             * {@code code='EVENT_EFFECT_BUNDLE'}일 때만 의미가 있다. 생략하면(null) 기존 구성을
+             * 그대로 둔다. 빈 배열을 명시적으로 보내면 전부 해제한다.
+             */
+            private List<Long> effectDefinitionIds;
         }
     }
 
@@ -118,6 +133,8 @@ public final class OptionalFeatureDto {
             private final String exclusivityGroup;
             /** 이 옵션을 승인받아 쓰는 구매 건수 — 카탈로그 관리 화면의 "사용 중" 경고용. */
             private final Long usageCount;
+            /** 이 묶음이 여는 이벤트 효과 id 목록. {@code code='EVENT_EFFECT_BUNDLE'}가 아니면 항상 빈 배열이다. */
+            private final List<Long> effectDefinitionIds;
             private final LocalDateTime createdAt;
         }
 

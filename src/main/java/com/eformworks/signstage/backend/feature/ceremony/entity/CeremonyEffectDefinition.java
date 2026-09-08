@@ -5,12 +5,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -22,9 +19,16 @@ import lombok.NoArgsConstructor;
  * legacy signstage의 고정 효과 목록을 데이터로 옮긴 것으로, signstage-docs
  * business/ceremony-event-effect-migration-plan.md/-implementation-tasks.md(BE-CATALOG-01) 참고.
  *
- * <p>{@code code}/{@code targetType}/{@code triggerType}/{@code rendererKey}/
- * {@code requiredOptionalFeatureId}는 등록 후 불변이다(서비스에서 update 시 바꾸지 않는다) —
- * 이 값들이 바뀌면 이미 저장된 {@code ceremony_event_effect_settings}의 의미가 깨지기 때문이다.
+ * <p>{@code code}/{@code targetType}/{@code triggerType}/{@code rendererKey}는 등록 후
+ * 불변이다(서비스에서 update 시 바꾸지 않는다) — 이 값들이 바뀌면 이미 저장된
+ * {@code ceremony_event_effect_settings}의 의미가 깨지기 때문이다.
+ *
+ * <p>이 효과를 쓰려면 조직이 구매해 적용해둬야 하는 선택옵션(entitlement)은 더 이상 이
+ * 엔티티가 단일 FK로 갖지 않는다(2026-09-08 결정) — 선택옵션(특히 "이벤트 효과 묶음" 종류)이
+ * 몇 개짜리 묶음 상품으로 계속 늘어날 수 있어야 해서, {@code CeremonyEffectDefinitionOption}
+ * N:N 매핑으로 옮겼다. 효과 하나가 여러 묶음(예: "3종"과 "5종")에 동시에 포함될 수 있고,
+ * 묶음 구성은 선택옵션 쪽(카탈로그 관리 화면)에서 편집한다 — 이 엔티티는 어느 묶음에
+ * 속하는지 알 필요가 없다.
  */
 @Entity
 @Table(name = "ceremony_effect_definitions")
@@ -46,14 +50,6 @@ public class CeremonyEffectDefinition extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "trigger_type", nullable = false, length = 40)
     private CeremonyEffectTrigger triggerType;
-
-    /**
-     * 이 효과를 쓰려면 조직이 구매해 적용해둬야 하는 선택옵션(entitlement) — 예: 서명
-     * 하이라이트류는 {@code SIGNER_FIELD_ZOOM}, 폭죽류는 {@code ALL_SIGNED_FIREWORKS}.
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "required_optional_feature_id", nullable = false)
-    private OptionalFeature requiredOptionalFeature;
 
     @Column(name = "display_name", nullable = false, length = 100)
     private String displayName;
@@ -86,7 +82,6 @@ public class CeremonyEffectDefinition extends BaseEntity {
             String code,
             CeremonyEffectTarget targetType,
             CeremonyEffectTrigger triggerType,
-            OptionalFeature requiredOptionalFeature,
             String displayName,
             String description,
             String rendererKey,
@@ -97,7 +92,6 @@ public class CeremonyEffectDefinition extends BaseEntity {
         this.code = code;
         this.targetType = targetType;
         this.triggerType = triggerType;
-        this.requiredOptionalFeature = requiredOptionalFeature;
         this.displayName = displayName;
         this.description = description;
         this.rendererKey = rendererKey;
@@ -109,8 +103,8 @@ public class CeremonyEffectDefinition extends BaseEntity {
     }
 
     /**
-     * 플랫폼 관리자 수정. {@code code}/{@code targetType}/{@code triggerType}/{@code rendererKey}/
-     * {@code requiredOptionalFeature}는 여기서 바꾸지 않는다(클래스 주석 참고).
+     * 플랫폼 관리자 수정. {@code code}/{@code targetType}/{@code triggerType}/{@code rendererKey}는
+     * 여기서 바꾸지 않는다(클래스 주석 참고).
      */
     public void updateInfo(
             String displayName,

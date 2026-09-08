@@ -44,9 +44,6 @@ public final class CeremonyEffectDefinitionDto {
             @NotBlank
             private String triggerType;
 
-            @NotNull
-            private Long requiredOptionalFeatureId;
-
             @NotBlank
             @Size(max = 100)
             private String displayName;
@@ -66,9 +63,10 @@ public final class CeremonyEffectDefinitionDto {
         }
 
         /**
-         * {@code code}/{@code targetType}/{@code triggerType}/{@code rendererKey}/
-         * {@code requiredOptionalFeatureId}는 등록 후 불변이라 {@link CreateCeremonyEffectDefinition}과
-         * 달리 여기엔 없다.
+         * {@code code}/{@code targetType}/{@code triggerType}/{@code rendererKey}는 등록 후
+         * 불변이라 {@link CreateCeremonyEffectDefinition}과 달리 여기엔 없다. 이 효과를 여는
+         * 선택옵션(묶음) 구성은 더 이상 이 정의가 갖지 않는다 — {@code OptionalFeatureService}
+         * 쪽에서 {@code effectDefinitionIds}로 관리한다(2026-09-08 결정).
          */
         @Getter
         @Setter
@@ -131,7 +129,8 @@ public final class CeremonyEffectDefinitionDto {
             private final String code;
             private final String targetType;
             private final String triggerType;
-            private final Long requiredOptionalFeatureId;
+            /** 이 효과를 포함한 선택옵션(묶음) id 목록 — 여러 묶음에 겹쳐 속할 수 있다. */
+            private final List<Long> optionalFeatureIds;
             private final String displayName;
             private final String description;
             private final String rendererKey;

@@ -29,6 +29,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanR
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOptionalFeaturePurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryOptionalFeatureRepository;
@@ -84,6 +85,7 @@ public class CeremonyService {
     private final CeremonyRepository ceremonyRepository;
     private final CeremonyAssignmentRepository ceremonyAssignmentRepository;
     private final CeremonyCapacityPurchaseRepository ceremonyCapacityPurchaseRepository;
+    private final CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
     private final CeremonyOptionalFeaturePurchaseRepository ceremonyOptionalFeaturePurchaseRepository;
     private final CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
     private final CeremonyPlanHistoryOptionalFeatureRepository ceremonyPlanHistoryOptionalFeatureRepository;
@@ -419,6 +421,13 @@ public class CeremonyService {
                 .findAllByCeremonyIdAndStatus(ceremony.getId(), PurchaseStatus.APPROVED).stream()
                 .collect(Collectors.toMap(purchase -> purchase.getOptionalFeature().getId(), purchase -> purchase));
 
+        Map<Long, List<Long>> effectDefinitionIdsByFeatureId = ceremonyEffectDefinitionOptionRepository
+                .findAllByOptionalFeatureIdIn(availableIds).stream()
+                .collect(Collectors.groupingBy(
+                        mapping -> mapping.getOptionalFeature().getId(),
+                        Collectors.mapping(mapping -> mapping.getEffectDefinition().getId(), Collectors.toList())
+                ));
+
         return optionalFeatureRepository.findAllById(availableIds).stream()
                 .map(feature -> {
                     CeremonyOptionalFeaturePurchase purchase = approvedPurchaseByFeatureId.get(feature.getId());
@@ -438,6 +447,7 @@ public class CeremonyService {
                             ceremonyOptionalFeaturePurchaseRepository.countByOptionalFeatureIdAndStatus(
                                     feature.getId(), PurchaseStatus.APPROVED
                             ),
+                            effectDefinitionIdsByFeatureId.getOrDefault(feature.getId(), List.of()),
                             feature.getCreatedAt()
                     );
                 })

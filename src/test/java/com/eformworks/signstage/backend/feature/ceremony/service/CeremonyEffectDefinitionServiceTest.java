@@ -14,18 +14,13 @@ import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEffectDefin
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinition;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectTarget;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectTrigger;
-import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,6 +33,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 /**
  * {@link CeremonyEffectDefinitionService} 단위 테스트 — signstage-docs
  * business/ceremony-event-effect-implementation-tasks.md BE-CATALOG-04.
+ *
+ * <p>이 정의가 어떤 선택옵션(묶음)에 속하는지는 더 이상 이 서비스가 갖지 않는다 —
+ * {@code CeremonyEffectDefinitionOption} N:N 매핑을 {@code OptionalFeatureService} 쪽에서
+ * 관리한다(2026-09-08 결정). 여기서는 {@code CeremonyEffectDefinitionOptionRepository}를
+ * "이 정의가 속한 묶음 id 목록" 조회 용도로만 mocking한다.
  */
 @ExtendWith(MockitoExtension.class)
 class CeremonyEffectDefinitionServiceTest {
@@ -45,7 +45,7 @@ class CeremonyEffectDefinitionServiceTest {
     @Mock
     private CeremonyEffectDefinitionRepository ceremonyEffectDefinitionRepository;
     @Mock
-    private OptionalFeatureRepository optionalFeatureRepository;
+    private CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
     @Mock
     private PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     @Mock
@@ -57,30 +57,16 @@ class CeremonyEffectDefinitionServiceTest {
     void setUp() {
         ceremonyEffectDefinitionService = new CeremonyEffectDefinitionService(
                 ceremonyEffectDefinitionRepository,
-                optionalFeatureRepository,
+                ceremonyEffectDefinitionOptionRepository,
                 platformAdminAuditLogRecorder,
                 rolePermissionService
         );
         lenient().when(rolePermissionService.isAllowed("PLATFORM_OPS", "ACTION_EFFECT_MANAGE")).thenReturn(true);
     }
 
-    private OptionalFeature signerFieldZoom() {
-        OptionalFeature feature = OptionalFeature.builder()
-                .code(OptionalFeatureCode.SIGNER_FIELD_ZOOM)
-                .name("서명 하이라이트")
-                .currencyCode("KRW")
-                .supplyPrice(BigDecimal.TEN)
-                .salePrice(BigDecimal.TEN)
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(BigDecimal.ZERO)
-                .build();
-        ReflectionTestUtils.setField(feature, "id", 10L);
-        return feature;
-    }
-
     private CeremonyEffectDefinitionDto.Request.CreateCeremonyEffectDefinition createRequest(String code) {
         return new CeremonyEffectDefinitionDto.Request.CreateCeremonyEffectDefinition(
-                code, "PROJECTOR", "SIGNATURE_COMPLETED", 10L,
+                code, "PROJECTOR", "SIGNATURE_COMPLETED",
                 "하이라이트", "설명", "projector-signature-highlight", false, null
         );
     }
@@ -117,7 +103,7 @@ class CeremonyEffectDefinitionServiceTest {
     void createDefinition_invalidClassification_fail() {
         CeremonyEffectDefinitionDto.Request.CreateCeremonyEffectDefinition request =
                 new CeremonyEffectDefinitionDto.Request.CreateCeremonyEffectDefinition(
-                        "HIGHLIGHT", "SCREEN", "SIGNATURE_COMPLETED", 10L,
+                        "HIGHLIGHT", "SCREEN", "SIGNATURE_COMPLETED",
                         "하이라이트", null, "renderer", false, null
                 );
 
@@ -128,27 +114,12 @@ class CeremonyEffectDefinitionServiceTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 필수 선택옵션을 참조하면 거부된다")
-    void createDefinition_requiredOptionalFeatureNotFound_fail() {
-        given(optionalFeatureRepository.findById(10L)).willReturn(Optional.empty());
-
-        assertThatThrownBy(() -> ceremonyEffectDefinitionService.createDefinition(
-                "PLATFORM_OPS", 1L, createRequest("HIGHLIGHT")
-        ))
-                .isInstanceOf(ApplicationException.class)
-                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
-                .isEqualTo(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND);
-    }
-
-    @Test
     @DisplayName("같은 분류(target, trigger) 안에 기존 정의가 있으면 10 단위로 뒤에 배치된다")
     void createDefinition_appendsAtEndOfGroupWithStep10() {
-        OptionalFeature feature = signerFieldZoom();
-        given(optionalFeatureRepository.findById(10L)).willReturn(Optional.of(feature));
         CeremonyEffectDefinition existing = CeremonyEffectDefinition.builder()
                 .code("HIGHLIGHT").targetType(CeremonyEffectTarget.PROJECTOR)
                 .triggerType(CeremonyEffectTrigger.SIGNATURE_COMPLETED)
-                .requiredOptionalFeature(feature).displayName("하이라이트").rendererKey("r").displayOrder(10)
+                .displayName("하이라이트").rendererKey("r").displayOrder(10)
                 .build();
         given(ceremonyEffectDefinitionRepository.findAllByGroupForUpdate(
                 CeremonyEffectTarget.PROJECTOR, CeremonyEffectTrigger.SIGNATURE_COMPLETED
@@ -164,13 +135,11 @@ class CeremonyEffectDefinitionServiceTest {
     @Test
     @DisplayName("configJson은 JSON object로 정규화되어 저장·조회된다")
     void createDefinition_configJson_roundTrips() {
-        OptionalFeature feature = signerFieldZoom();
-        given(optionalFeatureRepository.findById(10L)).willReturn(Optional.of(feature));
         given(ceremonyEffectDefinitionRepository.findAllByGroupForUpdate(any(), any())).willReturn(List.of());
 
         CeremonyEffectDefinitionDto.Request.CreateCeremonyEffectDefinition request =
                 new CeremonyEffectDefinitionDto.Request.CreateCeremonyEffectDefinition(
-                        "HIGHLIGHT", "PROJECTOR", "SIGNATURE_COMPLETED", 10L,
+                        "HIGHLIGHT", "PROJECTOR", "SIGNATURE_COMPLETED",
                         "하이라이트", null, "renderer", false, Map.of("color", "blue")
                 );
 
@@ -181,17 +150,16 @@ class CeremonyEffectDefinitionServiceTest {
     }
 
     @Test
-    @DisplayName("수정해도 code/target/trigger/rendererKey/requiredOptionalFeature는 바뀌지 않는다")
+    @DisplayName("수정해도 code/target/trigger/rendererKey는 바뀌지 않는다")
     void updateDefinition_immutableFieldsUnchanged() {
-        OptionalFeature feature = signerFieldZoom();
         CeremonyEffectDefinition definition = CeremonyEffectDefinition.builder()
                 .code("HIGHLIGHT").targetType(CeremonyEffectTarget.PROJECTOR)
                 .triggerType(CeremonyEffectTrigger.SIGNATURE_COMPLETED)
-                .requiredOptionalFeature(feature).displayName("하이라이트").rendererKey("projector-signature-highlight")
+                .displayName("하이라이트").rendererKey("projector-signature-highlight")
                 .displayOrder(10)
                 .build();
         ReflectionTestUtils.setField(definition, "id", 1L);
-        given(ceremonyEffectDefinitionRepository.findById(1L)).willReturn(Optional.of(definition));
+        given(ceremonyEffectDefinitionRepository.findById(1L)).willReturn(java.util.Optional.of(definition));
 
         CeremonyEffectDefinitionDto.Request.UpdateCeremonyEffectDefinition request =
                 new CeremonyEffectDefinitionDto.Request.UpdateCeremonyEffectDefinition(
@@ -205,11 +173,24 @@ class CeremonyEffectDefinitionServiceTest {
         assertThat(response.getTargetType()).isEqualTo("PROJECTOR");
         assertThat(response.getTriggerType()).isEqualTo("SIGNATURE_COMPLETED");
         assertThat(response.getRendererKey()).isEqualTo("projector-signature-highlight");
-        assertThat(response.getRequiredOptionalFeatureId()).isEqualTo(10L);
         assertThat(response.getDisplayName()).isEqualTo("새 표시명");
         assertThat(response.getEnabled()).isFalse();
         assertThat(response.getUserVisible()).isFalse();
         assertThat(response.getManuallyTriggerable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("정의 상세는 이 정의가 속한 묶음 id 목록을 담는다")
+    void findDefinition_includesOptionalFeatureIds() {
+        CeremonyEffectDefinition definition = definitionWithId(1L, 10);
+        given(ceremonyEffectDefinitionRepository.findById(1L)).willReturn(java.util.Optional.of(definition));
+        given(ceremonyEffectDefinitionOptionRepository.findAllByEffectDefinitionId(1L))
+                .willReturn(List.of(mappingTo(30L), mappingTo(31L)));
+
+        CeremonyEffectDefinitionDto.Response.CeremonyEffectDefinitionSummary response =
+                ceremonyEffectDefinitionService.findDefinition(1L);
+
+        assertThat(response.getOptionalFeatureIds()).containsExactlyInAnyOrder(30L, 31L);
     }
 
     @Test
@@ -274,13 +255,22 @@ class CeremonyEffectDefinitionServiceTest {
     }
 
     private CeremonyEffectDefinition definitionWithId(Long id, int displayOrder) {
-        OptionalFeature feature = signerFieldZoom();
         CeremonyEffectDefinition definition = CeremonyEffectDefinition.builder()
                 .code("CODE_" + id).targetType(CeremonyEffectTarget.PROJECTOR)
                 .triggerType(CeremonyEffectTrigger.SIGNATURE_COMPLETED)
-                .requiredOptionalFeature(feature).displayName("d" + id).rendererKey("r").displayOrder(displayOrder)
+                .displayName("d" + id).rendererKey("r").displayOrder(displayOrder)
                 .build();
         ReflectionTestUtils.setField(definition, "id", id);
         return definition;
+    }
+
+    /** {@code findAllByEffectDefinitionId} mocking 전용 — {@code optionalFeature.id}만 있으면 충분하다. */
+    private com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption mappingTo(Long optionalFeatureId) {
+        com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature feature =
+                com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature.builder().build();
+        ReflectionTestUtils.setField(feature, "id", optionalFeatureId);
+        return com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption.builder()
+                .optionalFeature(feature)
+                .build();
     }
 }
