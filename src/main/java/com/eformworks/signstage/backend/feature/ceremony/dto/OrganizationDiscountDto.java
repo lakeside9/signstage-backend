@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.ceremony.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -11,8 +12,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * 조직×품목 세밀 할인 오버라이드(안 A). signstage-docs
- * business/organization-event-discount-pricing-review.md 4.1절(2026-08-21 재검토) 참고.
+ * 조직×품목 세밀 할인 오버라이드 — 행 하나가 기간 하나(다중 버전, 안 B). signstage-docs
+ * business/organization-discount-override-security-and-validity-period-review.md 결정
+ * #4(2026-09-08) 참고.
  */
 public final class OrganizationDiscountDto {
 
@@ -24,6 +26,12 @@ public final class OrganizationDiscountDto {
         private Request() {
         }
 
+        /**
+         * 기간 하나를 새로 만들거나(POST) 이미 있는 기간 하나를 고칠 때(PUT) 공통으로 쓴다.
+         * {@code effectiveFrom}은 결정 #5(오늘 판단 타임존)가 유보라 자동 기본값을 채우지 않고
+         * 항상 필수 입력으로 받는다 — signstage-docs
+         * business/organization-discount-override-security-and-validity-period-review.md 3.2절.
+         */
         @Getter
         @Setter
         @NoArgsConstructor
@@ -35,6 +43,12 @@ public final class OrganizationDiscountDto {
 
             @NotNull
             private BigDecimal discountValue;
+
+            @NotNull
+            private LocalDate effectiveFrom;
+
+            /** null이면 무기한(그 뒤로 다른 기간이 없는 한). */
+            private LocalDate effectiveTo;
         }
     }
 
@@ -49,10 +63,16 @@ public final class OrganizationDiscountDto {
 
             private final Long id;
             private final Long organizationId;
+            /** 조직 횡단 목록 화면(discount-management-screen-separation-review.md)이 쓴다 — 조직 상세 안에서는 무시해도 된다. */
+            private final String organizationName;
             private final Long billingPlanId;
             private final String billingPlanName;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final LocalDate effectiveFrom;
+            private final LocalDate effectiveTo;
+            /** PENDING(예정)/ACTIVE(적용 중)/EXPIRED(만료됨) — 서버가 계산해 내려준다. */
+            private final String status;
             private final LocalDateTime createdAt;
         }
 
@@ -62,10 +82,14 @@ public final class OrganizationDiscountDto {
 
             private final Long id;
             private final Long organizationId;
+            private final String organizationName;
             private final Long optionalFeatureId;
             private final String optionalFeatureName;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final LocalDate effectiveFrom;
+            private final LocalDate effectiveTo;
+            private final String status;
             private final LocalDateTime createdAt;
         }
 
@@ -75,16 +99,20 @@ public final class OrganizationDiscountDto {
 
             private final Long id;
             private final Long organizationId;
+            private final String organizationName;
             private final Long capacityAddOnId;
             /** SIGNERS/TEMPLATES/TEST_EVENTS/MAIN_EVENTS — 다른 CapacityAddOn 관련 DTO와 같이 name()을 그대로 내려주고, 라벨링은 프런트가 한다. */
             private final String capacityType;
             private final Integer unitAmount;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final LocalDate effectiveFrom;
+            private final LocalDate effectiveTo;
+            private final String status;
             private final LocalDateTime createdAt;
         }
 
-        /** 조직별 할인 관리 화면이 한 조직에 걸린 세 카탈로그 종류의 오버라이드를 한 번에 받는 데 쓴다. */
+        /** 조직별 할인 관리 화면이 한 조직에 걸린 세 카탈로그 종류의 오버라이드(모든 품목·모든 기간)를 한 번에 받는 데 쓴다. */
         @Getter
         @AllArgsConstructor
         public static class OrganizationDiscountOverview {
@@ -109,6 +137,8 @@ public final class OrganizationDiscountDto {
             private final String billingPlanName;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final LocalDate effectiveFrom;
+            private final LocalDate effectiveTo;
             private final boolean removed;
             private final Long createdBy;
             private final LocalDateTime createdAt;
@@ -124,6 +154,8 @@ public final class OrganizationDiscountDto {
             private final String optionalFeatureName;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final LocalDate effectiveFrom;
+            private final LocalDate effectiveTo;
             private final boolean removed;
             private final Long createdBy;
             private final LocalDateTime createdAt;
@@ -140,6 +172,8 @@ public final class OrganizationDiscountDto {
             private final Integer unitAmount;
             private final String discountType;
             private final BigDecimal discountValue;
+            private final LocalDate effectiveFrom;
+            private final LocalDate effectiveTo;
             private final boolean removed;
             private final Long createdBy;
             private final LocalDateTime createdAt;

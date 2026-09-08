@@ -56,6 +56,20 @@ public class PlatformAdminCeremonyController {
     }
 
     @Operation(
+            summary = "행사 단건 조회(플랫폼 관리자)",
+            description = "조직 멤버십과 무관하게 이 조직의 행사 하나를 본다. 조회 전용이라 등급 검사 없다."
+                    + " 행사 건별 재량 할인 상세 화면(discount-management-screen-separation-review.md)이 쓴다."
+    )
+    @GetMapping("/{ceremonyId}")
+    public ApiResponse<CeremonyDto.Response.CeremonySummary> findCeremony(
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        CeremonyDto.Response.CeremonySummary response = ceremonyService.findCeremonyByPlatformAdmin(organizationId, ceremonyId);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
             summary = "행사 상태 강제 변경",
             description = "IN_PROGRESS/COMPLETED 양방향 변경. PLATFORM_OPS 이상만 호출할 수 있다."
     )

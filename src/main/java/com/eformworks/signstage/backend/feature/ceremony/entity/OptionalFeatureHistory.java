@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -12,7 +13,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -46,24 +46,8 @@ public class OptionalFeatureHistory extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
-    private String currencyCode;
-
-    @Column(name = "supply_price", nullable = false, precision = 19, scale = 4)
-    private BigDecimal supplyPrice;
-
-    @Column(name = "sale_price", nullable = false, precision = 19, scale = 4)
-    private BigDecimal salePrice;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "discount_type", nullable = false, length = 20)
-    private DiscountType discountType;
-
-    @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
-    private BigDecimal discountValue;
-
-    @Column(name = "tax_code", nullable = false, length = 50)
-    private String taxCode;
+    @Embedded
+    private CatalogPriceInfo priceInfo;
 
     @Column(nullable = false)
     private boolean active;
@@ -74,19 +58,24 @@ public class OptionalFeatureHistory extends BaseEntity {
     @Column(name = "exclusivity_group", length = 50)
     private String exclusivityGroup;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private OptionalFeatureCategory category;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "paired_capacity_type", length = 20)
+    private CapacityType pairedCapacityType;
+
     @Builder
     private OptionalFeatureHistory(OptionalFeature optionalFeature) {
         this.optionalFeature = optionalFeature;
         this.code = optionalFeature.getCode();
         this.name = optionalFeature.getName();
-        this.currencyCode = optionalFeature.getCurrencyCode();
-        this.supplyPrice = optionalFeature.getSupplyPrice();
-        this.salePrice = optionalFeature.getSalePrice();
-        this.discountType = optionalFeature.getDiscountType();
-        this.discountValue = optionalFeature.getDiscountValue();
-        this.taxCode = optionalFeature.getTaxCode();
+        this.priceInfo = optionalFeature.getPriceInfo();
         this.active = optionalFeature.isActive();
         this.projectorEffect = optionalFeature.isProjectorEffect();
         this.exclusivityGroup = optionalFeature.getExclusivityGroup();
+        this.category = optionalFeature.getCategory();
+        this.pairedCapacityType = optionalFeature.getPairedCapacityType();
     }
 }

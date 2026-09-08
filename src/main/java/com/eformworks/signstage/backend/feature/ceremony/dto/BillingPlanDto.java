@@ -1,11 +1,11 @@
 package com.eformworks.signstage.backend.feature.ceremony.dto;
 
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,7 +32,7 @@ public final class BillingPlanDto {
 
             private String currencyCode;
 
-            @NotNull
+            /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
             private BigDecimal supplyPrice;
 
             @NotNull
@@ -46,25 +46,17 @@ public final class BillingPlanDto {
 
             private String taxCode;
 
+            /**
+             * 이 플랜이 기본 포함하는 용량 한도 — {@code CapacityType} 이름을 키로 하는 맵(예:
+             * {@code {"SIGNERS": 100, "TEMPLATES": 10, "TEST_EVENTS": 3, "REHEARSAL_EVENTS": 3,
+             * "MAIN_EVENTS": 1}}). 정확히 {@code CapacityType.planIncludableTypes()}(플랜 기본
+             * 포함이 가능한 종류)와 같은 키 집합이어야 하고, 값은 0 이상이어야 한다 — 서비스
+             * 계층에서 검증한다(signstage-docs
+             * business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08,
+             * 항목 B). {@code TABLETS} 같은 "플랜 기본 포함 불가" 종류를 키로 넣으면 거부된다.
+             */
             @NotNull
-            @Min(0)
-            private Integer maxSigners;
-
-            @NotNull
-            @Min(0)
-            private Integer maxTemplates;
-
-            @NotNull
-            @Min(0)
-            private Integer maxTestEvents;
-
-            @NotNull
-            @Min(0)
-            private Integer maxRehearsalEvents;
-
-            @NotNull
-            @Min(0)
-            private Integer maxMainEvents;
+            private Map<String, Integer> capacities;
 
             /** 이 플랜에 기본으로 포함할 선택옵션 id 목록(생략하면 빈 목록). */
             private List<Long> optionalFeatureIds;
@@ -83,7 +75,8 @@ public final class BillingPlanDto {
          * 생성 후 불변이었으나 뺄 방법이 없어 문제였다). 생략하면 빈 목록으로 취급한다
          * ({@link CreatePlan}과 같은 규약). 이미 확정/진행 중인 행사는
          * {@code CeremonyPlanHistoryOptionalFeature}/{@code CeremonyPlanHistoryCapacityAddOn}
-         * 스냅샷으로 보호되어 이 수정에 영향받지 않는다.
+         * 스냅샷으로 보호되어 이 수정에 영향받지 않는다. {@code capacities}도 같은 방식으로
+         * 통째로 교체한다({@link CreatePlan}과 같은 검증 규약).
          */
         @Getter
         @Setter
@@ -96,7 +89,7 @@ public final class BillingPlanDto {
 
             private String currencyCode;
 
-            @NotNull
+            /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
             private BigDecimal supplyPrice;
 
             @NotNull
@@ -111,24 +104,7 @@ public final class BillingPlanDto {
             private String taxCode;
 
             @NotNull
-            @Min(0)
-            private Integer maxSigners;
-
-            @NotNull
-            @Min(0)
-            private Integer maxTemplates;
-
-            @NotNull
-            @Min(0)
-            private Integer maxTestEvents;
-
-            @NotNull
-            @Min(0)
-            private Integer maxRehearsalEvents;
-
-            @NotNull
-            @Min(0)
-            private Integer maxMainEvents;
+            private Map<String, Integer> capacities;
 
             /** 사용여부. false면 새 행사 생성/플랜 변경 대상에서 제외된다. */
             @NotNull
@@ -159,11 +135,8 @@ public final class BillingPlanDto {
             private final String discountType;
             private final BigDecimal discountValue;
             private final String taxCode;
-            private final Integer maxSigners;
-            private final Integer maxTemplates;
-            private final Integer maxTestEvents;
-            private final Integer maxRehearsalEvents;
-            private final Integer maxMainEvents;
+            /** {@code CapacityType} 이름 → 포함 수량. {@link Request.CreatePlan#capacities}와 같은 규약. */
+            private final Map<String, Integer> capacities;
             private final Boolean active;
             private final List<Long> optionalFeatureIds;
             /** 이 플랜에서 구매 가능한 용량 추가구매 상품 id 목록(안 A 큐레이션). */
@@ -186,11 +159,7 @@ public final class BillingPlanDto {
             private final String discountType;
             private final BigDecimal discountValue;
             private final String taxCode;
-            private final Integer maxSigners;
-            private final Integer maxTemplates;
-            private final Integer maxTestEvents;
-            private final Integer maxRehearsalEvents;
-            private final Integer maxMainEvents;
+            private final Map<String, Integer> capacities;
             private final Boolean active;
             private final Long createdBy;
             private final LocalDateTime createdAt;

@@ -328,6 +328,26 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_EFFECT_MANUAL_TRIGGER_RATE_LIMITED",
             HttpStatus.TOO_MANY_REQUESTS,
             "효과 수동 실행이 너무 잦습니다. 잠시 후 다시 시도해주세요."
+    ),
+    DISCOUNT_VALUE_INVALID(
+            "CEREMONY_DISCOUNT_VALUE_INVALID",
+            HttpStatus.BAD_REQUEST,
+            "할인값은 0 이상이어야 하고, 정률(PERCENT) 할인은 100을 넘을 수 없습니다."
+    ),
+    DISCOUNT_PERIOD_INVALID(
+            "CEREMONY_DISCOUNT_PERIOD_INVALID",
+            HttpStatus.BAD_REQUEST,
+            "종료일은 시작일보다 빠를 수 없습니다."
+    ),
+    DISCOUNT_PERIOD_OVERLAPPING(
+            "CEREMONY_DISCOUNT_PERIOD_OVERLAPPING",
+            HttpStatus.CONFLICT,
+            "같은 조직×품목에 이미 겹치는 기간의 할인 오버라이드가 있습니다."
+    ),
+    ORGANIZATION_DISCOUNT_PERIOD_NOT_FOUND(
+            "CEREMONY_ORGANIZATION_DISCOUNT_PERIOD_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "할인 오버라이드 기간을 찾을 수 없습니다."
     );
 
     private final String code;

@@ -34,7 +34,7 @@ public final class OptionalFeatureDto {
 
             private String currencyCode;
 
-            @NotNull
+            /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
             private BigDecimal supplyPrice;
 
             @NotNull
@@ -53,6 +53,18 @@ public final class OptionalFeatureDto {
 
             /** 같은 값을 가진 다른 선택옵션과 한 CeremonyEvent에 동시 적용할 수 없다. 생략하면(null) 배타 관계 없음. */
             private String exclusivityGroup;
+
+            /** 상위 분류(EQUIPMENT/PERSONNEL/APPLICATION) — signstage-docs business/ceremony-support-services-billing-review.md 결정(2026-09-08). */
+            @NotBlank
+            private String category;
+
+            /**
+             * 이 선택옵션과 짝이 되는 용량 추가구매 종류 — 표시 전용 상품(예: 태블릿 대여)이면
+             * 짝이 되는 {@code CapacityType} 이름을, 완결형(예: 이벤트 효과 묶음)이면 생략(null)한다.
+             * 짝이 되는 용량 추가구매 상품이 아직 없어도 저장은 막지 않는다(경고만) — signstage-docs
+             * business/optional-feature-capacity-addon-pairing-review.md 결정(2026-09-08).
+             */
+            private String pairedCapacityType;
 
             /**
              * 이 묶음이 열어주는 이벤트 효과 목록 — {@code code='EVENT_EFFECT_BUNDLE'}일 때만
@@ -77,7 +89,7 @@ public final class OptionalFeatureDto {
 
             private String currencyCode;
 
-            @NotNull
+            /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
             private BigDecimal supplyPrice;
 
             @NotNull
@@ -100,6 +112,11 @@ public final class OptionalFeatureDto {
 
             /** 같은 값을 가진 다른 선택옵션과 한 CeremonyEvent에 동시 적용할 수 없다. null이면 배타 관계 없음. */
             private String exclusivityGroup;
+
+            @NotBlank
+            private String category;
+
+            private String pairedCapacityType;
 
             /**
              * 이 묶음이 열어주는 이벤트 효과 목록을 통째로 교체한다(delete-all-then-recreate) —
@@ -131,6 +148,9 @@ public final class OptionalFeatureDto {
             private final Boolean active;
             private final Boolean projectorEffect;
             private final String exclusivityGroup;
+            private final String category;
+            /** null이면 완결형(짝 없음). 값이 있으면 표시 전용 상품이며 이 CapacityType의 용량 추가구매가 실제 수량을 담당한다. */
+            private final String pairedCapacityType;
             /** 이 옵션을 승인받아 쓰는 구매 건수 — 카탈로그 관리 화면의 "사용 중" 경고용. */
             private final Long usageCount;
             /** 이 묶음이 여는 이벤트 효과 id 목록. {@code code='EVENT_EFFECT_BUNDLE'}가 아니면 항상 빈 배열이다. */
@@ -155,6 +175,8 @@ public final class OptionalFeatureDto {
             private final Boolean active;
             private final Boolean projectorEffect;
             private final String exclusivityGroup;
+            private final String category;
+            private final String pairedCapacityType;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }

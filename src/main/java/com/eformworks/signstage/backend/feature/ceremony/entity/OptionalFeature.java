@@ -1,8 +1,8 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
-import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -39,24 +39,12 @@ public class OptionalFeature extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
-    private String currencyCode;
-
-    @Column(name = "supply_price", nullable = false, precision = 19, scale = 4)
-    private BigDecimal supplyPrice;
-
-    @Column(name = "sale_price", nullable = false, precision = 19, scale = 4)
-    private BigDecimal salePrice;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "discount_type", nullable = false, length = 20)
-    private DiscountType discountType;
-
-    @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
-    private BigDecimal discountValue;
-
-    @Column(name = "tax_code", nullable = false, length = 50)
-    private String taxCode;
+    /**
+     * 가격정보(통화/공급가/판매가/할인/세금코드) — signstage-docs
+     * business/billing-catalog-zero-base-schema-redesign-review.md 결정 #1(2026-09-08, 항목 A).
+     */
+    @Embedded
+    private CatalogPriceInfo priceInfo;
 
     /**
      * 사용여부(비활성화해도 행은 지우지 않는다). 비활성화된 선택옵션은 새 추가구매 대상에서
@@ -88,6 +76,25 @@ public class OptionalFeature extends BaseEntity {
     @Column(name = "exclusivity_group", length = 50)
     private String exclusivityGroup;
 
+    /**
+     * 상위 분류(장비/인력/애플리케이션) — signstage-docs
+     * business/ceremony-support-services-billing-review.md 결정(2026-09-08, 4.3절 안 B).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private OptionalFeatureCategory category;
+
+    /**
+     * 이 선택옵션이 표시 전용이며, 실제 수량은 이 {@link CapacityType}의 {@link CapacityAddOn}이
+     * 담당한다는 걸 명시한다 — null이면 완결형(그 자체로 끝나는 상품, 예: 이벤트 효과 묶음).
+     * 값이 있으면(예: 태블릿 대여 → {@code TABLETS}) 관리자 화면이 짝이 되는 용량 추가구매
+     * 상품을 인라인으로 보여준다(짝 누락은 경고만, 저장을 막지 않는다) — signstage-docs
+     * business/optional-feature-capacity-addon-pairing-review.md 결정(2026-09-08).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "paired_capacity_type", length = 20)
+    private CapacityType pairedCapacityType;
+
     @Builder
     private OptionalFeature(
             OptionalFeatureCode code,
@@ -99,19 +106,21 @@ public class OptionalFeature extends BaseEntity {
             BigDecimal discountValue,
             String taxCode,
             Boolean projectorEffect,
-            String exclusivityGroup
+            String exclusivityGroup,
+            OptionalFeatureCategory category,
+            CapacityType pairedCapacityType
     ) {
         this.code = code;
         this.name = name;
-        this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
-        this.supplyPrice = supplyPrice;
-        this.salePrice = salePrice;
-        this.discountType = discountType;
-        this.discountValue = discountValue;
-        this.taxCode = taxCode == null || taxCode.isBlank() ? "KR_VAT_STANDARD" : taxCode;
+        this.priceInfo = CatalogPriceInfo.of(
+                currencyCode, supplyPrice, salePrice, discountType, discountValue,
+                taxCode == null || taxCode.isBlank() ? "KR_VAT_STANDARD" : taxCode
+        );
         this.active = true;
         this.projectorEffect = projectorEffect != null ? projectorEffect : true;
         this.exclusivityGroup = exclusivityGroup;
+        this.category = category;
+        this.pairedCapacityType = pairedCapacityType;
     }
 
     /**
@@ -129,17 +138,19 @@ public class OptionalFeature extends BaseEntity {
             String taxCode,
             boolean active,
             boolean projectorEffect,
-            String exclusivityGroup
+            String exclusivityGroup,
+            OptionalFeatureCategory category,
+            CapacityType pairedCapacityType
     ) {
         this.name = name;
-        this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
-        this.supplyPrice = supplyPrice;
-        this.salePrice = salePrice;
-        this.discountType = discountType;
-        this.discountValue = discountValue;
-        this.taxCode = taxCode == null || taxCode.isBlank() ? this.taxCode : taxCode;
+        this.priceInfo = CatalogPriceInfo.of(
+                currencyCode, supplyPrice, salePrice, discountType, discountValue,
+                taxCode == null || taxCode.isBlank() ? this.priceInfo.getTaxCode() : taxCode
+        );
         this.active = active;
         this.projectorEffect = projectorEffect;
         this.exclusivityGroup = exclusivityGroup;
+        this.category = category;
+        this.pairedCapacityType = pairedCapacityType;
     }
 }

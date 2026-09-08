@@ -2,10 +2,10 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -14,6 +14,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -44,14 +45,17 @@ public class OrganizationOptionalFeatureDiscountHistory extends BaseEntity {
     @JoinColumn(name = "optional_feature_id", nullable = false)
     private OptionalFeature optionalFeature;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "discount_type", nullable = false, length = 20)
-    private DiscountType discountType;
+    @Embedded
+    @AttributeOverride(name = "discountValue", column = @Column(name = "discount_value", nullable = false, precision = 12, scale = 2))
+    private DiscountInfo discount;
 
-    @Column(name = "discount_value", nullable = false, precision = 12, scale = 2)
-    private BigDecimal discountValue;
+    @Column(name = "effective_from", nullable = false)
+    private LocalDate effectiveFrom;
 
-    /** true면 이 행이 "오버라이드 제거" 이벤트다 — discountType/discountValue는 제거 직전 값. */
+    @Column(name = "effective_to")
+    private LocalDate effectiveTo;
+
+    /** true면 이 행이 "오버라이드 제거" 이벤트다 — discount/effectiveFrom/effectiveTo는 제거 직전 값. */
     @Column(nullable = false)
     private boolean removed;
 
@@ -61,12 +65,15 @@ public class OrganizationOptionalFeatureDiscountHistory extends BaseEntity {
             OptionalFeature optionalFeature,
             DiscountType discountType,
             BigDecimal discountValue,
+            LocalDate effectiveFrom,
+            LocalDate effectiveTo,
             boolean removed
     ) {
         this.organization = organization;
         this.optionalFeature = optionalFeature;
-        this.discountType = discountType;
-        this.discountValue = discountValue;
+        this.discount = new DiscountInfo(discountType, discountValue);
+        this.effectiveFrom = effectiveFrom;
+        this.effectiveTo = effectiveTo;
         this.removed = removed;
     }
 }

@@ -41,7 +41,7 @@ public final class CapacityAddOnDto {
 
             private String currencyCode;
 
-            @NotNull
+            /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
             private BigDecimal supplyPrice;
 
             @NotNull
@@ -92,7 +92,7 @@ public final class CapacityAddOnDto {
 
             private String currencyCode;
 
-            @NotNull
+            /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
             private BigDecimal supplyPrice;
 
             @NotNull

@@ -3,10 +3,12 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinition;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCategory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
@@ -72,6 +74,8 @@ public class OptionalFeatureService {
                 .taxCode(request.getTaxCode())
                 .projectorEffect(request.getProjectorEffect())
                 .exclusivityGroup(request.getExclusivityGroup())
+                .category(parseCategory(request.getCategory()))
+                .pairedCapacityType(parseOptionalCapacityType(request.getPairedCapacityType()))
                 .build();
         optionalFeatureRepository.save(optionalFeature);
         recordFeatureHistory(optionalFeature);
@@ -104,7 +108,7 @@ public class OptionalFeatureService {
         checkEffectDefinitionIdsAllowed(optionalFeature.getCode(), request.getEffectDefinitionIds());
 
         String detail = "optionalFeatureId=" + optionalFeatureId
-                + ", salePrice: " + optionalFeature.getSalePrice() + " -> " + request.getSalePrice()
+                + ", salePrice: " + optionalFeature.getPriceInfo().getSalePrice() + " -> " + request.getSalePrice()
                 + ", active: " + optionalFeature.isActive() + " -> " + request.getActive();
 
         optionalFeature.updateInfo(
@@ -117,7 +121,9 @@ public class OptionalFeatureService {
                 request.getTaxCode(),
                 request.getActive(),
                 request.getProjectorEffect(),
-                request.getExclusivityGroup()
+                request.getExclusivityGroup(),
+                parseCategory(request.getCategory()),
+                parseOptionalCapacityType(request.getPairedCapacityType())
         );
         recordFeatureHistory(optionalFeature);
         if (request.getEffectDefinitionIds() != null) {
@@ -200,20 +206,47 @@ public class OptionalFeatureService {
         }
     }
 
+    private OptionalFeatureCategory parseCategory(String category) {
+        try {
+            return OptionalFeatureCategory.valueOf(category);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    /**
+     * 짝이 되는 용량 추가구매 종류 — 완결형 상품이면(요청에 생략) null. 짝이 되는
+     * {@code CapacityAddOn}이 아직 카탈로그에 없어도 저장은 막지 않는다(경고만, signstage-docs
+     * business/optional-feature-capacity-addon-pairing-review.md 결정 #3) — 그 경고는
+     * 프런트가 이미 불러온 용량 추가구매 목록과 대조해 표시한다.
+     */
+    private CapacityType parseOptionalCapacityType(String pairedCapacityType) {
+        if (pairedCapacityType == null || pairedCapacityType.isBlank()) {
+            return null;
+        }
+        try {
+            return CapacityType.valueOf(pairedCapacityType);
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
     private OptionalFeatureDto.Response.OptionalFeatureSummary toSummary(OptionalFeature optionalFeature) {
         return new OptionalFeatureDto.Response.OptionalFeatureSummary(
                 optionalFeature.getId(),
                 optionalFeature.getCode().name(),
                 optionalFeature.getName(),
-                optionalFeature.getCurrencyCode(),
-                optionalFeature.getSupplyPrice(),
-                optionalFeature.getSalePrice(),
-                optionalFeature.getDiscountType().name(),
-                optionalFeature.getDiscountValue(),
-                optionalFeature.getTaxCode(),
+                optionalFeature.getPriceInfo().getCurrencyCode(),
+                optionalFeature.getPriceInfo().getSupplyPrice(),
+                optionalFeature.getPriceInfo().getSalePrice(),
+                optionalFeature.getPriceInfo().getDiscount().getDiscountType().name(),
+                optionalFeature.getPriceInfo().getDiscount().getDiscountValue(),
+                optionalFeature.getPriceInfo().getTaxCode(),
                 optionalFeature.isActive(),
                 optionalFeature.isProjectorEffect(),
                 optionalFeature.getExclusivityGroup(),
+                optionalFeature.getCategory().name(),
+                optionalFeature.getPairedCapacityType() == null ? null : optionalFeature.getPairedCapacityType().name(),
                 ceremonyOptionalFeaturePurchaseRepository.countByOptionalFeatureIdAndStatus(
                         optionalFeature.getId(), PurchaseStatus.APPROVED
                 ),
@@ -229,15 +262,17 @@ public class OptionalFeatureService {
                 history.getId(),
                 history.getCode().name(),
                 history.getName(),
-                history.getCurrencyCode(),
-                history.getSupplyPrice(),
-                history.getSalePrice(),
-                history.getDiscountType().name(),
-                history.getDiscountValue(),
-                history.getTaxCode(),
+                history.getPriceInfo().getCurrencyCode(),
+                history.getPriceInfo().getSupplyPrice(),
+                history.getPriceInfo().getSalePrice(),
+                history.getPriceInfo().getDiscount().getDiscountType().name(),
+                history.getPriceInfo().getDiscount().getDiscountValue(),
+                history.getPriceInfo().getTaxCode(),
                 history.isActive(),
                 history.isProjectorEffect(),
                 history.getExclusivityGroup(),
+                history.getCategory().name(),
+                history.getPairedCapacityType() == null ? null : history.getPairedCapacityType().name(),
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );
