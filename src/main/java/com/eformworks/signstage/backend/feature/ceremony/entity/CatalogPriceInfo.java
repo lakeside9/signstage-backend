@@ -1,6 +1,8 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
+import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
+import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.Embedded;
@@ -57,6 +59,15 @@ public class CatalogPriceInfo {
             DiscountInfo discount,
             String taxCode
     ) {
+        // 하한 검증(음수 금지)을 이 생성자 한 곳에서 강제한다 — DiscountInfo의 할인값 검증과 같은
+        // 원칙(signstage-docs business/billing-catalog-pricing-input-validation-review.md 3.1절,
+        // 2026-09-09 구현). supplyPrice는 nullable("원가 미상")이라 null이면 검증을 건너뛴다.
+        if (supplyPrice != null && supplyPrice.signum() < 0) {
+            throw new ApplicationException(CeremonyErrorCode.CATALOG_PRICE_VALUE_INVALID);
+        }
+        if (salePrice != null && salePrice.signum() < 0) {
+            throw new ApplicationException(CeremonyErrorCode.CATALOG_PRICE_VALUE_INVALID);
+        }
         this.currencyCode = InternationalizationDefaults.currencyCodeOrDefault(currencyCode);
         this.supplyPrice = supplyPrice;
         this.salePrice = salePrice;

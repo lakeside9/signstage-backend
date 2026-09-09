@@ -9,6 +9,7 @@ import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CapacityAddOnDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
+import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnPricePeriodHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnPricePeriodRepository;
@@ -165,5 +166,18 @@ class CapacityAddOnServiceTest {
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CommonErrorCode.INVALID_REQUEST);
+    }
+
+    @Test
+    @DisplayName("음수 판매가는 서비스 계층까지 거부가 전달된다(CatalogPriceInfo 하한 검증 — signstage-docs "
+            + "business/billing-catalog-pricing-input-validation-review.md 3.1절)")
+    void createCapacityAddOn_negativeSalePrice_rejected() {
+        CapacityAddOnDto.Request.CreateCapacityAddOn request = createRequest("TABLETS", 1, null, null);
+        request.setSalePrice(new BigDecimal("-1"));
+
+        assertThatThrownBy(() -> capacityAddOnService.createCapacityAddOn("PLATFORM_OPS", 1L, request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CATALOG_PRICE_VALUE_INVALID);
     }
 }

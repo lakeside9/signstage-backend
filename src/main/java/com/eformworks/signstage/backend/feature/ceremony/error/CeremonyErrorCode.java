@@ -334,6 +334,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.BAD_REQUEST,
             "할인값은 0 이상이어야 하고, 정률(PERCENT) 할인은 100을 넘을 수 없습니다."
     ),
+    CATALOG_PRICE_VALUE_INVALID(
+            "CEREMONY_CATALOG_PRICE_VALUE_INVALID",
+            HttpStatus.BAD_REQUEST,
+            "공급가/판매가는 0 이상이어야 합니다."
+    ),
     DISCOUNT_PERIOD_INVALID(
             "CEREMONY_DISCOUNT_PERIOD_INVALID",
             HttpStatus.BAD_REQUEST,
