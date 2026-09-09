@@ -2,13 +2,11 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import jakarta.persistence.Column;
-import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -25,6 +23,13 @@ import lombok.NoArgsConstructor;
  * business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 B) —
  * {@code BillingPlanOptionalFeature}/{@code BillingPlanCapacityAddOn}과 같은 패턴으로
  * {@code BillingPlanService}가 별도 리포지토리로 관리하고, 이 엔티티는 그 구성을 직접 갖지 않는다.
+ *
+ * <p>가격정보({@link CatalogPriceInfo})와 사용여부(active)는 이 엔티티가 아니라
+ * {@link BillingPlanPricePeriod}로 옮겨졌다(signstage-docs
+ * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09, 다중버전 채택) —
+ * 이 엔티티는 이제 이름만 갖는 정체성일 뿐이고, "지금 판매 가능한지·얼마인지"는 항상
+ * {@code BillingPlanPricePeriodRepository.findEffective}로 그때그때 조회한다. 플랜 id는
+ * {@code Ceremony} 등에서 FK로 널리 참조되므로 정체성은 그대로 유지한다.
  */
 @Entity
 @Table(name = "billing_plans")
@@ -39,62 +44,18 @@ public class BillingPlan extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    /**
-     * 가격정보(통화/공급가/판매가/할인/세금코드) — signstage-docs
-     * business/billing-catalog-zero-base-schema-redesign-review.md 결정 #1(2026-09-08, 항목 A).
-     */
-    @Embedded
-    private CatalogPriceInfo priceInfo;
-
-    /**
-     * 사용여부(비활성화해도 행은 지우지 않는다 — 이미 이 플랜을 참조하는 Ceremony가 있을 수
-     * 있어 삭제는 여전히 범위 밖이다). 비활성화된 플랜은 새 행사 생성/플랜 변경 대상에서
-     * 제외된다({@code CeremonyService}) — signstage-docs
-     * business/ceremony-billing-options-review.md 7장 후속 결정.
-     */
-    @Column(nullable = false)
-    private boolean active;
-
     @Builder
-    private BillingPlan(
-            String name,
-            String currencyCode,
-            BigDecimal supplyPrice,
-            BigDecimal salePrice,
-            DiscountType discountType,
-            BigDecimal discountValue,
-            String taxCode
-    ) {
+    private BillingPlan(String name) {
         this.name = name;
-        this.priceInfo = CatalogPriceInfo.of(
-                currencyCode, supplyPrice, salePrice, discountType, discountValue,
-                taxCode == null || taxCode.isBlank() ? "KR_VAT_STANDARD" : taxCode
-        );
-        this.active = true;
     }
 
     /**
      * 플랫폼 관리자 카탈로그 관리 화면의 수정. 이 플랜에 묶인 선택옵션 구성은 생성 시점에만
      * 정해지고 여기서 바꾸지 않는다(교체하려면 새 플랜을 만든다 — 카탈로그 관리 화면 결정).
-     * 호출할 때마다 {@code BillingPlanHistory}에 이력 한 행을 남기는 것은 서비스
-     * ({@code BillingPlanService}) 몫이다. 한도({@link BillingPlanCapacity}) 구성 교체도
-     * 이 엔티티가 아니라 서비스가 리포지토리로 직접 처리한다.
+     * 가격/사용여부는 여기서 다루지 않는다 — {@link BillingPlanPricePeriod} 기간 단위 CRUD로
+     * 관리한다.
      */
-    public void updateInfo(
-            String name,
-            String currencyCode,
-            BigDecimal supplyPrice,
-            BigDecimal salePrice,
-            DiscountType discountType,
-            BigDecimal discountValue,
-            String taxCode,
-            boolean active
-    ) {
+    public void updateInfo(String name) {
         this.name = name;
-        this.priceInfo = CatalogPriceInfo.of(
-                currencyCode, supplyPrice, salePrice, discountType, discountValue,
-                taxCode == null || taxCode.isBlank() ? this.priceInfo.getTaxCode() : taxCode
-        );
-        this.active = active;
     }
 }

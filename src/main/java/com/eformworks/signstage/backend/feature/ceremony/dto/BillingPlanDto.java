@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.ceremony.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,11 @@ public final class BillingPlanDto {
         private Request() {
         }
 
+        /**
+         * 플랜 생성은 정체성(name 등)과 최초 판매가격 기간을 함께 만든다 — 모든 플랜은 최소
+         * 1개의 {@code BillingPlanPricePeriod}를 가져야 하기 때문이다(signstage-docs
+         * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09).
+         */
         @Getter
         @Setter
         @NoArgsConstructor
@@ -45,6 +51,17 @@ public final class BillingPlanDto {
             private BigDecimal discountValue;
 
             private String taxCode;
+
+            /** 최초 기간의 사용여부(보통 true). */
+            @NotNull
+            private Boolean active;
+
+            /** 최초 기간의 시작일. */
+            @NotNull
+            private LocalDate effectiveFrom;
+
+            /** 최초 기간의 종료일(무기한이면 생략). */
+            private LocalDate effectiveTo;
 
             /**
              * 이 플랜이 기본 포함하는 용량 한도 — {@code CapacityType} 이름을 키로 하는 맵(예:
@@ -77,6 +94,10 @@ public final class BillingPlanDto {
          * {@code CeremonyPlanHistoryOptionalFeature}/{@code CeremonyPlanHistoryCapacityAddOn}
          * 스냅샷으로 보호되어 이 수정에 영향받지 않는다. {@code capacities}도 같은 방식으로
          * 통째로 교체한다({@link CreatePlan}과 같은 검증 규약).
+         *
+         * <p>가격/사용여부/판매기간은 여기서 다루지 않는다 — {@link CreatePeriod}/{@link UpdatePeriod}
+         * 기간 단위 API로 관리한다(signstage-docs
+         * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09).
          */
         @Getter
         @Setter
@@ -87,9 +108,24 @@ public final class BillingPlanDto {
             @NotBlank
             private String name;
 
-            private String currencyCode;
+            @NotNull
+            private Map<String, Integer> capacities;
 
-            /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
+            /** 이 플랜에 기본으로 포함할 선택옵션 id 목록(생략하면 빈 목록 — 전부 뺀다는 뜻). */
+            private List<Long> optionalFeatureIds;
+
+            /** 이 플랜에서 구매 가능하게 열어줄 용량 추가구매 상품 id 목록(생략하면 빈 목록 — 전부 뺀다는 뜻). */
+            private List<Long> capacityAddOnIds;
+        }
+
+        /** 판매가격 기간 하나를 새로 추가한다. */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class CreatePeriod {
+
+            private String currencyCode;
             private BigDecimal supplyPrice;
 
             @NotNull
@@ -104,17 +140,42 @@ public final class BillingPlanDto {
             private String taxCode;
 
             @NotNull
-            private Map<String, Integer> capacities;
+            private Boolean active;
 
-            /** 사용여부. false면 새 행사 생성/플랜 변경 대상에서 제외된다. */
+            @NotNull
+            private LocalDate effectiveFrom;
+
+            private LocalDate effectiveTo;
+        }
+
+        /** 이미 있는 판매가격 기간 하나를 고친다({@link CreatePeriod}와 같은 필드). */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdatePeriod {
+
+            private String currencyCode;
+            private BigDecimal supplyPrice;
+
+            @NotNull
+            private BigDecimal salePrice;
+
+            @NotBlank
+            private String discountType;
+
+            @NotNull
+            private BigDecimal discountValue;
+
+            private String taxCode;
+
             @NotNull
             private Boolean active;
 
-            /** 이 플랜에 기본으로 포함할 선택옵션 id 목록(생략하면 빈 목록 — 전부 뺀다는 뜻). */
-            private List<Long> optionalFeatureIds;
+            @NotNull
+            private LocalDate effectiveFrom;
 
-            /** 이 플랜에서 구매 가능하게 열어줄 용량 추가구매 상품 id 목록(생략하면 빈 목록 — 전부 뺀다는 뜻). */
-            private List<Long> capacityAddOnIds;
+            private LocalDate effectiveTo;
         }
     }
 
@@ -123,44 +184,86 @@ public final class BillingPlanDto {
         private Response() {
         }
 
+        /**
+         * 목록 화면용 — "오늘" 기준 유효한 판매가격 기간({@code findEffective})을 같이 보여준다.
+         * 기간 사이 공백으로 오늘 유효한 기간이 없으면 가격 관련 필드는 전부 null이고
+         * {@code periodStatus}가 "NO_ACTIVE_PERIOD"다.
+         */
         @Getter
         @AllArgsConstructor
         public static class BillingPlanSummary {
 
             private final Long id;
             private final String name;
-            private final String currencyCode;
-            private final BigDecimal supplyPrice;
-            private final BigDecimal salePrice;
-            private final String discountType;
-            private final BigDecimal discountValue;
-            private final String taxCode;
             /** {@code CapacityType} 이름 → 포함 수량. {@link Request.CreatePlan#capacities}와 같은 규약. */
             private final Map<String, Integer> capacities;
-            private final Boolean active;
             private final List<Long> optionalFeatureIds;
             /** 이 플랜에서 구매 가능한 용량 추가구매 상품 id 목록(안 A 큐레이션). */
             private final List<Long> capacityAddOnIds;
             /** 이 플랜을 쓰는 행사(Ceremony) 수 — 카탈로그 관리 화면의 "사용 중" 경고용. */
             private final Long usageCount;
             private final LocalDateTime createdAt;
-        }
 
-        /** 플랜 값/사용여부 변경 이력 한 행 — 그 변경 시점의 전체 상태 스냅샷이다. */
-        @Getter
-        @AllArgsConstructor
-        public static class BillingPlanHistorySummary {
-
-            private final Long id;
-            private final String name;
+            // 오늘 기준 유효한 판매가격 기간(없으면 전부 null/NO_ACTIVE_PERIOD).
             private final String currencyCode;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
             private final String discountType;
             private final BigDecimal discountValue;
             private final String taxCode;
-            private final Map<String, Integer> capacities;
             private final Boolean active;
+            private final LocalDate effectiveFrom;
+            private final LocalDate effectiveTo;
+            private final String periodStatus;
+        }
+
+        /** 플랜 이름/배타 속성 변경 이력 한 행(가격/사용여부는 {@link BillingPlanPeriodSummary} 쪽 이력 참고). */
+        @Getter
+        @AllArgsConstructor
+        public static class BillingPlanHistorySummary {
+
+            private final Long id;
+            private final String name;
+            private final Map<String, Integer> capacities;
+            private final Long createdBy;
+            private final LocalDateTime createdAt;
+        }
+
+        /** 판매가격 기간 목록/상세 화면 한 행. */
+        @Getter
+        @AllArgsConstructor
+        public static class BillingPlanPeriodSummary {
+
+            private final Long id;
+            private final String currencyCode;
+            private final BigDecimal supplyPrice;
+            private final BigDecimal salePrice;
+            private final String discountType;
+            private final BigDecimal discountValue;
+            private final String taxCode;
+            private final Boolean active;
+            private final LocalDate effectiveFrom;
+            private final LocalDate effectiveTo;
+            private final String status;
+            private final LocalDateTime createdAt;
+        }
+
+        /** 판매가격 기간의 생성/수정/삭제 이력 한 행. */
+        @Getter
+        @AllArgsConstructor
+        public static class BillingPlanPeriodHistorySummary {
+
+            private final Long id;
+            private final String currencyCode;
+            private final BigDecimal supplyPrice;
+            private final BigDecimal salePrice;
+            private final String discountType;
+            private final BigDecimal discountValue;
+            private final String taxCode;
+            private final Boolean active;
+            private final LocalDate effectiveFrom;
+            private final LocalDate effectiveTo;
+            private final Boolean removed;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }

@@ -13,7 +13,9 @@ import static org.mockito.Mockito.verify;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanPricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOnPricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyCapacityPurchase;
@@ -22,12 +24,15 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHist
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeaturePricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TaxPolicy;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanPricePeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnPricePeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
@@ -37,6 +42,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlan
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeaturePricePeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
@@ -74,7 +80,9 @@ import org.springframework.test.util.ReflectionTestUtils;
  * {@link OrganizationDiscountService}는 이 테스트에서 목(mock) 처리하고, "그 결과를
  * CeremonyService가 올바른 스냅샷 컬럼에 옮겨 담는지"만 검증한다. 오버라이드 자체의 해석
  * 로직(있으면 오버라이드, 없으면 카탈로그 값)은 {@link OrganizationDiscountServiceTest}가
- * 검증한다.
+ * 검증한다. 카탈로그 가격/사용여부는 이제 {@code *PricePeriod} 기간에서 나오므로(signstage-docs
+ * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09), 각 시나리오는
+ * {@code findEffective}가 그 기간을 돌려주도록 목을 세팅한다.
  */
 @ExtendWith(MockitoExtension.class)
 class CeremonyServiceTest {
@@ -104,13 +112,19 @@ class CeremonyServiceTest {
     @Mock
     private BillingPlanRepository billingPlanRepository;
     @Mock
+    private BillingPlanPricePeriodRepository billingPlanPricePeriodRepository;
+    @Mock
     private BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
     @Mock
     private BillingPlanCapacityAddOnRepository billingPlanCapacityAddOnRepository;
     @Mock
     private CapacityAddOnRepository capacityAddOnRepository;
     @Mock
+    private CapacityAddOnPricePeriodRepository capacityAddOnPricePeriodRepository;
+    @Mock
     private OptionalFeatureRepository optionalFeatureRepository;
+    @Mock
+    private OptionalFeaturePricePeriodRepository optionalFeaturePricePeriodRepository;
     @Mock
     private UserRepository userRepository;
     @Mock
@@ -149,17 +163,45 @@ class CeremonyServiceTest {
         return ceremony;
     }
 
+    private BillingPlanPricePeriod planPeriod(
+            BillingPlan plan, BigDecimal supplyPrice, BigDecimal salePrice, DiscountType discountType, BigDecimal discountValue
+    ) {
+        return BillingPlanPricePeriod.builder()
+                .billingPlan(plan)
+                .supplyPrice(supplyPrice).salePrice(salePrice)
+                .discountType(discountType).discountValue(discountValue)
+                .active(true).effectiveFrom(LocalDate.of(2026, 1, 1))
+                .build();
+    }
+
+    private CapacityAddOnPricePeriod addOnPeriod(
+            CapacityAddOn addOn, BigDecimal supplyPrice, BigDecimal salePrice, DiscountType discountType, BigDecimal discountValue
+    ) {
+        return CapacityAddOnPricePeriod.builder()
+                .capacityAddOn(addOn)
+                .supplyPrice(supplyPrice).salePrice(salePrice)
+                .discountType(discountType).discountValue(discountValue)
+                .active(true).effectiveFrom(LocalDate.of(2026, 1, 1))
+                .build();
+    }
+
+    private OptionalFeaturePricePeriod featurePeriod(
+            OptionalFeature feature, BigDecimal supplyPrice, BigDecimal salePrice, DiscountType discountType, BigDecimal discountValue
+    ) {
+        return OptionalFeaturePricePeriod.builder()
+                .optionalFeature(feature)
+                .supplyPrice(supplyPrice).salePrice(salePrice)
+                .discountType(discountType).discountValue(discountValue)
+                .active(true).effectiveFrom(LocalDate.of(2026, 1, 1))
+                .build();
+    }
+
     @Test
     @DisplayName("KRW 예상 청구액은 통화 0자리 반올림 후 유효 세금 정책의 VAT를 합산한다")
     void calculateEstimatedTotal_appliesCurrencyRoundingAndTaxPolicy() {
         Organization organization = organization();
-        BillingPlan plan = BillingPlan.builder()
-                .name("기본")
-                .supplyPrice(new BigDecimal("10000"))
-                .salePrice(new BigDecimal("10005"))
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(BigDecimal.ZERO)
-                .build();
+        BillingPlan plan = BillingPlan.builder().name("기본").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
         Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
         ReflectionTestUtils.setField(ceremony, "id", 10L);
         Member member = Member.builder().role(MemberRole.OWNER).build();
@@ -169,6 +211,8 @@ class CeremonyServiceTest {
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(member));
         given(ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(Optional.empty());
+        given(billingPlanPricePeriodRepository.findEffective(eq(101L), any(LocalDate.class)))
+                .willReturn(Optional.of(planPeriod(plan, new BigDecimal("10000"), new BigDecimal("10005"), DiscountType.FIXED_AMOUNT, BigDecimal.ZERO)));
         given(ceremonyCapacityPurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(List.of());
         given(ceremonyOptionalFeaturePurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(List.of());
         given(taxPolicyResolver.resolve(any(), any(), any())).willReturn(taxPolicy);
@@ -189,13 +233,7 @@ class CeremonyServiceTest {
     void createCeremony_withPlanDiscountOverride_snapshotsOverride() {
         // given
         Organization organization = organization();
-        BillingPlan plan = BillingPlan.builder()
-                .name("스탠다드")
-                .supplyPrice(new BigDecimal("100000"))
-                .salePrice(new BigDecimal("90000"))
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(new BigDecimal("10000"))
-                .build();
+        BillingPlan plan = BillingPlan.builder().name("스탠다드").build();
         ReflectionTestUtils.setField(plan, "id", 101L);
         Member member = Member.builder().role(MemberRole.OWNER).build();
         User creator = User.builder().loginId("user1").name("사용자1").build();
@@ -205,10 +243,14 @@ class CeremonyServiceTest {
                 .willReturn(Optional.of(member));
         given(billingPlanRepository.findById(101L)).willReturn(Optional.of(plan));
         given(userRepository.findById(CURRENT_USER_ID)).willReturn(Optional.of(creator));
+        given(billingPlanPricePeriodRepository.findEffective(eq(101L), any(LocalDate.class)))
+                .willReturn(Optional.of(planPeriod(
+                        plan, new BigDecimal("100000"), new BigDecimal("90000"), DiscountType.FIXED_AMOUNT, new BigDecimal("10000")
+                )));
 
         OrganizationDiscountService.EffectiveDiscount overrideDiscount =
                 new OrganizationDiscountService.EffectiveDiscount(DiscountType.PERCENT, new BigDecimal("30"));
-        given(organizationDiscountService.resolveBillingPlanDiscount(eq(organization), eq(plan), any(LocalDate.class)))
+        given(organizationDiscountService.resolveBillingPlanDiscount(eq(organization), eq(101L), any(), any(), any(LocalDate.class)))
                 .willReturn(overrideDiscount);
 
         CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1");
@@ -232,24 +274,21 @@ class CeremonyServiceTest {
         Ceremony ceremony = ceremony(organization, 10L);
         Member member = Member.builder().role(MemberRole.OWNER).build();
 
-        CapacityAddOn addOn = CapacityAddOn.builder()
-                .capacityType(CapacityType.SIGNERS)
-                .unitAmount(10)
-                .supplyPrice(new BigDecimal("50000"))
-                .salePrice(new BigDecimal("45000"))
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(new BigDecimal("5000"))
-                .build();
+        CapacityAddOn addOn = CapacityAddOn.builder().capacityType(CapacityType.SIGNERS).unitAmount(10).build();
         ReflectionTestUtils.setField(addOn, "id", 201L);
 
         given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(member));
         given(capacityAddOnRepository.findById(201L)).willReturn(Optional.of(addOn));
+        given(capacityAddOnPricePeriodRepository.findEffective(eq(201L), any(LocalDate.class)))
+                .willReturn(Optional.of(addOnPeriod(
+                        addOn, new BigDecimal("50000"), new BigDecimal("45000"), DiscountType.FIXED_AMOUNT, new BigDecimal("5000")
+                )));
 
         OrganizationDiscountService.EffectiveDiscount overrideDiscount =
                 new OrganizationDiscountService.EffectiveDiscount(DiscountType.PERCENT, new BigDecimal("20"));
-        given(organizationDiscountService.resolveCapacityAddOnDiscount(eq(organization), eq(addOn), any(LocalDate.class)))
+        given(organizationDiscountService.resolveCapacityAddOnDiscount(eq(organization), eq(201L), any(), any(), any(LocalDate.class)))
                 .willReturn(overrideDiscount);
 
         CeremonyDto.Request.PurchaseCapacity request = new CeremonyDto.Request.PurchaseCapacity(201L, 2);
@@ -278,10 +317,6 @@ class CeremonyServiceTest {
                 .unitAmount(10)
                 .secondaryCapacityType(CapacityType.TABLETS)
                 .secondaryUnitAmount(10)
-                .supplyPrice(new BigDecimal("100000"))
-                .salePrice(new BigDecimal("90000"))
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(BigDecimal.ZERO)
                 .build();
         ReflectionTestUtils.setField(comboAddOn, "id", 301L);
 
@@ -289,7 +324,11 @@ class CeremonyServiceTest {
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(member));
         given(capacityAddOnRepository.findById(301L)).willReturn(Optional.of(comboAddOn));
-        given(organizationDiscountService.resolveCapacityAddOnDiscount(eq(organization), eq(comboAddOn), any(LocalDate.class)))
+        given(capacityAddOnPricePeriodRepository.findEffective(eq(301L), any(LocalDate.class)))
+                .willReturn(Optional.of(addOnPeriod(
+                        comboAddOn, new BigDecimal("100000"), new BigDecimal("90000"), DiscountType.FIXED_AMOUNT, BigDecimal.ZERO
+                )));
+        given(organizationDiscountService.resolveCapacityAddOnDiscount(eq(organization), eq(301L), any(), any(), any(LocalDate.class)))
                 .willReturn(new OrganizationDiscountService.EffectiveDiscount(DiscountType.FIXED_AMOUNT, BigDecimal.ZERO));
 
         CeremonyDto.Request.PurchaseCapacity request = new CeremonyDto.Request.PurchaseCapacity(301L, 2);
@@ -310,13 +349,7 @@ class CeremonyServiceTest {
     void calculateEffectiveCapacity_comboPurchase_addsToSecondaryCapacityType() {
         // given
         Organization organization = organization();
-        BillingPlan plan = BillingPlan.builder()
-                .name("스탠다드")
-                .supplyPrice(new BigDecimal("100000"))
-                .salePrice(new BigDecimal("90000"))
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(BigDecimal.ZERO)
-                .build();
+        BillingPlan plan = BillingPlan.builder().name("스탠다드").build();
         Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
         ReflectionTestUtils.setField(ceremony, "id", 10L);
 
@@ -325,10 +358,6 @@ class CeremonyServiceTest {
                 .unitAmount(10)
                 .secondaryCapacityType(CapacityType.TABLETS)
                 .secondaryUnitAmount(10)
-                .supplyPrice(new BigDecimal("100000"))
-                .salePrice(new BigDecimal("90000"))
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(BigDecimal.ZERO)
                 .build();
         ReflectionTestUtils.setField(comboAddOn, "id", 301L);
 
@@ -336,11 +365,13 @@ class CeremonyServiceTest {
                 .ceremony(ceremony)
                 .capacityAddOn(comboAddOn)
                 .quantity(2)
+                .currencyCode("KRW")
                 .purchasedUnitAmount(10)
                 .purchasedSecondaryUnitAmount(10)
                 .purchasedSalePrice(new BigDecimal("90000"))
                 .purchasedDiscountType(DiscountType.FIXED_AMOUNT)
                 .purchasedDiscountValue(BigDecimal.ZERO)
+                .purchasedTaxCode("KR_VAT_STANDARD")
                 .build();
 
         given(ceremonyCapacityPurchaseRepository
@@ -365,10 +396,6 @@ class CeremonyServiceTest {
         OptionalFeature feature = OptionalFeature.builder()
                 .code(OptionalFeatureCode.SIGNER_FIELD_ZOOM)
                 .name("서명 하이라이트")
-                .supplyPrice(new BigDecimal("30000"))
-                .salePrice(new BigDecimal("27000"))
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(new BigDecimal("3000"))
                 .build();
         ReflectionTestUtils.setField(feature, "id", 301L);
 
@@ -376,12 +403,14 @@ class CeremonyServiceTest {
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(member));
         given(optionalFeatureRepository.findById(301L)).willReturn(Optional.of(feature));
+        given(optionalFeaturePricePeriodRepository.findEffective(eq(301L), any(LocalDate.class)))
+                .willReturn(Optional.of(featurePeriod(
+                        feature, new BigDecimal("30000"), new BigDecimal("27000"), DiscountType.FIXED_AMOUNT, new BigDecimal("3000")
+                )));
 
         // 오버라이드 없음 — OrganizationDiscountService가 카탈로그 값을 그대로 돌려주는 상황을 흉내낸다.
-        given(organizationDiscountService.resolveOptionalFeatureDiscount(eq(organization), eq(feature), any(LocalDate.class)))
-                .willReturn(new OrganizationDiscountService.EffectiveDiscount(
-                        feature.getPriceInfo().getDiscount().getDiscountType(), feature.getPriceInfo().getDiscount().getDiscountValue()
-                ));
+        given(organizationDiscountService.resolveOptionalFeatureDiscount(eq(organization), eq(301L), any(), any(), any(LocalDate.class)))
+                .willReturn(new OrganizationDiscountService.EffectiveDiscount(DiscountType.FIXED_AMOUNT, new BigDecimal("3000")));
 
         CeremonyDto.Request.PurchaseOptionalFeature request = new CeremonyDto.Request.PurchaseOptionalFeature(301L);
 

@@ -348,6 +348,26 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_ORGANIZATION_DISCOUNT_PERIOD_NOT_FOUND",
             HttpStatus.NOT_FOUND,
             "할인 오버라이드 기간을 찾을 수 없습니다."
+    ),
+    CATALOG_PRICE_PERIOD_OVERLAPPING(
+            "CEREMONY_CATALOG_PRICE_PERIOD_OVERLAPPING",
+            HttpStatus.CONFLICT,
+            "같은 상품에 이미 겹치는 기간의 판매가격이 있습니다."
+    ),
+    CATALOG_PRICE_PERIOD_NOT_FOUND(
+            "CEREMONY_CATALOG_PRICE_PERIOD_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "상품의 해당 판매가격 기간을 찾을 수 없습니다."
+    ),
+    CATALOG_PRICE_PERIOD_REQUIRED(
+            "CEREMONY_CATALOG_PRICE_PERIOD_REQUIRED",
+            HttpStatus.CONFLICT,
+            "상품은 최소 하나의 판매가격 기간이 있어야 합니다."
+    ),
+    CATALOG_ITEM_NOT_ON_SALE(
+            "CEREMONY_CATALOG_ITEM_NOT_ON_SALE",
+            HttpStatus.CONFLICT,
+            "지금은 판매 기간이 아닌 상품입니다."
     );
 
     private final String code;
