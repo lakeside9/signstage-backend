@@ -55,17 +55,6 @@ public class OptionalFeature extends BaseEntity {
     private boolean active;
 
     /**
-     * 이 옵션이 프로젝터(전시용) 화면에 실제로 효과를 내는지 — signstage-docs
-     * business/ceremony-billing-options-review.md 8.7절 계열. 프로젝터 효과가 아닌 옵션(예:
-     * 화상참석)이 늘어날 걸 대비해 코드 변경 없이 카탈로그 등록만으로 구분할 수 있게 한다.
-     * 실제 효과 로직 자체는 여전히 프런트 {@code projectorEffects.ts}에 코드별로 구현해야
-     * 한다 — 이 필드는 "그런 종류의 옵션이다"라는 분류 정보일 뿐, 켠다고 효과가 저절로
-     * 생기지 않는다.
-     */
-    @Column(name = "projector_effect", nullable = false)
-    private boolean projectorEffect;
-
-    /**
      * 배타 그룹 — 같은 값을 가진 선택옵션들은 한 CeremonyEvent에 동시에 적용할 수 없다
      * ({@code CeremonyEventService#applyOptionalFeatures}가 강제한다). {@code Signer.roleCode}/
      * {@code TemplateField.roleCode}처럼 enum이 아니라 관리자가 카탈로그 등록 시 자유롭게
@@ -84,17 +73,6 @@ public class OptionalFeature extends BaseEntity {
     @Column(nullable = false, length = 20)
     private OptionalFeatureCategory category;
 
-    /**
-     * 이 선택옵션이 표시 전용이며, 실제 수량은 이 {@link CapacityType}의 {@link CapacityAddOn}이
-     * 담당한다는 걸 명시한다 — null이면 완결형(그 자체로 끝나는 상품, 예: 이벤트 효과 묶음).
-     * 값이 있으면(예: 태블릿 대여 → {@code TABLETS}) 관리자 화면이 짝이 되는 용량 추가구매
-     * 상품을 인라인으로 보여준다(짝 누락은 경고만, 저장을 막지 않는다) — signstage-docs
-     * business/optional-feature-capacity-addon-pairing-review.md 결정(2026-09-08).
-     */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "paired_capacity_type", length = 20)
-    private CapacityType pairedCapacityType;
-
     @Builder
     private OptionalFeature(
             OptionalFeatureCode code,
@@ -105,10 +83,8 @@ public class OptionalFeature extends BaseEntity {
             DiscountType discountType,
             BigDecimal discountValue,
             String taxCode,
-            Boolean projectorEffect,
             String exclusivityGroup,
-            OptionalFeatureCategory category,
-            CapacityType pairedCapacityType
+            OptionalFeatureCategory category
     ) {
         this.code = code;
         this.name = name;
@@ -117,10 +93,8 @@ public class OptionalFeature extends BaseEntity {
                 taxCode == null || taxCode.isBlank() ? "KR_VAT_STANDARD" : taxCode
         );
         this.active = true;
-        this.projectorEffect = projectorEffect != null ? projectorEffect : true;
         this.exclusivityGroup = exclusivityGroup;
         this.category = category;
-        this.pairedCapacityType = pairedCapacityType;
     }
 
     /**
@@ -137,10 +111,8 @@ public class OptionalFeature extends BaseEntity {
             BigDecimal discountValue,
             String taxCode,
             boolean active,
-            boolean projectorEffect,
             String exclusivityGroup,
-            OptionalFeatureCategory category,
-            CapacityType pairedCapacityType
+            OptionalFeatureCategory category
     ) {
         this.name = name;
         this.priceInfo = CatalogPriceInfo.of(
@@ -148,9 +120,7 @@ public class OptionalFeature extends BaseEntity {
                 taxCode == null || taxCode.isBlank() ? this.priceInfo.getTaxCode() : taxCode
         );
         this.active = active;
-        this.projectorEffect = projectorEffect;
         this.exclusivityGroup = exclusivityGroup;
         this.category = category;
-        this.pairedCapacityType = pairedCapacityType;
     }
 }

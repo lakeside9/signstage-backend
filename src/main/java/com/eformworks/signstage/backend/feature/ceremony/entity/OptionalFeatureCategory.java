@@ -6,8 +6,7 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
  * 관리자가 카탈로그 등록 시 직접 지정하는 카탈로그 데이터라, 새 분류가 필요해져도 이 enum에
  * 값을 추가하는 배포로만 대응한다(스키마 변경 불필요) — {@code exclusivityGroup}과 같은 원칙.
  *
- * <p>{@link CapacityAddOn}에는 이 필드가 없다 — {@link OptionalFeature#getPairedCapacityType()}으로
- * 짝을 이루는 표시용 옵션의 category를 화면 표시 시 그대로 재사용한다(4.3절 결정).
+ * <p>{@link CapacityAddOn}에는 이 필드가 없다(4.3절 결정).
  */
 public enum OptionalFeatureCategory {
     /** 장비 — 행사에 물리적으로 대여·지급되는 기기(예: 태블릿 대여). */
