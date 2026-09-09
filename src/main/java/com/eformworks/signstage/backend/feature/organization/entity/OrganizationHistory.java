@@ -65,6 +65,9 @@ public class OrganizationHistory extends BaseEntity {
     @Column(name = "billing_currency_code", nullable = false, length = 3)
     private String billingCurrencyCode;
 
+    @Column(name = "is_demo", nullable = false)
+    private boolean demo;
+
     @Builder
     private OrganizationHistory(Organization organization) {
         this.organization = organization;
@@ -75,5 +78,6 @@ public class OrganizationHistory extends BaseEntity {
         this.defaultLocale = organization.getDefaultLocale();
         this.defaultTimeZoneId = organization.getDefaultTimeZoneId();
         this.billingCurrencyCode = organization.getBillingCurrencyCode();
+        this.demo = organization.isDemo();
     }
 }

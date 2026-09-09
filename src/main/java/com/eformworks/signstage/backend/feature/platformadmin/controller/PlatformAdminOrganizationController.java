@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.organization.dto.OrganizationDto;
 import com.eformworks.signstage.backend.feature.organization.entity.OrganizationStatus;
+import com.eformworks.signstage.backend.feature.permission.dto.PermissionDto;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminOrganizationDto;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminOrganizationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -78,6 +79,32 @@ public class PlatformAdminOrganizationController {
     ) {
         PlatformAdminOrganizationDto.Response.OrganizationSummary response =
                 platformAdminOrganizationService.retrieveOrganization(organizationId);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "데모 조직 목록 조회",
+            description = "isDemo=true인 조직 전체. 관리자 콘솔의 데모 행사 관리 진입점이 쓴다"
+                    + "(signstage-docs business/demo-account-exhibition-signer-preview-review.md 11.4절)."
+    )
+    @GetMapping("/demo")
+    public ApiResponse<List<PlatformAdminOrganizationDto.Response.OrganizationSummary>> findDemoOrganizations() {
+        return ApiResponse.success(platformAdminOrganizationService.findDemoOrganizations(), traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "데모 조직 관리 시 조직 역할 권한키 조회",
+            description = "그 조직이 데모 조직일 때만 값이 나온다. ACTION_DEMO_CEREMONY_MANAGE 권한이 있으면(PLATFORM_OPS "
+                    + "이상) OWNER 권한키, 없으면(PLATFORM_SUPPORT) VIEWER 권한키를 돌려준다 — 재사용하는 기존 조직 사용자 "
+                    + "화면이 usePermissionStore에 그대로 실어 쓴다(11.2/11.5절)."
+    )
+    @GetMapping("/{organizationId}/demo-permissions")
+    public ApiResponse<PermissionDto.Response.MyPermissions> resolveDemoPermissions(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId
+    ) {
+        PermissionDto.Response.MyPermissions response =
+                platformAdminOrganizationService.resolveDemoPermissions(organizationId, currentUser.platformRole());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

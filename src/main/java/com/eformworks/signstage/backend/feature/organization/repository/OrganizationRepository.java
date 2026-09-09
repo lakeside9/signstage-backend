@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.organization.repository;
 
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -10,4 +11,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface OrganizationRepository extends JpaRepository<Organization, Long>, OrganizationRepositoryCustom {
 
     boolean existsByCode(String code);
+
+    List<Organization> findAllByDemoTrueOrderByCreatedAtDesc();
 }

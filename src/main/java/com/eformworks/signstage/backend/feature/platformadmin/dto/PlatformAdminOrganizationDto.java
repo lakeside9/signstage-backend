@@ -30,9 +30,24 @@ public final class PlatformAdminOrganizationDto {
             @Pattern(regexp = "^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$", message = "영문 소문자, 숫자, '-'만 사용할 수 있습니다.")
             private String code;
 
-            /** OWNER로 지정할 기존 사용자의 로그인 아이디. 계정을 새로 만들지 않는다 — 이미 있는 계정만 지정할 수 있다. */
-            @NotBlank
+            /**
+             * OWNER로 지정할 기존 사용자의 로그인 아이디. 계정을 새로 만들지 않는다 — 이미 있는
+             * 계정만 지정할 수 있다. {@code isDemo=true}면 이 값은 무시되고(생략 가능) 서버가
+             * 자리표시자 계정을 자동으로 만든다 — {@link #isDemo} 참고. 그 외에는 필수다
+             * (서비스 레이어에서 검증한다 — 조건부 필수라 {@code @NotBlank}를 붙이지 않았다).
+             */
             private String ownerLoginId;
+
+            /**
+             * 데모 조직으로 생성할지 — signstage-docs
+             * business/demo-account-exhibition-signer-preview-review.md 11.3절. true면
+             * {@code ownerLoginId}를 무시하고 서버가 조직 코드로부터 결정적으로 로그인 아이디를
+             * 만들어 자리표시자 OWNER 계정을 즉시 발급한다(아무도 로그인하지 않는다) — 관리자가
+             * 매번 별도 계정을 미리 만들어 지정할 필요가 없다. 데모 조직에서는 플랫폼 관리자가
+             * 이 계정 없이도(`findActiveMemberOrThrow` 우회로) 행사를 직접 관리할 수 있다.
+             * 생략하면(null) false.
+             */
+            private Boolean isDemo;
         }
 
         @Getter
@@ -80,6 +95,7 @@ public final class PlatformAdminOrganizationDto {
             private final String defaultLocale;
             private final long activeMemberCount;
             private final LocalDateTime createdAt;
+            private final boolean isDemo;
         }
     }
 }

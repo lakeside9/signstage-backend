@@ -95,6 +95,38 @@ public class PlatformAdminUserService {
     }
 
     /**
+     * 데모 조직의 OWNER 자리표시자 계정을 자동으로 만든다 — signstage-docs
+     * business/demo-account-exhibition-signer-preview-review.md 11.3절. 조직은 항상 OWNER가
+     * 1명 이상 있어야 한다는 스키마 불변식을 만족시키기 위한 것일 뿐, 이 계정으로 실제 로그인해
+     * 관리하는 용도가 아니다(플랫폼 관리자가 {@code findActiveMemberOrThrow} 우회로 직접 관리한다,
+     * 11.2절) — 그래서 관리자가 조직 생성 화면에서 매번 별도 계정을 미리 만들어 지정할 필요가
+     * 없도록, 조직 코드로부터 결정적으로(deterministic) 로그인 아이디를 만들어 즉시 발급한다.
+     * 비밀번호는 무작위로 생성해 아무도 모르게 두고(임시 비밀번호를 반환/노출하지 않는다),
+     * platform_role은 설정하지 않는다({@link #createUser}와 같은 일반 회원 계정).
+     */
+    @Transactional
+    public User createDemoPlaceholderOwner(String organizationCode) {
+        String loginId = "demo-owner-" + organizationCode + "@signstage-demo.internal";
+        if (userRepository.existsByLoginId(loginId) || userRepository.existsByEmail(loginId)) {
+            // organizationCode는 이미 organizations.code로 유일함이 보장돼 있어(호출부가 먼저
+            // 검증한다) 이 분기는 사실상 도달하지 않는다 — 그래도 방어적으로 막아둔다.
+            throw new ApplicationException(IdentityErrorCode.DUPLICATE_LOGIN_ID);
+        }
+
+        User user = User.builder()
+                .loginId(loginId)
+                .name("데모 조직 자리표시자 계정(" + organizationCode + ")")
+                .email(loginId)
+                .password(passwordEncoder.encode(temporaryPasswordGenerator.generate()))
+                .status(UserStatus.ACTIVE)
+                .passwordResetRequired(true)
+                .build();
+        userRepository.save(user);
+        recordUserHistory(user);
+        return user;
+    }
+
+    /**
      * loginId/name/email은 부분 일치 검색이다. 빈 문자열은 "조건 없음"으로 취급해 null로 바꿔 넘긴다
      * ({@link UserRepository#search}는 null인 조건만 무시한다). {@code withoutOrganization=false}
      * (일반 "회원 관리" 목록)일 때도 {@link UserRepository#search}가 플랫폼 관리자는 제외한다
