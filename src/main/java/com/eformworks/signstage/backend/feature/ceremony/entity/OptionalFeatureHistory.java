@@ -2,7 +2,6 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import jakarta.persistence.Column;
-import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -20,9 +19,11 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Immutable;
 
 /**
- * 선택옵션(OptionalFeature)의 값/사용여부 변경 이력. append-only다 — {@link BillingPlanHistory}와
+ * 선택옵션(OptionalFeature)의 이름/배타그룹/분류 변경 이력. append-only다 — {@link BillingPlanHistory}와
  * 같은 패턴. {@code code}는 원본에서 불변이지만 조인 없이 이력만으로 표시할 수 있게 그대로
- * 스냅샷에 포함한다.
+ * 스냅샷에 포함한다. 가격정보/사용여부 변경 이력은 {@link OptionalFeaturePricePeriodHistory}가
+ * 담당한다(signstage-docs business/billing-catalog-price-validity-period-review.md 결정,
+ * 2026-09-09) — {@link BillingPlanHistory}와 같은 이유로 축이 분리됐다.
  */
 @Entity
 @Table(name = "optional_feature_histories")
@@ -46,12 +47,6 @@ public class OptionalFeatureHistory extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Embedded
-    private CatalogPriceInfo priceInfo;
-
-    @Column(nullable = false)
-    private boolean active;
-
     @Column(name = "exclusivity_group", length = 50)
     private String exclusivityGroup;
 
@@ -64,8 +59,6 @@ public class OptionalFeatureHistory extends BaseEntity {
         this.optionalFeature = optionalFeature;
         this.code = optionalFeature.getCode();
         this.name = optionalFeature.getName();
-        this.priceInfo = optionalFeature.getPriceInfo();
-        this.active = optionalFeature.isActive();
         this.exclusivityGroup = optionalFeature.getExclusivityGroup();
         this.category = optionalFeature.getCategory();
     }

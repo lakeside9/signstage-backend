@@ -16,7 +16,6 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventOptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyTemplate;
-import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
@@ -36,7 +35,6 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFiel
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -131,10 +129,6 @@ class CeremonyEventServiceTest {
         OptionalFeature feature = OptionalFeature.builder()
                 .code(OptionalFeatureCode.SIGNER_FIELD_ZOOM)
                 .name(name)
-                .supplyPrice(new BigDecimal("10000"))
-                .salePrice(new BigDecimal("10000"))
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(BigDecimal.ZERO)
                 .exclusivityGroup(exclusivityGroup)
                 .build();
         ReflectionTestUtils.setField(feature, "id", id);

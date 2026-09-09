@@ -468,36 +468,39 @@ public class OrganizationDiscountService {
     // 같은 관례(CeremonyEventService 문서 주석 참고).
 
     /**
-     * asOfDate에 유효한 오버라이드 기간이 있으면 그 값, 없으면 카탈로그({@code plan}) 자체의
-     * 할인값. {@code asOfDate}는 호출부가 계산해 넘긴다 — "오늘"을 어느 타임존으로 볼지는 결정
-     * #5(유보)라 이 메서드 자체는 판단하지 않는다(signstage-docs
+     * asOfDate에 유효한 오버라이드 기간이 있으면 그 값, 없으면 호출부가 넘긴 카탈로그 자체의
+     * 할인값({@code catalogDiscountType}/{@code catalogDiscountValue}) — 호출부(CeremonyService)가
+     * 이미 그 시점 유효한 {@code BillingPlanPricePeriod}를 조회해뒀으므로 여기서 다시 조회하지
+     * 않는다(signstage-docs business/billing-catalog-price-validity-period-review.md 결정,
+     * 2026-09-09). {@code asOfDate}는 호출부가 계산해 넘긴다 — "오늘"을 어느 타임존으로 볼지는
+     * 결정 #5(유보)라 이 메서드 자체는 판단하지 않는다(signstage-docs
      * business/organization-discount-override-security-and-validity-period-review.md 3.2절).
      */
-    EffectiveDiscount resolveBillingPlanDiscount(Organization organization, BillingPlan plan, LocalDate asOfDate) {
+    EffectiveDiscount resolveBillingPlanDiscount(
+            Organization organization, Long billingPlanId, DiscountType catalogDiscountType, BigDecimal catalogDiscountValue, LocalDate asOfDate
+    ) {
         return organizationBillingPlanDiscountRepository
-                .findEffective(organization.getId(), plan.getId(), asOfDate)
+                .findEffective(organization.getId(), billingPlanId, asOfDate)
                 .map(override -> new EffectiveDiscount(override.getDiscount().getDiscountType(), override.getDiscount().getDiscountValue()))
-                .orElseGet(() -> new EffectiveDiscount(
-                        plan.getPriceInfo().getDiscount().getDiscountType(), plan.getPriceInfo().getDiscount().getDiscountValue()
-                ));
+                .orElseGet(() -> new EffectiveDiscount(catalogDiscountType, catalogDiscountValue));
     }
 
-    EffectiveDiscount resolveOptionalFeatureDiscount(Organization organization, OptionalFeature feature, LocalDate asOfDate) {
+    EffectiveDiscount resolveOptionalFeatureDiscount(
+            Organization organization, Long optionalFeatureId, DiscountType catalogDiscountType, BigDecimal catalogDiscountValue, LocalDate asOfDate
+    ) {
         return organizationOptionalFeatureDiscountRepository
-                .findEffective(organization.getId(), feature.getId(), asOfDate)
+                .findEffective(organization.getId(), optionalFeatureId, asOfDate)
                 .map(override -> new EffectiveDiscount(override.getDiscount().getDiscountType(), override.getDiscount().getDiscountValue()))
-                .orElseGet(() -> new EffectiveDiscount(
-                        feature.getPriceInfo().getDiscount().getDiscountType(), feature.getPriceInfo().getDiscount().getDiscountValue()
-                ));
+                .orElseGet(() -> new EffectiveDiscount(catalogDiscountType, catalogDiscountValue));
     }
 
-    EffectiveDiscount resolveCapacityAddOnDiscount(Organization organization, CapacityAddOn addOn, LocalDate asOfDate) {
+    EffectiveDiscount resolveCapacityAddOnDiscount(
+            Organization organization, Long capacityAddOnId, DiscountType catalogDiscountType, BigDecimal catalogDiscountValue, LocalDate asOfDate
+    ) {
         return organizationCapacityAddOnDiscountRepository
-                .findEffective(organization.getId(), addOn.getId(), asOfDate)
+                .findEffective(organization.getId(), capacityAddOnId, asOfDate)
                 .map(override -> new EffectiveDiscount(override.getDiscount().getDiscountType(), override.getDiscount().getDiscountValue()))
-                .orElseGet(() -> new EffectiveDiscount(
-                        addOn.getPriceInfo().getDiscount().getDiscountType(), addOn.getPriceInfo().getDiscount().getDiscountValue()
-                ));
+                .orElseGet(() -> new EffectiveDiscount(catalogDiscountType, catalogDiscountValue));
     }
 
     /** {@code CeremonyService}가 스냅샷 컬럼에 그대로 옮겨 담는 해석 결과 값 객체. */

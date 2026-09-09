@@ -74,21 +74,38 @@ public class CeremonyPlanHistory extends BaseEntity {
     private String taxCode;
 
     /**
-     * {@code discountType}/{@code discountValue}는 보통 {@code billingPlan}에서 그대로 뽑지만,
-     * 조직×플랜 오버라이드가 있으면({@link OrganizationBillingPlanDiscount},
-     * {@code OrganizationDiscountService#resolveBillingPlanDiscount}) 호출부가 그 값을 대신
-     * 넘긴다 — null이면(오버라이드 없음) 카탈로그 값으로 그대로 떨어진다.
+     * 가격 관련 값(currencyCode/supplyPrice/salePrice/taxCode)은 호출부
+     * ({@code CeremonyService#recordPlanHistory})가 그 순간 유효한
+     * {@link BillingPlanPricePeriod}를 {@code findEffective}로 조회해 넘긴다 — 이 엔티티는
+     * DB 조회를 하지 않는다(signstage-docs
+     * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09). 카탈로그
+     * 기본 할인({@code catalogDiscountType}/{@code catalogDiscountValue})도 같은 이유로 호출부가
+     * 그 기간의 값을 넘기고, 조직×플랜 오버라이드가 있으면({@link OrganizationBillingPlanDiscount},
+     * {@code OrganizationDiscountService#resolveBillingPlanDiscount}) {@code discountType}/
+     * {@code discountValue}에 그 값을 대신 넘긴다 — null이면(오버라이드 없음) 카탈로그 값으로
+     * 그대로 떨어진다.
      */
     @Builder
-    private CeremonyPlanHistory(Ceremony ceremony, BillingPlan billingPlan, DiscountType discountType, BigDecimal discountValue) {
+    private CeremonyPlanHistory(
+            Ceremony ceremony,
+            BillingPlan billingPlan,
+            String currencyCode,
+            BigDecimal supplyPrice,
+            BigDecimal salePrice,
+            String taxCode,
+            DiscountType catalogDiscountType,
+            BigDecimal catalogDiscountValue,
+            DiscountType discountType,
+            BigDecimal discountValue
+    ) {
         this.ceremony = ceremony;
         this.billingPlan = billingPlan;
         this.planName = billingPlan.getName();
-        this.currencyCode = billingPlan.getPriceInfo().getCurrencyCode();
-        this.planSupplyPrice = billingPlan.getPriceInfo().getSupplyPrice();
-        this.planSalePrice = billingPlan.getPriceInfo().getSalePrice();
-        this.planDiscountType = discountType != null ? discountType : billingPlan.getPriceInfo().getDiscount().getDiscountType();
-        this.planDiscountValue = discountValue != null ? discountValue : billingPlan.getPriceInfo().getDiscount().getDiscountValue();
-        this.taxCode = billingPlan.getPriceInfo().getTaxCode();
+        this.currencyCode = currencyCode;
+        this.planSupplyPrice = supplyPrice;
+        this.planSalePrice = salePrice;
+        this.planDiscountType = discountType != null ? discountType : catalogDiscountType;
+        this.planDiscountValue = discountValue != null ? discountValue : catalogDiscountValue;
+        this.taxCode = taxCode;
     }
 }

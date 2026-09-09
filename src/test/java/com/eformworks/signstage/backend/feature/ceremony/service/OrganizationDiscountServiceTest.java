@@ -92,13 +92,7 @@ class OrganizationDiscountServiceTest {
     }
 
     private BillingPlan plan() {
-        BillingPlan plan = BillingPlan.builder()
-                .name("스탠다드")
-                .supplyPrice(new BigDecimal("100000"))
-                .salePrice(new BigDecimal("90000"))
-                .discountType(DiscountType.FIXED_AMOUNT)
-                .discountValue(new BigDecimal("10000"))
-                .build();
+        BillingPlan plan = BillingPlan.builder().name("스탠다드").build();
         ReflectionTestUtils.setField(plan, "id", PLAN_ID);
         return plan;
     }
@@ -107,12 +101,12 @@ class OrganizationDiscountServiceTest {
     @DisplayName("asOfDate에 유효한 오버라이드 기간이 없으면 카탈로그(BillingPlan) 자체의 할인값을 그대로 돌려준다")
     void resolveBillingPlanDiscount_withoutEffectivePeriod_returnsCatalogValue() {
         Organization organization = organization();
-        BillingPlan plan = plan();
         given(organizationBillingPlanDiscountRepository.findEffective(ORGANIZATION_ID, PLAN_ID, TODAY))
                 .willReturn(Optional.empty());
 
-        OrganizationDiscountService.EffectiveDiscount result =
-                organizationDiscountService.resolveBillingPlanDiscount(organization, plan, TODAY);
+        OrganizationDiscountService.EffectiveDiscount result = organizationDiscountService.resolveBillingPlanDiscount(
+                organization, PLAN_ID, DiscountType.FIXED_AMOUNT, new BigDecimal("10000"), TODAY
+        );
 
         assertThat(result.type()).isEqualTo(DiscountType.FIXED_AMOUNT);
         assertThat(result.value()).isEqualByComparingTo("10000");
@@ -131,8 +125,9 @@ class OrganizationDiscountServiceTest {
         given(organizationBillingPlanDiscountRepository.findEffective(ORGANIZATION_ID, PLAN_ID, TODAY))
                 .willReturn(Optional.of(period));
 
-        OrganizationDiscountService.EffectiveDiscount result =
-                organizationDiscountService.resolveBillingPlanDiscount(organization, plan, TODAY);
+        OrganizationDiscountService.EffectiveDiscount result = organizationDiscountService.resolveBillingPlanDiscount(
+                organization, PLAN_ID, DiscountType.FIXED_AMOUNT, new BigDecimal("10000"), TODAY
+        );
 
         assertThat(result.type()).isEqualTo(DiscountType.PERCENT);
         assertThat(result.value()).isEqualByComparingTo("30");

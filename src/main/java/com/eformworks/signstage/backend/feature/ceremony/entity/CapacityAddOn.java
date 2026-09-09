@@ -2,7 +2,6 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import jakarta.persistence.Column;
-import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -10,7 +9,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -29,6 +27,13 @@ import lombok.NoArgsConstructor;
  * {@code unitAmount})과 달리 스냅샷 대상이 {@code CeremonyCapacityPurchase.purchasedSecondaryUnitAmount}
  * 하나뿐인 것도 주 용량과 같은 원칙이다 — {@code secondaryCapacityType} 자체는(주
  * {@code capacityType}이 그렇듯) 생성 후 사실상 불변이라 스냅샷하지 않는다.
+ *
+ * <p>가격정보({@link CatalogPriceInfo})와 사용여부(active)는 이 엔티티가 아니라
+ * {@link CapacityAddOnPricePeriod}로 옮겨졌다(signstage-docs
+ * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09, 다중버전 채택) —
+ * 이 엔티티는 이제 정체성(capacityType/unitAmount/secondaryCapacityType/secondaryUnitAmount)만
+ * 갖고, "지금 판매 가능한지·얼마인지"는 항상 {@code CapacityAddOnPricePeriodRepository.findEffective}로
+ * 그때그때 조회한다.
  */
 @Entity
 @Table(name = "capacity_addons")
@@ -54,67 +59,27 @@ public class CapacityAddOn extends BaseEntity {
     @Column(name = "secondary_unit_amount")
     private Integer secondaryUnitAmount;
 
-    /**
-     * 가격정보(통화/공급가/판매가/할인/세금코드) — signstage-docs
-     * business/billing-catalog-zero-base-schema-redesign-review.md 결정 #1(2026-09-08, 항목 A).
-     */
-    @Embedded
-    private CatalogPriceInfo priceInfo;
-
-    /**
-     * 사용여부(비활성화해도 행은 지우지 않는다). 비활성화된 상품은 새 추가구매 대상에서
-     * 제외된다({@code CeremonyService}) — signstage-docs
-     * business/ceremony-billing-options-review.md 7장 후속 결정.
-     */
-    @Column(nullable = false)
-    private boolean active;
-
     @Builder
     private CapacityAddOn(
             CapacityType capacityType,
             Integer unitAmount,
             CapacityType secondaryCapacityType,
-            Integer secondaryUnitAmount,
-            String currencyCode,
-            BigDecimal supplyPrice,
-            BigDecimal salePrice,
-            DiscountType discountType,
-            BigDecimal discountValue,
-            String taxCode
+            Integer secondaryUnitAmount
     ) {
         this.capacityType = capacityType;
         this.unitAmount = unitAmount;
         this.secondaryCapacityType = secondaryCapacityType;
         this.secondaryUnitAmount = secondaryUnitAmount;
-        this.priceInfo = CatalogPriceInfo.of(
-                currencyCode, supplyPrice, salePrice, discountType, discountValue,
-                taxCode == null || taxCode.isBlank() ? "KR_VAT_STANDARD" : taxCode
-        );
-        this.active = true;
     }
 
     /**
      * 플랫폼 관리자 카탈로그 관리 화면의 수정. {@code capacityType}/{@code secondaryCapacityType}은
      * 상품의 종류를 규정하는 값이라 생성 후 불변이고 여기서 바꾸지 않는다(바꾸려면 새 상품을
-     * 만든다). 호출할 때마다 {@code CapacityAddOnHistory}에 이력 한 행을 남기는 것은 서비스 몫이다.
+     * 만든다). 가격/사용여부는 여기서 다루지 않는다 — {@link CapacityAddOnPricePeriod} 기간
+     * 단위 CRUD로 관리한다.
      */
-    public void updateInfo(
-            Integer unitAmount,
-            Integer secondaryUnitAmount,
-            String currencyCode,
-            BigDecimal supplyPrice,
-            BigDecimal salePrice,
-            DiscountType discountType,
-            BigDecimal discountValue,
-            String taxCode,
-            boolean active
-    ) {
+    public void updateInfo(Integer unitAmount, Integer secondaryUnitAmount) {
         this.unitAmount = unitAmount;
         this.secondaryUnitAmount = secondaryUnitAmount;
-        this.priceInfo = CatalogPriceInfo.of(
-                currencyCode, supplyPrice, salePrice, discountType, discountValue,
-                taxCode == null || taxCode.isBlank() ? this.priceInfo.getTaxCode() : taxCode
-        );
-        this.active = active;
     }
 }

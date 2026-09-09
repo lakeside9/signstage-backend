@@ -88,27 +88,35 @@ public class CeremonyCapacityPurchase extends BaseEntity {
     @Column(name = "reviewed_at")
     private LocalDateTime reviewedAt;
 
+    /**
+     * {@code currencyCode}/{@code purchasedTaxCode}는 호출부({@code CeremonyService#purchaseCapacity})가
+     * 그 순간 유효한 {@link CapacityAddOnPricePeriod}를 {@code findEffective}로 조회해 넘긴다 —
+     * 이 엔티티는 DB 조회를 하지 않는다(signstage-docs
+     * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09).
+     */
     @Builder
     private CeremonyCapacityPurchase(
             Ceremony ceremony,
             CapacityAddOn capacityAddOn,
             Integer quantity,
+            String currencyCode,
             Integer purchasedUnitAmount,
             Integer purchasedSecondaryUnitAmount,
             BigDecimal purchasedSalePrice,
             DiscountType purchasedDiscountType,
-            BigDecimal purchasedDiscountValue
+            BigDecimal purchasedDiscountValue,
+            String purchasedTaxCode
     ) {
         this.ceremony = ceremony;
         this.capacityAddOn = capacityAddOn;
         this.quantity = quantity;
-        this.currencyCode = capacityAddOn.getPriceInfo().getCurrencyCode();
+        this.currencyCode = currencyCode;
         this.purchasedUnitAmount = purchasedUnitAmount;
         this.purchasedSecondaryUnitAmount = purchasedSecondaryUnitAmount;
         this.purchasedSalePrice = purchasedSalePrice;
         this.purchasedDiscountType = purchasedDiscountType;
         this.purchasedDiscountValue = purchasedDiscountValue;
-        this.purchasedTaxCode = capacityAddOn.getPriceInfo().getTaxCode();
+        this.purchasedTaxCode = purchasedTaxCode;
         this.status = PurchaseStatus.PENDING;
     }
 

@@ -10,7 +10,9 @@ import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanCapacity;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanCapacityAddOn;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanPricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOnPricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyAssignment;
@@ -23,12 +25,15 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHist
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeaturePricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanPricePeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnPricePeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
@@ -39,6 +44,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlan
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeaturePricePeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
@@ -96,10 +102,13 @@ public class CeremonyService {
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final BillingPlanRepository billingPlanRepository;
+    private final BillingPlanPricePeriodRepository billingPlanPricePeriodRepository;
     private final BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
     private final BillingPlanCapacityAddOnRepository billingPlanCapacityAddOnRepository;
     private final CapacityAddOnRepository capacityAddOnRepository;
+    private final CapacityAddOnPricePeriodRepository capacityAddOnPricePeriodRepository;
     private final OptionalFeatureRepository optionalFeatureRepository;
+    private final OptionalFeaturePricePeriodRepository optionalFeaturePricePeriodRepository;
     private final UserRepository userRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     private final OrganizationDiscountService organizationDiscountService;
@@ -119,8 +128,11 @@ public class CeremonyService {
 
         BillingPlan plan = billingPlanRepository.findById(request.getBillingPlanId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
-        checkPlanActive(plan);
-        checkCurrencyMatches(organization.getBillingCurrencyCode(), plan.getPriceInfo().getCurrencyCode());
+        // Ceremony.timeZoneId는 organization.getDefaultTimeZoneId()를 그대로 물려받는다 — 아직
+        // Ceremony가 없으니 organization에서 같은 값을 미리 계산해 쓴다.
+        LocalDate asOfDate = LocalDate.now(ZoneId.of(organization.getDefaultTimeZoneId()));
+        BillingPlanPricePeriod planPeriod = resolveSellablePlanPeriod(plan, asOfDate);
+        checkCurrencyMatches(organization.getBillingCurrencyCode(), planPeriod.getPriceInfo().getCurrencyCode());
 
         Ceremony ceremony = Ceremony.builder()
                 .organization(organization)
@@ -128,7 +140,7 @@ public class CeremonyService {
                 .title(request.getTitle())
                 .build();
         ceremonyRepository.save(ceremony);
-        recordPlanHistory(ceremony, plan);
+        recordPlanHistory(ceremony, plan, planPeriod, asOfDate);
 
         // 생성자는 역할과 무관하게 자동으로 배정된다(4.7절) — 나중에 OPERATOR로 강등돼도
         // 본인이 만든 행사 접근권을 그대로 유지하는 부수 효과가 있다.
@@ -261,11 +273,12 @@ public class CeremonyService {
 
         BillingPlan newPlan = billingPlanRepository.findById(request.getBillingPlanId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
-        checkPlanActive(newPlan);
-        checkCurrencyMatches(ceremony.getCurrencyCode(), newPlan.getPriceInfo().getCurrencyCode());
+        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
+        BillingPlanPricePeriod newPlanPeriod = resolveSellablePlanPeriod(newPlan, asOfDate);
+        checkCurrencyMatches(ceremony.getCurrencyCode(), newPlanPeriod.getPriceInfo().getCurrencyCode());
 
         ceremony.changePlan(newPlan);
-        recordPlanHistory(ceremony, newPlan);
+        recordPlanHistory(ceremony, newPlan, newPlanPeriod, asOfDate);
 
         return toSummary(ceremony);
     }
@@ -319,10 +332,9 @@ public class CeremonyService {
 
         CapacityAddOn addOn = capacityAddOnRepository.findById(request.getCapacityAddOnId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND));
-        if (!addOn.isActive()) {
-            throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_INACTIVE);
-        }
-        checkCurrencyMatches(ceremony.getCurrencyCode(), addOn.getPriceInfo().getCurrencyCode());
+        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
+        CapacityAddOnPricePeriod addOnPeriod = resolveSellableAddOnPeriod(addOn, asOfDate);
+        checkCurrencyMatches(ceremony.getCurrencyCode(), addOnPeriod.getPriceInfo().getCurrencyCode());
         // 안 A(구매 가능 상품 큐레이션) — 이 Ceremony의 플랜에서 구매 후보로 열어두지 않은 상품은
         // 거부한다. 플랜이 없는 행사(4.8절 예외)는 제한 없이 전부 허용한다 — signstage-docs
         // business/optional-feature-display-scope-and-plan-capacity-addon-review.md 5장.
@@ -334,18 +346,22 @@ public class CeremonyService {
         // 조직×용량추가구매 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다 —
         // recordPlanHistory와 같은 원칙(4.1절, 2026-08-21 재검토).
         OrganizationDiscountService.EffectiveDiscount discount = organizationDiscountService.resolveCapacityAddOnDiscount(
-                ceremony.getOrganization(), addOn, LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()))
+                ceremony.getOrganization(), addOn.getId(),
+                addOnPeriod.getPriceInfo().getDiscount().getDiscountType(), addOnPeriod.getPriceInfo().getDiscount().getDiscountValue(),
+                asOfDate
         );
 
         CeremonyCapacityPurchase purchase = CeremonyCapacityPurchase.builder()
                 .ceremony(ceremony)
                 .capacityAddOn(addOn)
                 .quantity(request.getQuantity())
+                .currencyCode(addOnPeriod.getPriceInfo().getCurrencyCode())
                 .purchasedUnitAmount(addOn.getUnitAmount())
                 .purchasedSecondaryUnitAmount(addOn.getSecondaryUnitAmount())
-                .purchasedSalePrice(addOn.getPriceInfo().getSalePrice())
+                .purchasedSalePrice(addOnPeriod.getPriceInfo().getSalePrice())
                 .purchasedDiscountType(discount.type())
                 .purchasedDiscountValue(discount.value())
+                .purchasedTaxCode(addOnPeriod.getPriceInfo().getTaxCode())
                 .build();
         ceremonyCapacityPurchaseRepository.save(purchase);
 
@@ -381,10 +397,9 @@ public class CeremonyService {
 
         OptionalFeature feature = optionalFeatureRepository.findById(request.getOptionalFeatureId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND));
-        if (!feature.isActive()) {
-            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_INACTIVE);
-        }
-        checkCurrencyMatches(ceremony.getCurrencyCode(), feature.getPriceInfo().getCurrencyCode());
+        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
+        OptionalFeaturePricePeriod featurePeriod = resolveSellableFeaturePeriod(feature, asOfDate);
+        checkCurrencyMatches(ceremony.getCurrencyCode(), featurePeriod.getPriceInfo().getCurrencyCode());
 
         boolean alreadyRequested = ceremonyOptionalFeaturePurchaseRepository.existsByCeremonyIdAndOptionalFeatureIdAndStatusIn(
                 ceremonyId, feature.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
@@ -396,16 +411,20 @@ public class CeremonyService {
         // 조직×선택옵션 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다 —
         // recordPlanHistory와 같은 원칙(4.1절, 2026-08-21 재검토).
         OrganizationDiscountService.EffectiveDiscount discount = organizationDiscountService.resolveOptionalFeatureDiscount(
-                ceremony.getOrganization(), feature, LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()))
+                ceremony.getOrganization(), feature.getId(),
+                featurePeriod.getPriceInfo().getDiscount().getDiscountType(), featurePeriod.getPriceInfo().getDiscount().getDiscountValue(),
+                asOfDate
         );
 
         CeremonyOptionalFeaturePurchase purchase = CeremonyOptionalFeaturePurchase.builder()
                 .ceremony(ceremony)
                 .optionalFeature(feature)
+                .currencyCode(featurePeriod.getPriceInfo().getCurrencyCode())
                 .purchasedName(feature.getName())
-                .purchasedSalePrice(feature.getPriceInfo().getSalePrice())
+                .purchasedSalePrice(featurePeriod.getPriceInfo().getSalePrice())
                 .purchasedDiscountType(discount.type())
                 .purchasedDiscountValue(discount.value())
+                .purchasedTaxCode(featurePeriod.getPriceInfo().getTaxCode())
                 .build();
         ceremonyOptionalFeaturePurchaseRepository.save(purchase);
 
@@ -465,29 +484,40 @@ public class CeremonyService {
                         Collectors.mapping(mapping -> mapping.getEffectDefinition().getId(), Collectors.toList())
                 ));
 
+        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
         return optionalFeatureRepository.findAllById(availableIds).stream()
                 .map(feature -> {
                     CeremonyOptionalFeaturePurchase purchase = approvedPurchaseByFeatureId.get(feature.getId());
+                    // 개별 추가구매(승인됨)한 옵션은 구매 시점 스냅샷을 쓰지만, 플랜에 기본 포함된
+                    // 옵션(추가구매 기록 없음)은 "오늘" 기준 유효한 판매가격 기간을 그대로 보여준다
+                    // — 애초에 개별로 "산" 적이 없어 가격을 보호할 스냅샷 자체가 없기 때문이다.
+                    Optional<OptionalFeaturePricePeriod> effective =
+                            optionalFeaturePricePeriodRepository.findEffective(feature.getId(), asOfDate);
                     return new OptionalFeatureDto.Response.OptionalFeatureSummary(
                             feature.getId(),
                             feature.getCode().name(),
                             purchase != null ? purchase.getPurchasedName() : feature.getName(),
-                            purchase != null ? purchase.getCurrencyCode() : feature.getPriceInfo().getCurrencyCode(),
-                            feature.getPriceInfo().getSupplyPrice(),
-                            purchase != null ? purchase.getPurchasedSalePrice() : feature.getPriceInfo().getSalePrice(),
+                            purchase != null ? purchase.getCurrencyCode() : effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
+                            effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
+                            purchase != null ? purchase.getPurchasedSalePrice() : effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
                             purchase != null
                                     ? purchase.getPurchasedDiscountType().name()
-                                    : feature.getPriceInfo().getDiscount().getDiscountType().name(),
-                            purchase != null ? purchase.getPurchasedDiscountValue() : feature.getPriceInfo().getDiscount().getDiscountValue(),
-                            purchase != null ? purchase.getPurchasedTaxCode() : feature.getPriceInfo().getTaxCode(),
-                            feature.isActive(),
+                                    : effective.map(p -> p.getPriceInfo().getDiscount().getDiscountType().name()).orElse(null),
+                            purchase != null
+                                    ? purchase.getPurchasedDiscountValue()
+                                    : effective.map(p -> p.getPriceInfo().getDiscount().getDiscountValue()).orElse(null),
+                            purchase != null ? purchase.getPurchasedTaxCode() : effective.map(p -> p.getPriceInfo().getTaxCode()).orElse(null),
+                            effective.map(OptionalFeaturePricePeriod::isActive).orElse(null),
                             feature.getExclusivityGroup(),
                             feature.getCategory().name(),
                             ceremonyOptionalFeaturePurchaseRepository.countByOptionalFeatureIdAndStatus(
                                     feature.getId(), PurchaseStatus.APPROVED
                             ),
                             effectDefinitionIdsByFeatureId.getOrDefault(feature.getId(), List.of()),
-                            feature.getCreatedAt()
+                            feature.getCreatedAt(),
+                            effective.map(OptionalFeaturePricePeriod::getEffectiveFrom).orElse(null),
+                            effective.map(OptionalFeaturePricePeriod::getEffectiveTo).orElse(null),
+                            effective.map(p -> p.isActive() ? "ON_SALE" : "INACTIVE").orElse("NO_ACTIVE_PERIOD")
                     );
                 })
                 .toList();
@@ -793,11 +823,39 @@ public class CeremonyService {
         }
     }
 
-    /** 사용 중지(active=false)된 플랜은 신규 선택/변경 대상에서 제외한다. */
-    private void checkPlanActive(BillingPlan plan) {
-        if (!plan.isActive()) {
+    /**
+     * asOfDate 기준 유효한 판매가격 기간을 찾아 사용여부까지 확인한다 — 기간이 없거나(카탈로그
+     * 등록 실수로 공백이 생긴 경우) 있어도 사용 중지(active=false)면 신규 선택/변경 대상에서
+     * 제외한다(signstage-docs business/billing-catalog-price-validity-period-review.md 결정,
+     * 2026-09-09).
+     */
+    private BillingPlanPricePeriod resolveSellablePlanPeriod(BillingPlan plan, LocalDate asOfDate) {
+        BillingPlanPricePeriod period = billingPlanPricePeriodRepository.findEffective(plan.getId(), asOfDate)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_INACTIVE));
+        if (!period.isActive()) {
             throw new ApplicationException(CeremonyErrorCode.BILLING_PLAN_INACTIVE);
         }
+        return period;
+    }
+
+    /** {@link #resolveSellablePlanPeriod}과 같은 원칙 — 선택옵션. */
+    private OptionalFeaturePricePeriod resolveSellableFeaturePeriod(OptionalFeature feature, LocalDate asOfDate) {
+        OptionalFeaturePricePeriod period = optionalFeaturePricePeriodRepository.findEffective(feature.getId(), asOfDate)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_INACTIVE));
+        if (!period.isActive()) {
+            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_INACTIVE);
+        }
+        return period;
+    }
+
+    /** {@link #resolveSellablePlanPeriod}과 같은 원칙 — 용량 추가구매 상품. */
+    private CapacityAddOnPricePeriod resolveSellableAddOnPeriod(CapacityAddOn addOn, LocalDate asOfDate) {
+        CapacityAddOnPricePeriod period = capacityAddOnPricePeriodRepository.findEffective(addOn.getId(), asOfDate)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_INACTIVE));
+        if (!period.isActive()) {
+            throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_INACTIVE);
+        }
+        return period;
     }
 
     /**
@@ -809,19 +867,27 @@ public class CeremonyService {
      * 9장 후속 결정, business/optional-feature-display-scope-and-plan-capacity-addon-review.md
      * 5.5절 후속).
      */
-    private void recordPlanHistory(Ceremony ceremony, BillingPlan plan) {
+    private void recordPlanHistory(Ceremony ceremony, BillingPlan plan, BillingPlanPricePeriod planPeriod, LocalDate asOfDate) {
         // 조직×플랜 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다
         // (signstage-docs business/organization-event-discount-pricing-review.md 4.1절,
         // 2026-08-21 재검토) — 그 시점의 값을 CeremonyPlanHistory에 고정해 두므로, 오버라이드를
         // 나중에 바꿔도 이미 만들어진 이 Ceremony에는 영향을 주지 않는다.
         OrganizationDiscountService.EffectiveDiscount discount =
                 organizationDiscountService.resolveBillingPlanDiscount(
-                        ceremony.getOrganization(), plan, LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()))
+                        ceremony.getOrganization(), plan.getId(),
+                        planPeriod.getPriceInfo().getDiscount().getDiscountType(), planPeriod.getPriceInfo().getDiscount().getDiscountValue(),
+                        asOfDate
                 );
         CeremonyPlanHistory history = ceremonyPlanHistoryRepository.save(
                 CeremonyPlanHistory.builder()
                         .ceremony(ceremony)
                         .billingPlan(plan)
+                        .currencyCode(planPeriod.getPriceInfo().getCurrencyCode())
+                        .supplyPrice(planPeriod.getPriceInfo().getSupplyPrice())
+                        .salePrice(planPeriod.getPriceInfo().getSalePrice())
+                        .taxCode(planPeriod.getPriceInfo().getTaxCode())
+                        .catalogDiscountType(planPeriod.getPriceInfo().getDiscount().getDiscountType())
+                        .catalogDiscountValue(planPeriod.getPriceInfo().getDiscount().getDiscountValue())
                         .discountType(discount.type())
                         .discountValue(discount.value())
                         .build()
@@ -908,15 +974,25 @@ public class CeremonyService {
         if (plan != null) {
             Optional<CeremonyPlanHistory> snapshot =
                     ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
+            // 이력이 없는 경우(플랜 확정 기능 배포 전 기존 행사)만 라이브 값(오늘 기준 유효한
+            // 판매가격 기간)으로 대체한다 — calculateEffectiveCapacity와 같은 원칙.
+            Optional<BillingPlanPricePeriod> livePeriod = snapshot.isPresent()
+                    ? Optional.empty()
+                    : billingPlanPricePeriodRepository.findEffective(plan.getId(), LocalDate.now(ZoneId.of(ceremony.getTimeZoneId())));
             planApplied = snapshot
                     .map(history -> moneyCalculator.applyDiscount(
                             history.getPlanSalePrice(), history.getPlanDiscountType(), history.getPlanDiscountValue(), currencyPolicy
                     ))
-                    .orElseGet(() -> moneyCalculator.applyDiscount(
-                            plan.getPriceInfo().getSalePrice(), plan.getPriceInfo().getDiscount(), currencyPolicy
-                    ));
-            String planTaxCode = snapshot.map(CeremonyPlanHistory::getTaxCode).orElse(plan.getPriceInfo().getTaxCode());
-            taxableLines.add(new TaxableLine(planApplied, planTaxCode));
+                    .orElseGet(() -> livePeriod
+                            .map(period -> moneyCalculator.applyDiscount(
+                                    period.getPriceInfo().getSalePrice(), period.getPriceInfo().getDiscount(), currencyPolicy
+                            ))
+                            .orElse(BigDecimal.ZERO));
+            String planTaxCode = snapshot.map(CeremonyPlanHistory::getTaxCode)
+                    .orElseGet(() -> livePeriod.map(period -> period.getPriceInfo().getTaxCode()).orElse(null));
+            if (planTaxCode != null) {
+                taxableLines.add(new TaxableLine(planApplied, planTaxCode));
+            }
         }
 
         List<TaxableLine> capacityLines = ceremonyCapacityPurchaseRepository
@@ -1144,21 +1220,26 @@ public class CeremonyService {
     }
 
     private CapacityAddOnDto.Response.CapacityAddOnSummary toCapacityAddOnSummary(CapacityAddOn addOn) {
+        Optional<CapacityAddOnPricePeriod> effective =
+                capacityAddOnPricePeriodRepository.findEffective(addOn.getId(), LocalDate.now());
         return new CapacityAddOnDto.Response.CapacityAddOnSummary(
                 addOn.getId(),
                 addOn.getCapacityType().name(),
                 addOn.getUnitAmount(),
                 addOn.getSecondaryCapacityType() == null ? null : addOn.getSecondaryCapacityType().name(),
                 addOn.getSecondaryUnitAmount(),
-                addOn.getPriceInfo().getCurrencyCode(),
-                addOn.getPriceInfo().getSupplyPrice(),
-                addOn.getPriceInfo().getSalePrice(),
-                addOn.getPriceInfo().getDiscount().getDiscountType().name(),
-                addOn.getPriceInfo().getDiscount().getDiscountValue(),
-                addOn.getPriceInfo().getTaxCode(),
-                addOn.isActive(),
+                effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
+                effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
+                effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
+                effective.map(p -> p.getPriceInfo().getDiscount().getDiscountType().name()).orElse(null),
+                effective.map(p -> p.getPriceInfo().getDiscount().getDiscountValue()).orElse(null),
+                effective.map(p -> p.getPriceInfo().getTaxCode()).orElse(null),
+                effective.map(CapacityAddOnPricePeriod::isActive).orElse(null),
                 ceremonyCapacityPurchaseRepository.countByCapacityAddOnIdAndStatus(addOn.getId(), PurchaseStatus.APPROVED),
-                addOn.getCreatedAt()
+                addOn.getCreatedAt(),
+                effective.map(CapacityAddOnPricePeriod::getEffectiveFrom).orElse(null),
+                effective.map(CapacityAddOnPricePeriod::getEffectiveTo).orElse(null),
+                effective.map(p -> p.isActive() ? "ON_SALE" : "INACTIVE").orElse("NO_ACTIVE_PERIOD")
         );
     }
 

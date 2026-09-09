@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -67,10 +68,58 @@ public class PlatformAdminBillingCatalogController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "과금 플랜 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 수정할 때마다(값 또는 사용여부 변경) 1건씩 쌓인다.")
+    @Operation(summary = "과금 플랜 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 이름/한도 구성이 바뀔 때마다 1건씩 쌓인다.")
     @GetMapping("/billing-plans/{id}/history")
     public ApiResponse<List<BillingPlanDto.Response.BillingPlanHistorySummary>> findPlanHistory(@PathVariable Long id) {
         return ApiResponse.success(billingPlanService.findPlanHistory(id), traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "과금 플랜 판매가격 기간 추가", description = "PLATFORM_OPS 이상만 호출할 수 있다. 기간이 다른 기간과 겹치면 거부된다.")
+    @PostMapping("/billing-plans/{id}/periods")
+    public ApiResponse<BillingPlanDto.Response.BillingPlanPeriodSummary> createPlanPeriod(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody BillingPlanDto.Request.CreatePeriod request
+    ) {
+        BillingPlanDto.Response.BillingPlanPeriodSummary response =
+                billingPlanService.createPeriod(id, currentUser.platformRole(), currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "과금 플랜 판매가격 기간 수정", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
+    @PutMapping("/billing-plans/{id}/periods/{periodId}")
+    public ApiResponse<BillingPlanDto.Response.BillingPlanPeriodSummary> updatePlanPeriod(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id,
+            @PathVariable Long periodId,
+            @Valid @RequestBody BillingPlanDto.Request.UpdatePeriod request
+    ) {
+        BillingPlanDto.Response.BillingPlanPeriodSummary response =
+                billingPlanService.updatePeriod(id, periodId, currentUser.platformRole(), currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "과금 플랜 판매가격 기간 삭제", description = "PLATFORM_OPS 이상만 호출할 수 있다. 마지막 남은 기간은 지울 수 없다.")
+    @DeleteMapping("/billing-plans/{id}/periods/{periodId}")
+    public ApiResponse<Void> removePlanPeriod(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id,
+            @PathVariable Long periodId
+    ) {
+        billingPlanService.removePeriod(id, periodId, currentUser.platformRole(), currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "과금 플랜 판매가격 기간 목록 조회", description = "오래된 순 — 과거/현재/예정 기간을 전부 보여준다.")
+    @GetMapping("/billing-plans/{id}/periods")
+    public ApiResponse<List<BillingPlanDto.Response.BillingPlanPeriodSummary>> findPlanPeriods(@PathVariable Long id) {
+        return ApiResponse.success(billingPlanService.findPlanPeriods(id), traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "과금 플랜 판매가격 기간 변경 이력 조회", description = "최신순 — 기간 생성/수정/삭제 이벤트를 전부 보여준다.")
+    @GetMapping("/billing-plans/{id}/periods/history")
+    public ApiResponse<List<BillingPlanDto.Response.BillingPlanPeriodHistorySummary>> findPlanPeriodHistory(@PathVariable Long id) {
+        return ApiResponse.success(billingPlanService.findPlanPeriodHistory(id), traceIdProvider.getTraceId());
     }
 
     @Operation(summary = "선택옵션 등록", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
@@ -96,12 +145,64 @@ public class PlatformAdminBillingCatalogController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "선택옵션 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 수정할 때마다(값 또는 사용여부 변경) 1건씩 쌓인다.")
+    @Operation(summary = "선택옵션 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 이름/배타그룹/분류가 바뀔 때마다 1건씩 쌓인다.")
     @GetMapping("/optional-features/{id}/history")
     public ApiResponse<List<OptionalFeatureDto.Response.OptionalFeatureHistorySummary>> findOptionalFeatureHistory(
             @PathVariable Long id
     ) {
         return ApiResponse.success(optionalFeatureService.findFeatureHistory(id), traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "선택옵션 판매가격 기간 추가", description = "PLATFORM_OPS 이상만 호출할 수 있다. 기간이 다른 기간과 겹치면 거부된다.")
+    @PostMapping("/optional-features/{id}/periods")
+    public ApiResponse<OptionalFeatureDto.Response.OptionalFeaturePeriodSummary> createOptionalFeaturePeriod(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody OptionalFeatureDto.Request.CreatePeriod request
+    ) {
+        OptionalFeatureDto.Response.OptionalFeaturePeriodSummary response =
+                optionalFeatureService.createPeriod(id, currentUser.platformRole(), currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "선택옵션 판매가격 기간 수정", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
+    @PutMapping("/optional-features/{id}/periods/{periodId}")
+    public ApiResponse<OptionalFeatureDto.Response.OptionalFeaturePeriodSummary> updateOptionalFeaturePeriod(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id,
+            @PathVariable Long periodId,
+            @Valid @RequestBody OptionalFeatureDto.Request.UpdatePeriod request
+    ) {
+        OptionalFeatureDto.Response.OptionalFeaturePeriodSummary response =
+                optionalFeatureService.updatePeriod(id, periodId, currentUser.platformRole(), currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "선택옵션 판매가격 기간 삭제", description = "PLATFORM_OPS 이상만 호출할 수 있다. 마지막 남은 기간은 지울 수 없다.")
+    @DeleteMapping("/optional-features/{id}/periods/{periodId}")
+    public ApiResponse<Void> removeOptionalFeaturePeriod(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id,
+            @PathVariable Long periodId
+    ) {
+        optionalFeatureService.removePeriod(id, periodId, currentUser.platformRole(), currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "선택옵션 판매가격 기간 목록 조회", description = "오래된 순 — 과거/현재/예정 기간을 전부 보여준다.")
+    @GetMapping("/optional-features/{id}/periods")
+    public ApiResponse<List<OptionalFeatureDto.Response.OptionalFeaturePeriodSummary>> findOptionalFeaturePeriods(
+            @PathVariable Long id
+    ) {
+        return ApiResponse.success(optionalFeatureService.findFeaturePeriods(id), traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "선택옵션 판매가격 기간 변경 이력 조회", description = "최신순 — 기간 생성/수정/삭제 이벤트를 전부 보여준다.")
+    @GetMapping("/optional-features/{id}/periods/history")
+    public ApiResponse<List<OptionalFeatureDto.Response.OptionalFeaturePeriodHistorySummary>> findOptionalFeaturePeriodHistory(
+            @PathVariable Long id
+    ) {
+        return ApiResponse.success(optionalFeatureService.findFeaturePeriodHistory(id), traceIdProvider.getTraceId());
     }
 
     @Operation(summary = "용량 추가구매 상품 등록", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
@@ -127,11 +228,63 @@ public class PlatformAdminBillingCatalogController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "용량 추가구매 상품 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 수정할 때마다(값 또는 사용여부 변경) 1건씩 쌓인다.")
+    @Operation(summary = "용량 추가구매 상품 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 단위수량이 바뀔 때마다 1건씩 쌓인다.")
     @GetMapping("/capacity-addons/{id}/history")
     public ApiResponse<List<CapacityAddOnDto.Response.CapacityAddOnHistorySummary>> findCapacityAddOnHistory(
             @PathVariable Long id
     ) {
         return ApiResponse.success(capacityAddOnService.findAddOnHistory(id), traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "용량 추가구매 상품 판매가격 기간 추가", description = "PLATFORM_OPS 이상만 호출할 수 있다. 기간이 다른 기간과 겹치면 거부된다.")
+    @PostMapping("/capacity-addons/{id}/periods")
+    public ApiResponse<CapacityAddOnDto.Response.CapacityAddOnPeriodSummary> createCapacityAddOnPeriod(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody CapacityAddOnDto.Request.CreatePeriod request
+    ) {
+        CapacityAddOnDto.Response.CapacityAddOnPeriodSummary response =
+                capacityAddOnService.createPeriod(id, currentUser.platformRole(), currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "용량 추가구매 상품 판매가격 기간 수정", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
+    @PutMapping("/capacity-addons/{id}/periods/{periodId}")
+    public ApiResponse<CapacityAddOnDto.Response.CapacityAddOnPeriodSummary> updateCapacityAddOnPeriod(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id,
+            @PathVariable Long periodId,
+            @Valid @RequestBody CapacityAddOnDto.Request.UpdatePeriod request
+    ) {
+        CapacityAddOnDto.Response.CapacityAddOnPeriodSummary response =
+                capacityAddOnService.updatePeriod(id, periodId, currentUser.platformRole(), currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "용량 추가구매 상품 판매가격 기간 삭제", description = "PLATFORM_OPS 이상만 호출할 수 있다. 마지막 남은 기간은 지울 수 없다.")
+    @DeleteMapping("/capacity-addons/{id}/periods/{periodId}")
+    public ApiResponse<Void> removeCapacityAddOnPeriod(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id,
+            @PathVariable Long periodId
+    ) {
+        capacityAddOnService.removePeriod(id, periodId, currentUser.platformRole(), currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "용량 추가구매 상품 판매가격 기간 목록 조회", description = "오래된 순 — 과거/현재/예정 기간을 전부 보여준다.")
+    @GetMapping("/capacity-addons/{id}/periods")
+    public ApiResponse<List<CapacityAddOnDto.Response.CapacityAddOnPeriodSummary>> findCapacityAddOnPeriods(
+            @PathVariable Long id
+    ) {
+        return ApiResponse.success(capacityAddOnService.findAddOnPeriods(id), traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "용량 추가구매 상품 판매가격 기간 변경 이력 조회", description = "최신순 — 기간 생성/수정/삭제 이벤트를 전부 보여준다.")
+    @GetMapping("/capacity-addons/{id}/periods/history")
+    public ApiResponse<List<CapacityAddOnDto.Response.CapacityAddOnPeriodHistorySummary>> findCapacityAddOnPeriodHistory(
+            @PathVariable Long id
+    ) {
+        return ApiResponse.success(capacityAddOnService.findAddOnPeriodHistory(id), traceIdProvider.getTraceId());
     }
 }
