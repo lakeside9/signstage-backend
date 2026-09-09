@@ -20,6 +20,8 @@ import com.eformworks.signstage.backend.feature.organization.entity.Organization
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminOrganizationDto;
 import com.eformworks.signstage.backend.feature.platformadmin.error.PlatformAdminErrorCode;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.permission.dto.PermissionDto;
+import com.eformworks.signstage.backend.feature.permission.entity.RoleAxis;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -52,6 +54,7 @@ public class PlatformAdminOrganizationService {
     private final OrganizationHistoryRepository organizationHistoryRepository;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
     private final RolePermissionService rolePermissionService;
+    private final PlatformAdminUserService platformAdminUserService;
 
     /**
      * 관리자가 조직을 직접 만든다. 계정을 새로 만들지 않고 {@code ownerLoginId}로 지정한 기존 사용자를
@@ -73,13 +76,27 @@ public class PlatformAdminOrganizationService {
             throw new ApplicationException(OrganizationErrorCode.ORGANIZATION_CODE_DUPLICATE);
         }
 
-        User owner = userRepository.findByLoginId(request.getOwnerLoginId())
-                .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_USER_NOT_FOUND));
-        checkSingleOrganizationLimit(owner);
-        checkOwnerLimit(owner);
-        checkNotPlatformAdmin(owner);
+        boolean demo = Boolean.TRUE.equals(request.getIsDemo());
+        User owner;
+        if (demo) {
+            // 데모 조직은 자리표시자 OWNER를 서버가 자동으로 만든다 — ownerLoginId를 별도로
+            // 지정할 필요가 없고(signstage-docs
+            // business/demo-account-exhibition-signer-preview-review.md 11.3절), 방금 만든
+            // 계정이라 checkSingleOrganizationLimit/checkOwnerLimit/checkNotPlatformAdmin은
+            // 항상 통과가 보장돼 호출하지 않는다.
+            owner = platformAdminUserService.createDemoPlaceholderOwner(request.getCode());
+        } else {
+            if (request.getOwnerLoginId() == null || request.getOwnerLoginId().isBlank()) {
+                throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+            }
+            owner = userRepository.findByLoginId(request.getOwnerLoginId())
+                    .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_MEMBER_USER_NOT_FOUND));
+            checkSingleOrganizationLimit(owner);
+            checkOwnerLimit(owner);
+            checkNotPlatformAdmin(owner);
+        }
 
-        Organization organization = saveOrganizationWithOwner(request.getOrganizationName(), request.getCode(), owner);
+        Organization organization = saveOrganizationWithOwner(request.getOrganizationName(), request.getCode(), owner, demo);
 
         OrganizationCreationRequest autoApprovedRequest = OrganizationCreationRequest.builder()
                 .requestedBy(owner)
@@ -102,10 +119,11 @@ public class PlatformAdminOrganizationService {
      * 승인({@code PlatformAdminOrganizationRequestService})이 이 메서드를 공유한다
      * (organization-creation-approval-review.md 3.1절 "저장 방식 결정됨").
      */
-    Organization saveOrganizationWithOwner(String name, String code, User owner) {
+    Organization saveOrganizationWithOwner(String name, String code, User owner, boolean demo) {
         Organization organization = Organization.builder()
                 .name(name)
                 .code(code)
+                .demo(demo)
                 .build();
         organizationRepository.save(organization);
 
@@ -302,7 +320,39 @@ public class PlatformAdminOrganizationService {
                 organization.getStatus().name(),
                 organization.getDefaultLocale(),
                 activeMemberCount,
-                organization.getCreatedAt()
+                organization.getCreatedAt(),
+                organization.isDemo()
         );
+    }
+
+    /**
+     * "이 데모 조직을 관리한다면 어떤 조직 역할 권한키를 갖게 되는가" — signstage-docs
+     * business/demo-account-exhibition-signer-preview-review.md 11.2/11.5절. 실제 organization_members
+     * 행을 조회하지 않고(플랫폼 관리자는 애초에 그 조직의 Member가 아니다) {@code CeremonyService
+     * .findActiveMemberOrThrow}의 가상 Member 역할 결정 로직과 정확히 같은 조건으로 계산한다 —
+     * 프런트(재사용하는 기존 조직 사용자 화면)가 이 응답을 {@code usePermissionStore}에 그대로
+     * 실어 {@code hasPermission(key)} 판단에 쓴다.
+     */
+    public PermissionDto.Response.MyPermissions resolveDemoPermissions(Long organizationId, String actingPlatformRole) {
+        Organization organization = findOrganizationOrThrow(organizationId);
+        if (!organization.isDemo()) {
+            throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+        }
+        MemberRole virtualRole = rolePermissionService.isAllowed(actingPlatformRole, "ACTION_DEMO_CEREMONY_MANAGE")
+                ? MemberRole.OWNER
+                : MemberRole.VIEWER;
+        List<String> keys = rolePermissionService.allowedKeys(virtualRole.name()).stream().sorted().toList();
+        return new PermissionDto.Response.MyPermissions(RoleAxis.ORGANIZATION.name(), virtualRole.name(), keys);
+    }
+
+    /**
+     * 데모 조직 목록 — signstage-docs
+     * business/demo-account-exhibition-signer-preview-review.md 11.4절(신규 관리자 콘솔 화면이
+     * 관리할 대상을 고르는 진입점). 개수가 적을 것으로 보고 페이지네이션 없이 전체를 반환한다.
+     */
+    public List<PlatformAdminOrganizationDto.Response.OrganizationSummary> findDemoOrganizations() {
+        return organizationRepository.findAllByDemoTrueOrderByCreatedAtDesc().stream()
+                .map(this::toSummary)
+                .toList();
     }
 }

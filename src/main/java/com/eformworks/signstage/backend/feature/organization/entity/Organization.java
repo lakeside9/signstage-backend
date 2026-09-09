@@ -52,6 +52,16 @@ public class Organization extends BaseEntity {
     @Column(name = "billing_currency_code", nullable = false, length = 3)
     private String billingCurrencyCode;
 
+    /**
+     * 데모 조직 여부 — signstage-docs
+     * business/demo-account-exhibition-signer-preview-review.md 11장(2026-09-09, 결정 번복) 참고.
+     * 데모 조직에서는 {@code CeremonyService.findActiveMemberOrThrow}가 실제 {@code Member} 행
+     * 없이도 플랫폼 관리자를 가상 멤버로 우회시켜준다 — 플랫폼 관리자가 데모 행사 생성부터
+     * 문서·서명자 등록, 하위 행사 제어까지 전부 직접 할 수 있게 하기 위해서다. 기본값 false.
+     */
+    @Column(name = "is_demo", nullable = false)
+    private boolean demo;
+
     @Builder
     private Organization(
             String name,
@@ -59,7 +69,8 @@ public class Organization extends BaseEntity {
             String defaultLanguageCode,
             String defaultLocale,
             String defaultTimeZoneId,
-            String billingCurrencyCode
+            String billingCurrencyCode,
+            boolean demo
     ) {
         this.name = name;
         this.code = code;
@@ -68,6 +79,7 @@ public class Organization extends BaseEntity {
         this.defaultLocale = InternationalizationDefaults.formatLocaleOrDefault(defaultLocale);
         this.defaultTimeZoneId = InternationalizationDefaults.timeZoneIdOrDefault(defaultTimeZoneId);
         this.billingCurrencyCode = InternationalizationDefaults.currencyCodeOrDefault(billingCurrencyCode);
+        this.demo = demo;
     }
 
     /**

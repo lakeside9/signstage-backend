@@ -764,7 +764,36 @@ public class CeremonyService {
 
     Member findActiveMemberOrThrow(Long organizationId, Long userId) {
         return memberRepository.findByOrganizationIdAndUserIdAndStatus(organizationId, userId, MemberStatus.ACTIVE)
-                .orElseThrow(() -> new ApplicationException(CommonErrorCode.ACCESS_DENIED));
+                .orElseGet(() -> resolveDemoVirtualMemberOrThrow(organizationId, userId));
+    }
+
+    /**
+     * 데모 조직 우회 — signstage-docs
+     * business/demo-account-exhibition-signer-preview-review.md 11.2절(2026-09-09, 결정 번복).
+     * 실제 {@code Member} 행이 없을 때만(비용이 큰 조회는 평소 조직 사용자 흐름에 영향이 없도록
+     * 실패 경로에서만 시도한다) 호출자가 플랫폼 관리자이고 그 조직이 데모 조직(Organization.isDemo)
+     * 이면, 저장하지 않는 가상의 Member를 그 자리에서 만들어 돌려준다 — 이 메서드를 공유하는
+     * {@code CeremonyEventService}/{@code CeremonyEventEffectSettingService}/
+     * {@code CeremonyEffectRuntimeService}/{@code CeremonyResultService}/{@code SignerService}/
+     * {@code TemplateService}/{@code TemplateFieldService} 8개 서비스 전부에 자동 파급된다.
+     *
+     * <p>가상 Member의 역할은 호출자의 플랫폼 등급에 따라 갈린다 — {@code ACTION_DEMO_CEREMONY_MANAGE}
+     * 권한이 있으면(PLATFORM_OPS 이상) 전체 관리가 가능한 OWNER, 없으면(PLATFORM_SUPPORT) 조회만
+     * 가능한 VIEWER다. 이 메서드 자체는 두 등급을 구분하지 않고 항상 같은 코드 경로를 타지만,
+     * 이미 있는 역할 기반 검사(예: {@code checkCeremonyManageAccess}가 쓰는
+     * {@code ACTION_CEREMONY_MANAGE})가 VIEWER는 그대로 걸러내므로 새 검사를 추가하지 않아도
+     * 두 등급이 자연스럽게 나뉜다.
+     */
+    private Member resolveDemoVirtualMemberOrThrow(Long organizationId, Long userId) {
+        Organization organization = organizationRepository.findById(organizationId).orElse(null);
+        User user = userRepository.findById(userId).orElse(null);
+        if (organization != null && organization.isDemo() && user != null && user.getPlatformRole() != null) {
+            MemberRole virtualRole = rolePermissionService.isAllowed(user.getPlatformRole().name(), "ACTION_DEMO_CEREMONY_MANAGE")
+                    ? MemberRole.OWNER
+                    : MemberRole.VIEWER;
+            return Member.builder().organization(organization).user(user).role(virtualRole).status(MemberStatus.ACTIVE).build();
+        }
+        throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
     }
 
     /** OWNER/ADMIN/VIEWER는 조직의 모든 행사를 조회할 수 있고, OPERATOR는 배정된 행사만 조회할 수 있다. */

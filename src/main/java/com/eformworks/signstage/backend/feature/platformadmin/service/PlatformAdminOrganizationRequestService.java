@@ -78,8 +78,11 @@ public class PlatformAdminOrganizationRequestService {
         platformAdminOrganizationService.checkOwnerLimit(owner);
         platformAdminOrganizationService.checkNotPlatformAdmin(owner);
 
+        // 사용자 셀프서비스 요청 승인 경로로는 데모 조직을 만들 수 없다 — 데모 조직은 언제나
+        // 플랫폼 관리자가 직접 등록한다(signstage-docs
+        // business/demo-account-exhibition-signer-preview-review.md 11.3절).
         Organization organization = platformAdminOrganizationService.saveOrganizationWithOwner(
-                creationRequest.getOrganizationName(), request.getCode(), owner
+                creationRequest.getOrganizationName(), request.getCode(), owner, false
         );
         creationRequest.approve(actingUserId, organization);
 
