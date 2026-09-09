@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.platformadmin.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import java.time.LocalDateTime;
@@ -96,6 +97,18 @@ public final class PlatformAdminOrganizationDto {
             private final long activeMemberCount;
             private final LocalDateTime createdAt;
             private final boolean isDemo;
+
+            /**
+             * Lombok {@code @Getter}가 만들었을 getter는 {@code isDemo()}인데, Jackson은 boolean
+             * getter의 "is" 접두어를 벗겨 JSON 키를 "demo"로 만들어버린다(프런트는 "isDemo" 키를
+             * 기대한다). 그래서 이 getter만 직접 선언해 @JsonProperty로 키를 고정한다 — 클래스
+             * 레벨 @Getter는 이미 이름이 같은 메서드가 있으면 따로 만들지 않으므로 중복 프로퍼티가
+             * 생기지 않는다(2026-09-09 발견·수정).
+             */
+            @JsonProperty("isDemo")
+            public boolean isDemo() {
+                return isDemo;
+            }
         }
     }
 }
