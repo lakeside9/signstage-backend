@@ -3,7 +3,6 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinition;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
@@ -72,10 +71,8 @@ public class OptionalFeatureService {
                 .discountType(parseDiscountType(request.getDiscountType()))
                 .discountValue(request.getDiscountValue())
                 .taxCode(request.getTaxCode())
-                .projectorEffect(request.getProjectorEffect())
                 .exclusivityGroup(request.getExclusivityGroup())
                 .category(parseCategory(request.getCategory()))
-                .pairedCapacityType(parseOptionalCapacityType(request.getPairedCapacityType()))
                 .build();
         optionalFeatureRepository.save(optionalFeature);
         recordFeatureHistory(optionalFeature);
@@ -120,10 +117,8 @@ public class OptionalFeatureService {
                 request.getDiscountValue(),
                 request.getTaxCode(),
                 request.getActive(),
-                request.getProjectorEffect(),
                 request.getExclusivityGroup(),
-                parseCategory(request.getCategory()),
-                parseOptionalCapacityType(request.getPairedCapacityType())
+                parseCategory(request.getCategory())
         );
         recordFeatureHistory(optionalFeature);
         if (request.getEffectDefinitionIds() != null) {
@@ -214,23 +209,6 @@ public class OptionalFeatureService {
         }
     }
 
-    /**
-     * 짝이 되는 용량 추가구매 종류 — 완결형 상품이면(요청에 생략) null. 짝이 되는
-     * {@code CapacityAddOn}이 아직 카탈로그에 없어도 저장은 막지 않는다(경고만, signstage-docs
-     * business/optional-feature-capacity-addon-pairing-review.md 결정 #3) — 그 경고는
-     * 프런트가 이미 불러온 용량 추가구매 목록과 대조해 표시한다.
-     */
-    private CapacityType parseOptionalCapacityType(String pairedCapacityType) {
-        if (pairedCapacityType == null || pairedCapacityType.isBlank()) {
-            return null;
-        }
-        try {
-            return CapacityType.valueOf(pairedCapacityType);
-        } catch (IllegalArgumentException e) {
-            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
-        }
-    }
-
     private OptionalFeatureDto.Response.OptionalFeatureSummary toSummary(OptionalFeature optionalFeature) {
         return new OptionalFeatureDto.Response.OptionalFeatureSummary(
                 optionalFeature.getId(),
@@ -243,10 +221,8 @@ public class OptionalFeatureService {
                 optionalFeature.getPriceInfo().getDiscount().getDiscountValue(),
                 optionalFeature.getPriceInfo().getTaxCode(),
                 optionalFeature.isActive(),
-                optionalFeature.isProjectorEffect(),
                 optionalFeature.getExclusivityGroup(),
                 optionalFeature.getCategory().name(),
-                optionalFeature.getPairedCapacityType() == null ? null : optionalFeature.getPairedCapacityType().name(),
                 ceremonyOptionalFeaturePurchaseRepository.countByOptionalFeatureIdAndStatus(
                         optionalFeature.getId(), PurchaseStatus.APPROVED
                 ),
@@ -269,10 +245,8 @@ public class OptionalFeatureService {
                 history.getPriceInfo().getDiscount().getDiscountValue(),
                 history.getPriceInfo().getTaxCode(),
                 history.isActive(),
-                history.isProjectorEffect(),
                 history.getExclusivityGroup(),
                 history.getCategory().name(),
-                history.getPairedCapacityType() == null ? null : history.getPairedCapacityType().name(),
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );

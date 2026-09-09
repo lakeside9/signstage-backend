@@ -481,10 +481,8 @@ public class CeremonyService {
                             purchase != null ? purchase.getPurchasedDiscountValue() : feature.getPriceInfo().getDiscount().getDiscountValue(),
                             purchase != null ? purchase.getPurchasedTaxCode() : feature.getPriceInfo().getTaxCode(),
                             feature.isActive(),
-                            feature.isProjectorEffect(),
                             feature.getExclusivityGroup(),
                             feature.getCategory().name(),
-                            feature.getPairedCapacityType() == null ? null : feature.getPairedCapacityType().name(),
                             ceremonyOptionalFeaturePurchaseRepository.countByOptionalFeatureIdAndStatus(
                                     feature.getId(), PurchaseStatus.APPROVED
                             ),

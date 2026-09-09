@@ -42,8 +42,8 @@ public enum OptionalFeatureCode {
     VIDEO_ATTENDANCE,
     /**
      * 이 조직이 태블릿 대여 서비스를 쓰는지 표시하는 용도였다 — 프로젝터 화면 등 실제 동작에
-     * 연결되지 않는다(등록 시 {@code projectorEffect=false}로 만든다). 실제 대여 대수는
-     * {@code CapacityType.TABLETS} 용량 추가구매로 별도 관리한다(2026-08-21 추가).
+     * 연결되지 않는다. 실제 대여 대수는 {@code CapacityType.TABLETS} 용량 추가구매로 별도
+     * 관리한다(2026-08-21 추가).
      *
      * <p><b>더 이상 신규 등록하지 않음(2026-08-30)</b> — 선택옵션 카탈로그를 전시화면/서명화면에
      * 실제 효과를 내는 항목으로 좁히기로 하면서, 화면 효과가 없는 이 코드는 관리자 카탈로그
@@ -55,11 +55,10 @@ public enum OptionalFeatureCode {
     TABLET_RENTAL,
     /**
      * 행사 당일 오프라인 현장에 인력이 나가 설치·운영·트러블슈팅을 지원한다 — {@code TABLET_RENTAL}과
-     * 같은 "표시용 옵션 + 수량 추가구매" 패턴이다(등록 시 {@code projectorEffect=false},
-     * {@code pairedCapacityType=CapacityType.ONSITE_SUPPORT}). 실제 지원 건수는
-     * {@code CapacityType.ONSITE_SUPPORT} 용량 추가구매로 관리하고, 수도권/지방 출장비 차등은
-     * 그 용량 추가구매 상품을 두 개(카탈로그 행)로 나눠 등록하는 방식으로 표현한다(2026-09-08
-     * 결정) — signstage-docs business/ceremony-support-services-billing-review.md 참고.
+     * 같은 "표시용 옵션 + 수량 추가구매" 패턴이다. 실제 지원 건수는 {@code CapacityType.ONSITE_SUPPORT}
+     * 용량 추가구매로 관리하고, 수도권/지방 출장비 차등은 그 용량 추가구매 상품을 두 개(카탈로그
+     * 행)로 나눠 등록하는 방식으로 표현한다(2026-09-08 결정) — signstage-docs
+     * business/ceremony-support-services-billing-review.md 참고.
      */
     ONSITE_SUPPORT,
     /**
