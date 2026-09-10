@@ -17,6 +17,7 @@ import com.eformworks.signstage.backend.feature.organization.entity.Organization
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminMemberDto;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -42,6 +43,8 @@ class PlatformAdminMemberServiceTest {
     private UserRepository userRepository;
     @Mock
     private PlatformAdminAuditLogRecorder auditLogRecorder;
+    @Mock
+    private RolePermissionService rolePermissionService;
 
     @InjectMocks
     private PlatformAdminMemberService platformAdminMemberService;
@@ -70,6 +73,7 @@ class PlatformAdminMemberServiceTest {
         request.setLoginId(targetUser.getLoginId());
         request.setRole(MemberRole.VIEWER.name());
 
+        given(rolePermissionService.isAllowed("PLATFORM_SUPER", "ACTION_PARTNER_MEMBER_CONTROL")).willReturn(true);
         given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(organization));
         given(userRepository.findByLoginId(targetUser.getLoginId())).willReturn(Optional.of(targetUser));
         given(memberRepository.existsByOrganizationIdAndUserId(ORGANIZATION_ID, TARGET_USER_ID)).willReturn(false);

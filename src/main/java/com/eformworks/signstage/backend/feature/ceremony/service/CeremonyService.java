@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
@@ -1148,7 +1149,7 @@ public class CeremonyService {
 
     private UnitProductDto.Response.UnitProductSummary toUnitProductSummaryForPurchase(UnitProduct unitProduct) {
         Optional<UnitProductPricePeriod> effective =
-                unitProductPricePeriodRepository.findEffective(unitProduct.getId(), LocalDate.now());
+                unitProductPricePeriodRepository.findEffective(unitProduct.getId(), InternationalizationDefaults.today());
         return new UnitProductDto.Response.UnitProductSummary(
                 unitProduct.getId(),
                 unitProduct.getType().name(),

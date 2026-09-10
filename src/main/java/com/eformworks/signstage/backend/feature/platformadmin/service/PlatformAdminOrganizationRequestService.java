@@ -10,11 +10,11 @@ import com.eformworks.signstage.backend.feature.organization.entity.Organization
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationCreationRequestRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminOrganizationRequestDto;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -32,13 +32,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PlatformAdminOrganizationRequestService {
 
-    private static final Set<String> ORGANIZATION_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
-
     private final OrganizationCreationRequestRepository requestRepository;
     private final OrganizationRepository organizationRepository;
     private final UserRepository userRepository;
     private final PlatformAdminOrganizationService platformAdminOrganizationService;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
+    private final RolePermissionService rolePermissionService;
 
     public Page<PlatformAdminOrganizationRequestDto.Response.RequestSummary> findRequests(
             OrganizationCreationRequestStatus status,
@@ -112,7 +111,7 @@ public class PlatformAdminOrganizationRequestService {
     }
 
     private void checkCanManage(String actingPlatformRole) {
-        if (!ORGANIZATION_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+        if (!rolePermissionService.isAllowed(actingPlatformRole, "ACTION_PARTNER_REQUEST_REVIEW")) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
     }

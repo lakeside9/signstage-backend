@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.core.i18n;
 
 import java.time.DateTimeException;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Currency;
 import java.util.Locale;
@@ -47,6 +48,18 @@ public final class InternationalizationDefaults {
         } catch (DateTimeException e) {
             throw new IllegalArgumentException("Invalid IANA time zone: " + candidate, e);
         }
+    }
+
+    /**
+     * 조직·행사처럼 자기 타임존을 갖지 않는 전역 카탈로그(단위 상품/플랜 판매가격·할인 기간)의
+     * "오늘" — signstage-docs business/organization-discount-override-security-and-validity-
+     * period-review.md 결정 #5(2026-09-10, 플랫폼 기본 타임존 채택)와
+     * business/billing-catalog-price-validity-period-review.md 결정 #10(같은 이슈)이
+     * 여기로 모인다. 조직 스코프가 있는 값(조직×플랜 할인 오버라이드)은 이 메서드 대신
+     * {@code organization.getDefaultTimeZoneId()} 기준 {@code LocalDate.now(ZoneId)}를 쓴다.
+     */
+    public static LocalDate today() {
+        return LocalDate.now(ZoneId.of(TIME_ZONE_ID));
     }
 
     public static String currencyCodeOrDefault(String value) {

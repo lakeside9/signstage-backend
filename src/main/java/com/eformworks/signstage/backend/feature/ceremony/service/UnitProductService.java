@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.ProductPriceInfo;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
@@ -77,7 +78,8 @@ public class UnitProductService {
 
         UnitProductType type = parseType(request.getType());
         checkEffectDefinitionIdsAllowed(request.getEffectDefinitionIds());
-        checkPeriodValid(request.getEffectiveFrom(), request.getEffectiveTo());
+        LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
+        checkPeriodValid(effectiveFrom, request.getEffectiveTo());
 
         UnitProduct unitProduct = UnitProduct.builder()
                 .type(type)
@@ -95,7 +97,7 @@ public class UnitProductService {
                 .salePrice(request.getSalePrice())
                 .taxCode(request.getTaxCode())
                 .active(request.getActive())
-                .effectiveFrom(request.getEffectiveFrom())
+                .effectiveFrom(effectiveFrom)
                 .effectiveTo(request.getEffectiveTo())
                 .build();
         unitProductPricePeriodRepository.save(period);
@@ -149,8 +151,9 @@ public class UnitProductService {
         checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
         UnitProduct unitProduct = unitProductRepository.findById(unitProductId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
-        checkPeriodValid(request.getEffectiveFrom(), request.getEffectiveTo());
-        checkNoOverlap(unitProductId, null, request.getEffectiveFrom(), request.getEffectiveTo());
+        LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
+        checkPeriodValid(effectiveFrom, request.getEffectiveTo());
+        checkNoOverlap(unitProductId, null, effectiveFrom, request.getEffectiveTo());
 
         UnitProductPricePeriod period = UnitProductPricePeriod.builder()
                 .unitProduct(unitProduct)
@@ -159,7 +162,7 @@ public class UnitProductService {
                 .salePrice(request.getSalePrice())
                 .taxCode(request.getTaxCode())
                 .active(request.getActive())
-                .effectiveFrom(request.getEffectiveFrom())
+                .effectiveFrom(effectiveFrom)
                 .effectiveTo(request.getEffectiveTo())
                 .build();
         unitProductPricePeriodRepository.save(period);
@@ -315,6 +318,18 @@ public class UnitProductService {
         }
     }
 
+    /**
+     * effectiveFrom 생략(null) 시 "오늘"로 채운다 — signstage-docs
+     * business/organization-discount-override-security-and-validity-period-review.md 결정
+     * #5(2026-09-10) — 단위 상품 카탈로그는 조직/행사 스코프가 없어 플랫폼 기본 타임존
+     * (Asia/Seoul)을 쓴다. 이미 있는 기간을 고치는 {@code UpdatePeriod}는 이 헬퍼를 쓰지
+     * 않는다 — 편집 중인 기간의 시작일을 묵시적으로 오늘로 되돌리면 안 되므로 여전히 필수
+     * 입력이다.
+     */
+    private LocalDate resolveEffectiveFrom(LocalDate requested) {
+        return requested != null ? requested : InternationalizationDefaults.today();
+    }
+
     private void checkPeriodValid(LocalDate effectiveFrom, LocalDate effectiveTo) {
         if (effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
             throw new ApplicationException(CeremonyErrorCode.DISCOUNT_PERIOD_INVALID);
@@ -338,7 +353,7 @@ public class UnitProductService {
     }
 
     private String computeStatus(boolean active, LocalDate effectiveFrom, LocalDate effectiveTo) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = InternationalizationDefaults.today();
         if (today.isBefore(effectiveFrom)) {
             return "PENDING";
         }
@@ -355,7 +370,7 @@ public class UnitProductService {
 
     private UnitProductDto.Response.UnitProductSummary toSummary(UnitProduct unitProduct) {
         Optional<UnitProductPricePeriod> effective =
-                unitProductPricePeriodRepository.findEffective(unitProduct.getId(), LocalDate.now());
+                unitProductPricePeriodRepository.findEffective(unitProduct.getId(), InternationalizationDefaults.today());
         return new UnitProductDto.Response.UnitProductSummary(
                 unitProduct.getId(),
                 unitProduct.getType().name(),

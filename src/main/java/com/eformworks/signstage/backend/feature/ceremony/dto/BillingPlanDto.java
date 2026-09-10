@@ -75,8 +75,12 @@ public final class BillingPlanDto {
             @NotNull
             private Boolean active;
 
-            /** 최초 기간의 시작일. */
-            @NotNull
+            /**
+             * 최초 기간의 시작일. 생략하면(null) 플랫폼 기본 타임존(Asia/Seoul) 기준 오늘로
+             * 채운다(signstage-docs
+             * business/organization-discount-override-security-and-validity-period-review.md
+             * 결정 #5, 2026-09-10).
+             */
             private LocalDate effectiveFrom;
 
             /** 최초 기간의 종료일(무기한이면 생략). */
@@ -119,7 +123,7 @@ public final class BillingPlanDto {
             @NotNull
             private Boolean active;
 
-            @NotNull
+            /** 생략하면(null) 플랫폼 기본 타임존(Asia/Seoul) 기준 오늘로 채운다({@link CreatePlan}과 같은 규칙). */
             private LocalDate effectiveFrom;
 
             private LocalDate effectiveTo;
