@@ -19,6 +19,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProd
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TaxPolicy;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductPricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
@@ -885,35 +886,72 @@ public class CeremonyService {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
+        QuoteCalculation calculation = buildQuoteCalculation(ceremony);
+        return new CeremonyDto.Response.EstimatedTotal(
+                calculation.planAppliedPrice(),
+                calculation.unitProductPurchasesTotal(),
+                calculation.subtotal(),
+                ceremony.getFinalDiscount().getDiscountType().name(),
+                ceremony.getFinalDiscount().getDiscountValue(),
+                ceremony.getCurrencyCode(),
+                ceremony.getCurrencyFractionDigits(),
+                calculation.netAmount(),
+                calculation.taxAmount(),
+                calculation.grossAmount(),
+                calculation.grossAmount()
+        );
+    }
+
+    /**
+     * {@link #calculateEstimatedTotal}(예상 청구 금액)과 {@code BillingQuoteService}(확정 견적,
+     * signstage-docs business/currency-tax-internationalization-review.md 9장)이 공유하는
+     * 계산 본체다 — 같은 계산이 두 곳에서 갈라지면 "예상"과 "확정"이 서로 다른 숫자를 보여주는
+     * 사고가 나므로 소스를 하나로 둔다. 계산 순서는 8장 그대로: 플랜 소계 → 플랜 할인(품목
+     * 할인) → 추가구매 합산 → subtotal → 행사 건별 재량 할인(ceremony 할인) → 세금(라인별
+     * 비례 배분 + 라인별 taxCode로 계산). 호출자가 이미 조직/행사 접근 권한을 검증했다고
+     * 전제한다(이 메서드 자체는 검증하지 않음).
+     */
+    QuoteCalculation buildQuoteCalculation(Ceremony ceremony) {
         CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
         LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
 
-        // ---- 플랜 소계 → 플랜 적용가(할인 한 번) → 줄별 재배분(세금 계산용) ----
-        BigDecimal planApplied = BigDecimal.ZERO;
-        List<TaxableLine> planTaxableLines = List.of();
+        // ---- 플랜 줄(품목 식별자 보존) → 플랜 할인(품목 할인) 비례 배분 ----
+        List<QuoteLineDraft> planLines = new ArrayList<>();
         BillingPlan plan = ceremony.getBillingPlan();
         if (plan != null) {
             Optional<CeremonyPlanHistory> snapshot =
                     ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
-            List<TaxableLine> rawPlanLines = snapshot
-                    .map(history -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(history.getId()).stream()
-                            .filter(line -> line.getIncludedQuantity() > 0)
-                            .map(line -> new TaxableLine(
-                                    line.getSnapshotSalePrice().multiply(BigDecimal.valueOf(line.getIncludedQuantity())),
-                                    line.getSnapshotTaxCode()
-                            ))
-                            .toList())
-                    // 이력이 없는 경우(플랜 확정 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
-                    .orElseGet(() -> billingPlanUnitProductRepository.findAllByBillingPlanId(plan.getId()).stream()
-                            .filter(source -> source.getIncludedQuantity() > 0)
-                            .flatMap(source -> unitProductPricePeriodRepository
-                                    .findEffective(source.getUnitProduct().getId(), asOfDate)
-                                    .map(period -> new TaxableLine(
-                                            period.getPriceInfo().getSalePrice().multiply(BigDecimal.valueOf(source.getIncludedQuantity())),
-                                            period.getPriceInfo().getTaxCode()
-                                    ))
-                                    .stream())
-                            .toList());
+            if (snapshot.isPresent()) {
+                for (CeremonyPlanHistoryUnitProduct line : ceremonyPlanHistoryUnitProductRepository
+                        .findAllByCeremonyPlanHistoryId(snapshot.get().getId())) {
+                    if (line.getIncludedQuantity() <= 0) {
+                        continue;
+                    }
+                    BigDecimal listAmount = line.getSnapshotSalePrice().multiply(BigDecimal.valueOf(line.getIncludedQuantity()));
+                    planLines.add(new QuoteLineDraft(
+                            "PLAN_UNIT_PRODUCT", line.getUnitProduct().getId(), line.getUnitProduct().getName(),
+                            line.getIncludedQuantity(), line.getSnapshotSalePrice(), listAmount, BigDecimal.ZERO,
+                            line.getSnapshotTaxCode()
+                    ));
+                }
+            } else {
+                // 이력이 없는 경우(플랜 확정 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
+                for (BillingPlanUnitProduct source : billingPlanUnitProductRepository.findAllByBillingPlanId(plan.getId())) {
+                    if (source.getIncludedQuantity() <= 0) {
+                        continue;
+                    }
+                    unitProductPricePeriodRepository.findEffective(source.getUnitProduct().getId(), asOfDate)
+                            .ifPresent(period -> {
+                                BigDecimal listAmount = period.getPriceInfo().getSalePrice()
+                                        .multiply(BigDecimal.valueOf(source.getIncludedQuantity()));
+                                planLines.add(new QuoteLineDraft(
+                                        "PLAN_UNIT_PRODUCT", source.getUnitProduct().getId(), source.getUnitProduct().getName(),
+                                        source.getIncludedQuantity(), period.getPriceInfo().getSalePrice(), listAmount,
+                                        BigDecimal.ZERO, period.getPriceInfo().getTaxCode()
+                                ));
+                            });
+                }
+            }
 
             DiscountType planDiscountType = snapshot.map(CeremonyPlanHistory::getPlanDiscountType)
                     .orElseGet(() -> billingPlanDiscountPeriodRepository.findEffective(plan.getId(), asOfDate)
@@ -922,105 +960,166 @@ public class CeremonyService {
                     .orElseGet(() -> billingPlanDiscountPeriodRepository.findEffective(plan.getId(), asOfDate)
                             .map(period -> period.getDiscount().getDiscountValue()).orElse(BigDecimal.ZERO));
 
-            BigDecimal planSubtotal = rawPlanLines.stream().map(TaxableLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
-            planApplied = moneyCalculator.applyDiscount(planSubtotal, planDiscountType, planDiscountValue, currencyPolicy);
-            planTaxableLines = allocateProportionally(rawPlanLines, planApplied, currencyPolicy);
+            BigDecimal planSubtotal = planLines.stream().map(QuoteLineDraft::listAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal planApplied = moneyCalculator.applyDiscount(planSubtotal, planDiscountType, planDiscountValue, currencyPolicy);
+            List<QuoteLineDraft> allocatedPlanLines = allocateItemDiscount(planLines, planApplied, currencyPolicy);
+            planLines.clear();
+            planLines.addAll(allocatedPlanLines);
         }
+        BigDecimal planAppliedPrice = planLines.stream()
+                .map(QuoteLineDraft::afterItemDiscount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // ---- 추가구매(승인분, 정가 그대로 — 할인 없음) ----
-        List<TaxableLine> purchaseLines = ceremonyUnitProductPurchaseLineRepository
-                .findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
+        // ---- 추가구매 줄(승인분, 정가 그대로 — 품목 할인 없음, 3.5절 결정) ----
+        List<QuoteLineDraft> purchaseLines = ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(ceremony.getId()).stream()
                 .filter(line -> line.getPurchase().getStatus() == PurchaseStatus.APPROVED)
-                .map(line -> new TaxableLine(
-                        line.getPurchasedSalePrice().multiply(BigDecimal.valueOf(line.getQuantity())),
-                        line.getPurchasedTaxCode()
-                ))
+                .map(line -> {
+                    BigDecimal listAmount = line.getPurchasedSalePrice().multiply(BigDecimal.valueOf(line.getQuantity()));
+                    return new QuoteLineDraft(
+                            "UNIT_PRODUCT_PURCHASE", line.getUnitProduct().getId(), line.getPurchasedName(),
+                            line.getQuantity(), line.getPurchasedSalePrice(), listAmount, BigDecimal.ZERO,
+                            line.getPurchasedTaxCode()
+                    );
+                })
                 .toList();
-        BigDecimal purchaseTotal = purchaseLines.stream().map(TaxableLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal purchaseTotal = purchaseLines.stream().map(QuoteLineDraft::listAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        List<TaxableLine> taxableLines = new ArrayList<>(planTaxableLines);
-        taxableLines.addAll(purchaseLines);
+        List<QuoteLineDraft> allLines = new ArrayList<>(planLines);
+        allLines.addAll(purchaseLines);
 
-        BigDecimal subtotal = planApplied.add(purchaseTotal);
+        BigDecimal subtotal = planAppliedPrice.add(purchaseTotal);
         BigDecimal netAmount = moneyCalculator.applyDiscount(subtotal, ceremony.getFinalDiscount(), currencyPolicy);
-        BigDecimal taxAmount = calculateLineRoundedTax(taxableLines, subtotal, netAmount, currencyPolicy, asOfDate);
+
+        List<QuoteLineDetail> lineDetails = allocateCeremonyDiscountAndTax(allLines, subtotal, netAmount, currencyPolicy, asOfDate);
+        BigDecimal taxAmount = lineDetails.stream().map(QuoteLineDetail::taxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal grossAmount = moneyCalculator.normalize(netAmount.add(taxAmount), currencyPolicy);
 
-        return new CeremonyDto.Response.EstimatedTotal(
-                planApplied,
-                purchaseTotal,
-                subtotal,
-                ceremony.getFinalDiscount().getDiscountType().name(),
-                ceremony.getFinalDiscount().getDiscountValue(),
-                ceremony.getCurrencyCode(),
-                ceremony.getCurrencyFractionDigits(),
-                netAmount,
-                taxAmount,
-                grossAmount,
-                grossAmount
-        );
+        return new QuoteCalculation(planAppliedPrice, purchaseTotal, subtotal, netAmount, taxAmount, grossAmount, lineDetails);
     }
 
     /**
-     * {@code total}을 {@code lines}의 세전 금액 비중대로 재배분한다 — 반올림 오차는 마지막
-     * 줄이 흡수한다. 플랜 소계에 플랜 할인을 적용한 뒤, 그 적용가를 원래 단위 상품 줄들에
-     * 세금 계산용으로 되돌려 배분하는 데 쓴다({@link #calculateLineRoundedTax}가 행사 건별
-     * 최종 할인에 쓰는 것과 같은 알고리즘).
+     * {@code appliedTotal}(품목 할인 적용 후 값)을 {@code lines}의 정가(listAmount) 비중대로
+     * 재배분해 각 줄의 {@code itemDiscountAmount}를 채운다 — 반올림 잔액은 마지막 줄이
+     * 흡수한다(결정적 배분 — 실행마다 같은 결과).
      */
-    private List<TaxableLine> allocateProportionally(List<TaxableLine> lines, BigDecimal total, CurrencyPolicy currencyPolicy) {
-        BigDecimal weightSum = lines.stream().map(TaxableLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (weightSum.signum() == 0) {
+    private List<QuoteLineDraft> allocateItemDiscount(List<QuoteLineDraft> lines, BigDecimal appliedTotal, CurrencyPolicy currencyPolicy) {
+        BigDecimal listSum = lines.stream().map(QuoteLineDraft::listAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (listSum.signum() == 0) {
             return lines;
         }
-        List<TaxableLine> allocated = new ArrayList<>();
+        List<QuoteLineDraft> allocated = new ArrayList<>();
         BigDecimal runningTotal = BigDecimal.ZERO;
         for (int index = 0; index < lines.size(); index++) {
+            QuoteLineDraft line = lines.get(index);
             BigDecimal share;
             if (index == lines.size() - 1) {
-                share = total.subtract(runningTotal);
+                share = appliedTotal.subtract(runningTotal);
             } else {
                 share = moneyCalculator.normalize(
-                        lines.get(index).amount().multiply(total).divide(weightSum, 12, currencyPolicy.roundingMode()),
+                        line.listAmount().multiply(appliedTotal).divide(listSum, 12, currencyPolicy.roundingMode()),
                         currencyPolicy
                 );
                 runningTotal = runningTotal.add(share);
             }
-            allocated.add(new TaxableLine(share, lines.get(index).taxCode()));
+            allocated.add(new QuoteLineDraft(
+                    line.lineType(), line.itemId(), line.itemName(), line.quantity(), line.unitListAmount(),
+                    line.listAmount(), line.listAmount().subtract(share), line.taxCode()
+            ));
         }
         return allocated;
     }
 
-    /** 행사 최종 할인 후 금액을 실제 구매 라인에 비례 배분하고 유효한 세금 정책으로 라인별 반올림한다. */
-    private BigDecimal calculateLineRoundedTax(
-            List<TaxableLine> lines,
+    /**
+     * 행사 건별 최종 할인 후 금액({@code netAmount})을 품목 할인 적용 후 금액 비중대로 라인에
+     * 배분해 {@code ceremonyDiscountAmount}/{@code netAmount}를 채우고, 라인별 유효 세금
+     * 정책으로 세액·합계를 계산한다({@code EXCLUSIVE} 세율 기준).
+     */
+    private List<QuoteLineDetail> allocateCeremonyDiscountAndTax(
+            List<QuoteLineDraft> lines,
             BigDecimal subtotal,
             BigDecimal netAmount,
             CurrencyPolicy currencyPolicy,
             LocalDate taxPointDate
     ) {
+        List<QuoteLineDetail> result = new ArrayList<>();
         if (subtotal.signum() == 0) {
-            return moneyCalculator.normalize(BigDecimal.ZERO, currencyPolicy);
+            return result;
         }
         BigDecimal allocated = BigDecimal.ZERO;
-        BigDecimal tax = BigDecimal.ZERO;
         for (int index = 0; index < lines.size(); index++) {
+            QuoteLineDraft line = lines.get(index);
+            BigDecimal afterItemDiscount = line.afterItemDiscount();
             BigDecimal lineNet;
             if (index == lines.size() - 1) {
                 lineNet = netAmount.subtract(allocated);
             } else {
                 lineNet = moneyCalculator.normalize(
-                        lines.get(index).amount().multiply(netAmount).divide(subtotal, 12, currencyPolicy.roundingMode()),
+                        afterItemDiscount.multiply(netAmount).divide(subtotal, 12, currencyPolicy.roundingMode()),
                         currencyPolicy
                 );
                 allocated = allocated.add(lineNet);
             }
-            BigDecimal rate = taxPolicyResolver.resolve("KR", lines.get(index).taxCode(), taxPointDate).getRatePercent();
-            tax = tax.add(moneyCalculator.calculateExclusiveTax(lineNet, rate, currencyPolicy));
+            BigDecimal ceremonyDiscount = afterItemDiscount.subtract(lineNet);
+            TaxPolicy taxPolicy = taxPolicyResolver.resolve("KR", line.taxCode(), taxPointDate);
+            BigDecimal taxAmount = moneyCalculator.calculateExclusiveTax(lineNet, taxPolicy.getRatePercent(), currencyPolicy);
+            BigDecimal grossAmount = moneyCalculator.normalize(lineNet.add(taxAmount), currencyPolicy);
+            result.add(new QuoteLineDetail(
+                    line.lineType(), line.itemId(), line.itemName(), line.quantity(), line.unitListAmount(),
+                    line.listAmount(), line.itemDiscountAmount(), ceremonyDiscount, lineNet,
+                    line.taxCode(), taxPolicy.getCategory().name(), taxPolicy.getRatePercent(), taxPolicy.getPriceInclusion(),
+                    taxAmount, grossAmount
+            ));
         }
-        return moneyCalculator.normalize(tax, currencyPolicy);
+        return result;
     }
 
-    private record TaxableLine(BigDecimal amount, String taxCode) {
+    /** {@link #buildQuoteCalculation}의 계산 결과 헤더 + 라인 상세 — 확정 견적 스냅샷의 원본. */
+    record QuoteCalculation(
+            BigDecimal planAppliedPrice,
+            BigDecimal unitProductPurchasesTotal,
+            BigDecimal subtotal,
+            BigDecimal netAmount,
+            BigDecimal taxAmount,
+            BigDecimal grossAmount,
+            List<QuoteLineDetail> lines
+    ) {
+    }
+
+    /** 품목 할인 배분 전 단계의 줄 초안 — {@code itemDiscountAmount}는 {@link #allocateItemDiscount} 전엔 0. */
+    private record QuoteLineDraft(
+            String lineType,
+            Long itemId,
+            String itemName,
+            int quantity,
+            BigDecimal unitListAmount,
+            BigDecimal listAmount,
+            BigDecimal itemDiscountAmount,
+            String taxCode
+    ) {
+        BigDecimal afterItemDiscount() {
+            return listAmount.subtract(itemDiscountAmount);
+        }
+    }
+
+    /** {@code billing_quote_lines} 한 줄과 1:1로 대응하는 완전한 계산 결과. */
+    record QuoteLineDetail(
+            String lineType,
+            Long itemId,
+            String itemName,
+            int quantity,
+            BigDecimal unitListAmount,
+            BigDecimal listAmount,
+            BigDecimal itemDiscountAmount,
+            BigDecimal ceremonyDiscountAmount,
+            BigDecimal netAmount,
+            String taxCode,
+            String taxCategory,
+            BigDecimal taxRatePercent,
+            String priceInclusion,
+            BigDecimal taxAmount,
+            BigDecimal grossAmount
+    ) {
     }
 
     /**

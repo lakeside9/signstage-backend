@@ -24,6 +24,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProd
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TaxCategory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TaxPolicy;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductCategory;
@@ -202,6 +203,8 @@ class CeremonyServiceTest {
         given(ceremonyUnitProductPurchaseLineRepository.findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(10L)).willReturn(List.of());
         given(taxPolicyResolver.resolve(any(), any(), any())).willReturn(taxPolicy);
         given(taxPolicy.getRatePercent()).willReturn(new BigDecimal("10.0000"));
+        given(taxPolicy.getCategory()).willReturn(TaxCategory.STANDARD);
+        given(taxPolicy.getPriceInclusion()).willReturn("EXCLUSIVE");
 
         CeremonyDto.Response.EstimatedTotal result =
                 ceremonyService.calculateEstimatedTotal(ORGANIZATION_ID, 10L, CURRENT_USER_ID);

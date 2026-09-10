@@ -403,6 +403,21 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_SUBSCRIPTION_EXHAUSTED",
             HttpStatus.CONFLICT,
             "구독으로 만들 수 있는 행사 건수를 모두 사용했습니다."
+    ),
+    /**
+     * 확정 견적(signstage-docs business/currency-tax-internationalization-review.md 9/10장,
+     * 2026-09-10 구현)의 오류 코드.
+     */
+    QUOTE_NOT_FOUND("CEREMONY_QUOTE_NOT_FOUND", HttpStatus.NOT_FOUND, "확정 견적을 찾을 수 없습니다."),
+    QUOTE_ALREADY_VOID(
+            "CEREMONY_QUOTE_ALREADY_VOID",
+            HttpStatus.CONFLICT,
+            "이미 무효화된 견적입니다."
+    ),
+    QUOTE_EMPTY(
+            "CEREMONY_QUOTE_EMPTY",
+            HttpStatus.CONFLICT,
+            "플랜이 없거나 청구할 항목이 없는 행사는 견적을 확정할 수 없습니다."
     );
 
     private final String code;
