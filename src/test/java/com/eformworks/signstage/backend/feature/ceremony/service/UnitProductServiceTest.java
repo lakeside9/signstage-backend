@@ -13,6 +13,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinition;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectTarget;
@@ -186,7 +187,7 @@ class UnitProductServiceTest {
     @DisplayName("목록 조회 — canDelete는 사용 이력이 전혀 없을 때만 true다")
     void findUnitProducts_computesCanDeleteFromUsage() {
         UnitProduct unitProduct = unitProduct();
-        given(unitProductRepository.findAll()).willReturn(java.util.List.of(unitProduct));
+        given(unitProductRepository.findAllByOrderByDisplayOrderAscIdAsc()).willReturn(java.util.List.of(unitProduct));
         given(unitProductPricePeriodRepository.findEffective(any(), any())).willReturn(Optional.empty());
         given(ceremonyEffectDefinitionOptionRepository.findAllByUnitProductId(UNIT_PRODUCT_ID)).willReturn(java.util.List.of());
         given(ceremonyUnitProductPurchaseLineRepository.countByUnitProduct_IdAndPurchase_Status(any(), any())).willReturn(0L);
@@ -312,5 +313,43 @@ class UnitProductServiceTest {
 
         verify(ceremonyEffectDefinitionOptionRepository).deleteAllByUnitProductId(UNIT_PRODUCT_ID);
         verify(ceremonyEffectDefinitionOptionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("순서 변경 — 요청에 담긴 각 상품의 displayOrder를 그대로 반영한다")
+    void updateDisplayOrders_updatesEachProduct() {
+        UnitProduct first = unitProduct();
+        UnitProduct second = UnitProduct.builder()
+                .type(UnitProductType.TEMPLATES).name("템플릿").category(UnitProductCategory.ESSENTIAL).build();
+        ReflectionTestUtils.setField(second, "id", 902L);
+        given(unitProductRepository.findAllById(java.util.List.of(UNIT_PRODUCT_ID, 902L)))
+                .willReturn(java.util.List.of(first, second));
+        given(unitProductRepository.findAllByOrderByDisplayOrderAscIdAsc()).willReturn(java.util.List.of(second, first));
+
+        DisplayOrderRequest.UpdateDisplayOrders request = new DisplayOrderRequest.UpdateDisplayOrders(java.util.List.of(
+                new DisplayOrderRequest.Item(UNIT_PRODUCT_ID, 1),
+                new DisplayOrderRequest.Item(902L, 0)
+        ));
+
+        var result = unitProductService.updateDisplayOrders("PLATFORM_OPS", 1L, request);
+
+        assertThat(first.getDisplayOrder()).isEqualTo(1);
+        assertThat(second.getDisplayOrder()).isEqualTo(0);
+        assertThat(result).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("순서 변경 — 존재하지 않는 id가 섞여 있으면 UNIT_PRODUCT_NOT_FOUND")
+    void updateDisplayOrders_throwsWhenNotFound() {
+        given(unitProductRepository.findAllById(java.util.List.of(UNIT_PRODUCT_ID))).willReturn(java.util.List.of());
+
+        DisplayOrderRequest.UpdateDisplayOrders request = new DisplayOrderRequest.UpdateDisplayOrders(
+                java.util.List.of(new DisplayOrderRequest.Item(UNIT_PRODUCT_ID, 0))
+        );
+
+        assertThatThrownBy(() -> unitProductService.updateDisplayOrders("PLATFORM_OPS", 1L, request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND);
     }
 }

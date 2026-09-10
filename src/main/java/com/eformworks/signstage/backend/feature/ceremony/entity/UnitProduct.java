@@ -60,6 +60,17 @@ public class UnitProduct extends BaseEntity {
     @Column(name = "exclusivity_group", length = 50)
     private String exclusivityGroup;
 
+    /**
+     * 카탈로그 목록 화면의 표시 순서(2026-09-10, 사용자 요청 — {@code Signer}/{@code Template}/
+     * {@code CeremonyEvent}와 같은 displayOrder 일괄 재정렬 패턴). 위/아래 이동 버튼이 전체
+     * 목록을 다시 인덱싱해 저장한다({@code UnitProductService#updateDisplayOrders}). 동률이면
+     * id 오름차순으로 정렬한다({@code UnitProductRepository.findAllByOrderByDisplayOrderAscIdAsc})
+     * — 새로 등록되는 상품은 기본값 0을 받아, 순서를 한 번도 안 바꾼 다른 0짜리 상품들 중
+     * id가 가장 크므로 자연스럽게 목록 맨 끝에 온다.
+     */
+    @Column(name = "display_order", nullable = false)
+    private Integer displayOrder = 0;
+
     @Builder
     private UnitProduct(UnitProductType type, String name, UnitProductCategory category, String exclusivityGroup) {
         this.type = type;
@@ -77,5 +88,12 @@ public class UnitProduct extends BaseEntity {
         this.name = name;
         this.category = category;
         this.exclusivityGroup = exclusivityGroup;
+    }
+
+    /** 단위 상품 목록의 위/아래 이동 버튼이 호출한다 — {@code null}이면 바꾸지 않는다. */
+    public void updateDisplayOrder(Integer displayOrder) {
+        if (displayOrder != null) {
+            this.displayOrder = displayOrder;
+        }
     }
 }

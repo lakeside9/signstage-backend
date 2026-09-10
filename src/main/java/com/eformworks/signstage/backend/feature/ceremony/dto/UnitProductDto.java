@@ -200,6 +200,8 @@ public final class UnitProductDto {
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;
             private final String periodStatus;
+            /** 카탈로그 목록 화면의 표시 순서 — 위/아래 이동 버튼으로 바꾼다(2026-09-10). */
+            private final Integer displayOrder;
             /**
              * 삭제 가능 여부 — 플랜 구성(현재/이력 포함)·행사 플랜 스냅샷·추가구매·행사 적용·
              * 이벤트 효과 묶음 매핑 어디에도 한 번도 등장한 적이 없어야 true다

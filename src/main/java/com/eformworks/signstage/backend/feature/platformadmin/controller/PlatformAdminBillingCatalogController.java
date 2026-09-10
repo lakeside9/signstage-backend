@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.BillingPlanDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.BillingPlanService;
 import com.eformworks.signstage.backend.feature.ceremony.service.UnitProductService;
@@ -144,6 +145,20 @@ public class PlatformAdminBillingCatalogController {
     ) {
         UnitProductDto.Response.UnitProductSummary response =
                 unitProductService.createUnitProduct(currentUser.platformRole(), currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "단위 상품 표시 순서 일괄 변경",
+            description = "PLATFORM_OPS 이상만 호출할 수 있다. 목록 화면의 위/아래 이동 버튼이 전체 목록을 원하는 순서로 다시 인덱싱해 통째로 보낸다."
+    )
+    @PutMapping("/unit-products/display-orders")
+    public ApiResponse<List<UnitProductDto.Response.UnitProductSummary>> updateUnitProductDisplayOrders(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @Valid @RequestBody DisplayOrderRequest.UpdateDisplayOrders request
+    ) {
+        List<UnitProductDto.Response.UnitProductSummary> response =
+                unitProductService.updateDisplayOrders(currentUser.platformRole(), currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
