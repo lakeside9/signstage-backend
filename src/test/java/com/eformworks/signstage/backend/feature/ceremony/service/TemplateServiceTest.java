@@ -8,7 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
@@ -100,7 +100,7 @@ class TemplateServiceTest {
         given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
         given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
                 .willReturn(Member.builder().role(MemberRole.OWNER).build());
-        given(ceremonyService.calculateEffectiveCapacity(ceremony, CapacityType.TEMPLATES)).willReturn(10);
+        given(ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.TEMPLATES)).willReturn(10);
         given(templateRepository.countByCeremonyId(CEREMONY_ID)).willReturn(1L);
         given(templateRepository.findById(TEMPLATE_ID)).willReturn(Optional.of(original));
 

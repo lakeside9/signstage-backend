@@ -88,7 +88,7 @@ public class ProjectorService {
         List<String> appliedOptionalFeatureCodes = ceremonyEventOptionalFeatureRepository
                 .findAllByCeremonyEventId(event.getId())
                 .stream()
-                .map(applied -> applied.getOptionalFeature().getCode().name())
+                .map(applied -> applied.getUnitProduct().getType().name())
                 .toList();
 
         return new ProjectorDto.Response.ProjectorContext(

@@ -3,29 +3,19 @@ package com.eformworks.signstage.backend.core.jpa;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanHistory;
-import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanHistoryCapacity;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOnHistory;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanHistoryUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventLog;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryCapacity;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryCapacityAddOn;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryOptionalFeature;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureHistory;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationBillingPlanDiscountHistory;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationCapacityAddOnDiscountHistory;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationOptionalFeatureDiscountHistory;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanHistoryCapacityRepository;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductHistory;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanHistoryRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnHistoryRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityAddOnRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureHistoryRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationBillingPlanDiscountHistoryRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationCapacityAddOnDiscountHistoryRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationOptionalFeatureDiscountHistoryRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductHistoryRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.LoginHistory;
 import com.eformworks.signstage.backend.feature.identity.entity.UserHistory;
 import com.eformworks.signstage.backend.feature.identity.repository.LoginHistoryRepository;
@@ -43,17 +33,12 @@ class AppendOnlyHistoryContractTest {
 
     private static final List<Class<?>> APPEND_ONLY_ENTITIES = List.of(
             BillingPlanHistory.class,
-            BillingPlanHistoryCapacity.class,
-            CapacityAddOnHistory.class,
+            BillingPlanHistoryUnitProduct.class,
             CeremonyEventLog.class,
             CeremonyPlanHistory.class,
-            CeremonyPlanHistoryCapacity.class,
-            CeremonyPlanHistoryCapacityAddOn.class,
-            CeremonyPlanHistoryOptionalFeature.class,
-            OptionalFeatureHistory.class,
+            CeremonyPlanHistoryUnitProduct.class,
+            UnitProductHistory.class,
             OrganizationBillingPlanDiscountHistory.class,
-            OrganizationCapacityAddOnDiscountHistory.class,
-            OrganizationOptionalFeatureDiscountHistory.class,
             LoginHistory.class,
             UserHistory.class,
             OrganizationHistory.class,
@@ -62,17 +47,12 @@ class AppendOnlyHistoryContractTest {
 
     private static final List<Class<?>> APPEND_ONLY_REPOSITORIES = List.of(
             BillingPlanHistoryRepository.class,
-            BillingPlanHistoryCapacityRepository.class,
-            CapacityAddOnHistoryRepository.class,
+            BillingPlanHistoryUnitProductRepository.class,
             CeremonyEventLogRepository.class,
-            CeremonyPlanHistoryCapacityAddOnRepository.class,
-            CeremonyPlanHistoryCapacityRepository.class,
-            CeremonyPlanHistoryOptionalFeatureRepository.class,
+            CeremonyPlanHistoryUnitProductRepository.class,
             CeremonyPlanHistoryRepository.class,
-            OptionalFeatureHistoryRepository.class,
+            UnitProductHistoryRepository.class,
             OrganizationBillingPlanDiscountHistoryRepository.class,
-            OrganizationCapacityAddOnDiscountHistoryRepository.class,
-            OrganizationOptionalFeatureDiscountHistoryRepository.class,
             LoginHistoryRepository.class,
             UserHistoryRepository.class,
             OrganizationHistoryRepository.class,

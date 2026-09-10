@@ -13,9 +13,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 할인 표현(discountType/discountValue) 값 객체. 카탈로그 가격정보({@link CatalogPriceInfo})와
- * 조직×품목 할인 오버라이드({@code OrganizationBillingPlanDiscount} 등 3종 + 그 이력 3종)가
- * 전부 이 쌍을 독립적으로 갖고 있던 걸 하나로 모았다 — signstage-docs
+ * 할인 표현(discountType/discountValue) 값 객체. 옛 카탈로그 가격정보({@code CatalogPriceInfo},
+ * 지금은 {@link BillingPlanDiscountPeriod}만 할인을 갖는 구조로 바뀌며 삭제됨, signstage-docs
+ * business/billing-catalog-unit-product-model-redesign-review.md 2026-09-10)와 조직×품목 할인
+ * 오버라이드({@code OrganizationBillingPlanDiscount} 등 3종 + 그 이력 3종)가 전부 이 쌍을
+ * 독립적으로 갖고 있던 걸 하나로 모았다 — signstage-docs
  * business/billing-catalog-zero-base-schema-redesign-review.md 결정 #4(2026-09-08).
  *
  * <p>조직×품목 오버라이드 쪽은 카탈로그보다 좁은 정밀도(precision 12, scale 2)를 써왔으므로

@@ -4,48 +4,36 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
-import com.eformworks.signstage.backend.feature.ceremony.dto.CapacityAddOnDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
-import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
-import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanCapacity;
-import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanCapacityAddOn;
-import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanPricePeriod;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOnPricePeriod;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanDiscountPeriod;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyAssignment;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyCapacityPurchase;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOptionalFeaturePurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryCapacity;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryCapacityAddOn;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryOptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchase;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeaturePricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductPricePeriod;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityAddOnRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanPricePeriodRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanDiscountPeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnPricePeriodRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOptionalFeaturePurchaseRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityAddOnRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeaturePricePeriodRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductPricePeriodRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
@@ -64,10 +52,12 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -78,11 +68,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 행사 마스터(Ceremony). signstage-docs business/ceremony-feature-migration-review.md
- * 4.1/4.6/4.7절, business/ceremony-billing-options-review.md 4.10/4.11절 참고.
+ * 4.1/4.6/4.7절, business/billing-catalog-unit-product-model-redesign-review.md(2026-09-10,
+ * 2단계) 참고.
  *
  * <p>조직 스코핑은 JWT 클레임이 아니라 매 요청마다 organization_members를 직접 조회해
  * 판단한다(기존 {@code MemberService}와 같은 패턴). package-private 헬퍼 일부는
  * {@link CeremonyEventService}가 같은 패키지에서 공유한다.
+ *
+ * <p>과금 관련 로직은 2단계 재설계로 전면 재작성됐다 — 옛 {@code CapacityAddOn}/
+ * {@code OptionalFeature} 카탈로그와 {@code CeremonyCapacityPurchase}/
+ * {@code CeremonyOptionalFeaturePurchase} 2종 구매를 {@link UnitProduct} 하나와
+ * {@link CeremonyUnitProductPurchase}(+Line) 장바구니형 구매로 통합했다. 플랜은 더 이상 자기
+ * 가격을 갖지 않고, "오늘 가격"은 {@link BillingPlanUnitProduct} 구성으로부터 조회 시점에
+ * 계산된다.
  */
 @Service
 @RequiredArgsConstructor
@@ -91,24 +89,18 @@ public class CeremonyService {
 
     private final CeremonyRepository ceremonyRepository;
     private final CeremonyAssignmentRepository ceremonyAssignmentRepository;
-    private final CeremonyCapacityPurchaseRepository ceremonyCapacityPurchaseRepository;
+    private final CeremonyUnitProductPurchaseRepository ceremonyUnitProductPurchaseRepository;
+    private final CeremonyUnitProductPurchaseLineRepository ceremonyUnitProductPurchaseLineRepository;
     private final CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
-    private final CeremonyOptionalFeaturePurchaseRepository ceremonyOptionalFeaturePurchaseRepository;
     private final CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
-    private final CeremonyPlanHistoryOptionalFeatureRepository ceremonyPlanHistoryOptionalFeatureRepository;
-    private final CeremonyPlanHistoryCapacityAddOnRepository ceremonyPlanHistoryCapacityAddOnRepository;
-    private final CeremonyPlanHistoryCapacityRepository ceremonyPlanHistoryCapacityRepository;
-    private final BillingPlanCapacityRepository billingPlanCapacityRepository;
+    private final CeremonyPlanHistoryUnitProductRepository ceremonyPlanHistoryUnitProductRepository;
+    private final BillingPlanUnitProductRepository billingPlanUnitProductRepository;
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final BillingPlanRepository billingPlanRepository;
-    private final BillingPlanPricePeriodRepository billingPlanPricePeriodRepository;
-    private final BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
-    private final BillingPlanCapacityAddOnRepository billingPlanCapacityAddOnRepository;
-    private final CapacityAddOnRepository capacityAddOnRepository;
-    private final CapacityAddOnPricePeriodRepository capacityAddOnPricePeriodRepository;
-    private final OptionalFeatureRepository optionalFeatureRepository;
-    private final OptionalFeaturePricePeriodRepository optionalFeaturePricePeriodRepository;
+    private final BillingPlanDiscountPeriodRepository billingPlanDiscountPeriodRepository;
+    private final UnitProductRepository unitProductRepository;
+    private final UnitProductPricePeriodRepository unitProductPricePeriodRepository;
     private final UserRepository userRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     private final OrganizationDiscountService organizationDiscountService;
@@ -131,8 +123,8 @@ public class CeremonyService {
         // Ceremony.timeZoneId는 organization.getDefaultTimeZoneId()를 그대로 물려받는다 — 아직
         // Ceremony가 없으니 organization에서 같은 값을 미리 계산해 쓴다.
         LocalDate asOfDate = LocalDate.now(ZoneId.of(organization.getDefaultTimeZoneId()));
-        BillingPlanPricePeriod planPeriod = resolveSellablePlanPeriod(plan, asOfDate);
-        checkCurrencyMatches(organization.getBillingCurrencyCode(), planPeriod.getPriceInfo().getCurrencyCode());
+        BillingPlanDiscountPeriod planPeriod = resolveSellablePlanPeriod(plan, asOfDate);
+        checkCurrencyMatches(organization.getBillingCurrencyCode(), resolvePlanCurrency(plan, asOfDate));
 
         Ceremony ceremony = Ceremony.builder()
                 .organization(organization)
@@ -274,8 +266,8 @@ public class CeremonyService {
         BillingPlan newPlan = billingPlanRepository.findById(request.getBillingPlanId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
         LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
-        BillingPlanPricePeriod newPlanPeriod = resolveSellablePlanPeriod(newPlan, asOfDate);
-        checkCurrencyMatches(ceremony.getCurrencyCode(), newPlanPeriod.getPriceInfo().getCurrencyCode());
+        BillingPlanDiscountPeriod newPlanPeriod = resolveSellablePlanPeriod(newPlan, asOfDate);
+        checkCurrencyMatches(ceremony.getCurrencyCode(), resolvePlanCurrency(newPlan, asOfDate));
 
         ceremony.changePlan(newPlan);
         recordPlanHistory(ceremony, newPlan, newPlanPeriod, asOfDate);
@@ -318,121 +310,86 @@ public class CeremonyService {
                 .toList();
     }
 
+    /**
+     * 단위 상품 추가구매 — 옛 {@code purchaseCapacity}/{@code purchaseOptionalFeature} 통합
+     * (signstage-docs business/billing-catalog-unit-product-model-redesign-review.md 결정,
+     * 2026-09-10, 3.4절). 한 요청에 여러 줄을 담을 수 있고(장바구니형), 요청 전체가 PENDING
+     * 하나로 생겨 승인/반려도 항상 전체 단위로 처리된다. 토글형({@code EVENT_EFFECT_BUNDLE})
+     * 단위 상품은 수량이 0/1 관례를 따라야 하고(3.6절), 이미 대기중/승인된 요청이 있으면
+     * 재구매할 수 없다 — 그 외 종류(용량 계열)는 여러 번 구매해 누적할 수 있다(옛
+     * {@code CeremonyCapacityPurchase}와 같은 동작).
+     */
     @Transactional
-    public CeremonyDto.Response.CapacityPurchaseSummary purchaseCapacity(
+    public CeremonyDto.Response.UnitProductPurchaseSummary purchaseUnitProducts(
             Long organizationId,
             Long ceremonyId,
             Long currentUserId,
-            CeremonyDto.Request.PurchaseCapacity request
+            CeremonyDto.Request.PurchaseUnitProducts request
     ) {
         Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         checkCeremonyEditable(ceremony);
 
-        CapacityAddOn addOn = capacityAddOnRepository.findById(request.getCapacityAddOnId())
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_FOUND));
-        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
-        CapacityAddOnPricePeriod addOnPeriod = resolveSellableAddOnPeriod(addOn, asOfDate);
-        checkCurrencyMatches(ceremony.getCurrencyCode(), addOnPeriod.getPriceInfo().getCurrencyCode());
-        // 안 A(구매 가능 상품 큐레이션) — 이 Ceremony의 플랜에서 구매 후보로 열어두지 않은 상품은
-        // 거부한다. 플랜이 없는 행사(4.8절 예외)는 제한 없이 전부 허용한다 — signstage-docs
-        // business/optional-feature-display-scope-and-plan-capacity-addon-review.md 5장.
-        if (ceremony.getBillingPlan() != null
-                && !retrieveAvailableCapacityAddOnIds(ceremony).contains(addOn.getId())) {
-            throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_NOT_AVAILABLE_FOR_PLAN);
-        }
-
-        // 조직×용량추가구매 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다 —
-        // recordPlanHistory와 같은 원칙(4.1절, 2026-08-21 재검토).
-        OrganizationDiscountService.EffectiveDiscount discount = organizationDiscountService.resolveCapacityAddOnDiscount(
-                ceremony.getOrganization(), addOn.getId(),
-                addOnPeriod.getPriceInfo().getDiscount().getDiscountType(), addOnPeriod.getPriceInfo().getDiscount().getDiscountValue(),
-                asOfDate
-        );
-
-        CeremonyCapacityPurchase purchase = CeremonyCapacityPurchase.builder()
-                .ceremony(ceremony)
-                .capacityAddOn(addOn)
-                .quantity(request.getQuantity())
-                .currencyCode(addOnPeriod.getPriceInfo().getCurrencyCode())
-                .purchasedUnitAmount(addOn.getUnitAmount())
-                .purchasedSecondaryUnitAmount(addOn.getSecondaryUnitAmount())
-                .purchasedSalePrice(addOnPeriod.getPriceInfo().getSalePrice())
-                .purchasedDiscountType(discount.type())
-                .purchasedDiscountValue(discount.value())
-                .purchasedTaxCode(addOnPeriod.getPriceInfo().getTaxCode())
-                .build();
-        ceremonyCapacityPurchaseRepository.save(purchase);
-
-        return toCapacitySummary(purchase);
-    }
-
-    /** 요청자 본인 이력 조회 — 대기중/승인됨/반려됨 전부 보여준다. */
-    public List<CeremonyDto.Response.CapacityPurchaseSummary> findCapacityPurchases(
-            Long organizationId,
-            Long ceremonyId,
-            Long currentUserId
-    ) {
-        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
-        checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
-
-        return ceremonyCapacityPurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
-                .map(this::toCapacitySummary)
+        List<Long> requestedIds = request.getLines().stream()
+                .map(CeremonyDto.Request.PurchaseUnitProductLine::getUnitProductId)
                 .toList();
-    }
-
-    @Transactional
-    public CeremonyDto.Response.OptionalFeaturePurchaseSummary purchaseOptionalFeature(
-            Long organizationId,
-            Long ceremonyId,
-            Long currentUserId,
-            CeremonyDto.Request.PurchaseOptionalFeature request
-    ) {
-        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
-        checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        checkCeremonyEditable(ceremony);
-
-        OptionalFeature feature = optionalFeatureRepository.findById(request.getOptionalFeatureId())
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_FOUND));
-        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
-        OptionalFeaturePricePeriod featurePeriod = resolveSellableFeaturePeriod(feature, asOfDate);
-        checkCurrencyMatches(ceremony.getCurrencyCode(), featurePeriod.getPriceInfo().getCurrencyCode());
-
-        boolean alreadyRequested = ceremonyOptionalFeaturePurchaseRepository.existsByCeremonyIdAndOptionalFeatureIdAndStatusIn(
-                ceremonyId, feature.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
-        );
-        if (alreadyRequested) {
-            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_ALREADY_PURCHASED);
+        if (requestedIds.size() != requestedIds.stream().distinct().count()) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
 
-        // 조직×선택옵션 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다 —
-        // recordPlanHistory와 같은 원칙(4.1절, 2026-08-21 재검토).
-        OrganizationDiscountService.EffectiveDiscount discount = organizationDiscountService.resolveOptionalFeatureDiscount(
-                ceremony.getOrganization(), feature.getId(),
-                featurePeriod.getPriceInfo().getDiscount().getDiscountType(), featurePeriod.getPriceInfo().getDiscount().getDiscountValue(),
-                asOfDate
-        );
+        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
+        Set<Long> purchasableIds = ceremony.getBillingPlan() != null
+                ? new HashSet<>(retrievePurchasableUnitProductIds(ceremony))
+                : null;
 
-        CeremonyOptionalFeaturePurchase purchase = CeremonyOptionalFeaturePurchase.builder()
-                .ceremony(ceremony)
-                .optionalFeature(feature)
-                .currencyCode(featurePeriod.getPriceInfo().getCurrencyCode())
-                .purchasedName(feature.getName())
-                .purchasedSalePrice(featurePeriod.getPriceInfo().getSalePrice())
-                .purchasedDiscountType(discount.type())
-                .purchasedDiscountValue(discount.value())
-                .purchasedTaxCode(featurePeriod.getPriceInfo().getTaxCode())
-                .build();
-        ceremonyOptionalFeaturePurchaseRepository.save(purchase);
+        CeremonyUnitProductPurchase purchase = CeremonyUnitProductPurchase.builder().ceremony(ceremony).build();
+        ceremonyUnitProductPurchaseRepository.save(purchase);
 
-        return toOptionalFeatureSummary(purchase);
+        List<CeremonyUnitProductPurchaseLine> lines = new ArrayList<>();
+        for (CeremonyDto.Request.PurchaseUnitProductLine line : request.getLines()) {
+            UnitProduct unitProduct = unitProductRepository.findById(line.getUnitProductId())
+                    .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
+            UnitProductPricePeriod period = resolveSellableUnitProductPeriod(unitProduct, asOfDate);
+            checkCurrencyMatches(ceremony.getCurrencyCode(), period.getPriceInfo().getCurrencyCode());
+
+            // 안 A(구매 가능 상품 큐레이션) — 이 Ceremony의 플랜에서 구매 후보로 열어두지 않은
+            // 상품은 거부한다. 플랜이 없는 행사(4.8절 예외)는 제한 없이 전부 허용한다.
+            if (purchasableIds != null && !purchasableIds.contains(unitProduct.getId())) {
+                throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_AVAILABLE_FOR_PLAN);
+            }
+
+            if (unitProduct.getType() == UnitProductType.EVENT_EFFECT_BUNDLE) {
+                if (line.getQuantity() > 1) {
+                    throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+                }
+                boolean alreadyRequested = ceremonyUnitProductPurchaseLineRepository
+                        .existsByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(
+                                ceremonyId, unitProduct.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
+                        );
+                if (alreadyRequested) {
+                    throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_ALREADY_PURCHASED);
+                }
+            }
+
+            lines.add(ceremonyUnitProductPurchaseLineRepository.save(
+                    CeremonyUnitProductPurchaseLine.builder()
+                            .purchase(purchase)
+                            .unitProduct(unitProduct)
+                            .quantity(line.getQuantity())
+                            .currencyCode(period.getPriceInfo().getCurrencyCode())
+                            .purchasedName(unitProduct.getName())
+                            .purchasedSalePrice(period.getPriceInfo().getSalePrice())
+                            .purchasedTaxCode(period.getPriceInfo().getTaxCode())
+                            .build()
+            ));
+        }
+
+        return toUnitProductPurchaseSummary(purchase, lines);
     }
 
     /** 요청자 본인 이력 조회 — 대기중/승인됨/반려됨 전부 보여준다. */
-    public List<CeremonyDto.Response.OptionalFeaturePurchaseSummary> findOptionalFeaturePurchases(
+    public List<CeremonyDto.Response.UnitProductPurchaseSummary> findUnitProductPurchases(
             Long organizationId,
             Long ceremonyId,
             Long currentUserId
@@ -441,25 +398,28 @@ public class CeremonyService {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
-        return ceremonyOptionalFeaturePurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
-                .map(this::toOptionalFeatureSummary)
+        return ceremonyUnitProductPurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
+                .map(purchase -> toUnitProductPurchaseSummary(
+                        purchase,
+                        ceremonyUnitProductPurchaseLineRepository.findAllByPurchaseIdOrderByIdAsc(purchase.getId())
+                ))
                 .toList();
     }
 
     /**
-     * 이 Ceremony가 하위 행사에 실제로 적용할 수 있는 선택옵션(플랜 포함분 + 승인된 추가구매)
-     * 카탈로그만 필터링해 돌려준다 — {@link #retrievePurchasedOptionalFeatureIds}와 같은 계산을
-     * 쓴다. 하위 행사 등록/수정/상세 세 화면이 전부 이 목록으로 체크박스를 채운다(구매 안 한
-     * 옵션을 보여줬다가 저장 시점에야 실패를 아는 예전 방식의 한계를 없앤다).
+     * 이 Ceremony가 하위 행사에 실제로 적용할 수 있는 단위 상품(플랜 포함분 + 승인된 추가구매)
+     * 카탈로그만 필터링해 돌려준다 — {@link #retrieveApplicableUnitProductIds}와 같은 계산을
+     * 쓴다. {@code type=EVENT_EFFECT_BUNDLE}로 범위를 좁힌다 — CeremonyEvent에 켜고 끄는
+     * 개념이 있는 종류는 지금 이것뿐이다(signstage-docs
+     * business/billing-catalog-unit-product-model-redesign-review.md 3.6절). 하위 행사
+     * 등록/수정/상세 세 화면이 전부 이 목록으로 체크박스를 채운다.
      *
-     * <p>개별 추가구매(승인됨)한 옵션은 이름/가격을 구매 시점 스냅샷({@code purchasedName}/
+     * <p>개별 추가구매(승인됨)한 상품은 이름/가격을 구매 시점 스냅샷({@code purchasedName}/
      * {@code purchasedSalePrice} 등)으로 보여준다 — 카탈로그 관리자가 나중에 이름을 바꿔도
-     * 이미 구매한 옵션의 표시는 안 바뀐다(signstage-docs
-     * business/ceremony-billing-options-review.md 9장). 플랜에 기본 포함된 옵션(추가구매
-     * 기록이 없음)은 스냅샷 대상이 아니라 카탈로그 값을 그대로 보여준다 — 애초에 개별로
-     * "산" 적이 없어 가격을 보호할 대상 자체가 없다.
+     * 이미 구매한 상품의 표시는 안 바뀐다. 플랜에 기본 포함된 상품(추가구매 기록이 없음)은
+     * 스냅샷 대상이 아니라 카탈로그 값을 그대로 보여준다.
      */
-    public List<OptionalFeatureDto.Response.OptionalFeatureSummary> retrieveAvailableOptionalFeatures(
+    public List<UnitProductDto.Response.UnitProductSummary> retrieveApplicableUnitProducts(
             Long organizationId,
             Long ceremonyId,
             Long currentUserId
@@ -468,55 +428,49 @@ public class CeremonyService {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
-        List<Long> availableIds = retrievePurchasedOptionalFeatureIds(ceremony);
+        List<Long> availableIds = retrieveApplicableUnitProductIds(ceremony);
         if (availableIds.isEmpty()) {
             return List.of();
         }
 
-        Map<Long, CeremonyOptionalFeaturePurchase> approvedPurchaseByFeatureId = ceremonyOptionalFeaturePurchaseRepository
-                .findAllByCeremonyIdAndStatus(ceremony.getId(), PurchaseStatus.APPROVED).stream()
-                .collect(Collectors.toMap(purchase -> purchase.getOptionalFeature().getId(), purchase -> purchase));
+        Map<Long, CeremonyUnitProductPurchaseLine> approvedLineByProductId = ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(ceremony.getId()).stream()
+                .filter(line -> line.getPurchase().getStatus() == PurchaseStatus.APPROVED)
+                .collect(Collectors.toMap(line -> line.getUnitProduct().getId(), line -> line, (a, b) -> a));
 
-        Map<Long, List<Long>> effectDefinitionIdsByFeatureId = ceremonyEffectDefinitionOptionRepository
-                .findAllByOptionalFeatureIdIn(availableIds).stream()
+        Map<Long, List<Long>> effectDefinitionIdsByProductId = ceremonyEffectDefinitionOptionRepository
+                .findAllByUnitProductIdIn(availableIds).stream()
                 .collect(Collectors.groupingBy(
-                        mapping -> mapping.getOptionalFeature().getId(),
+                        mapping -> mapping.getUnitProduct().getId(),
                         Collectors.mapping(mapping -> mapping.getEffectDefinition().getId(), Collectors.toList())
                 ));
 
         LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
-        return optionalFeatureRepository.findAllById(availableIds).stream()
-                .map(feature -> {
-                    CeremonyOptionalFeaturePurchase purchase = approvedPurchaseByFeatureId.get(feature.getId());
-                    // 개별 추가구매(승인됨)한 옵션은 구매 시점 스냅샷을 쓰지만, 플랜에 기본 포함된
-                    // 옵션(추가구매 기록 없음)은 "오늘" 기준 유효한 판매가격 기간을 그대로 보여준다
-                    // — 애초에 개별로 "산" 적이 없어 가격을 보호할 스냅샷 자체가 없기 때문이다.
-                    Optional<OptionalFeaturePricePeriod> effective =
-                            optionalFeaturePricePeriodRepository.findEffective(feature.getId(), asOfDate);
-                    return new OptionalFeatureDto.Response.OptionalFeatureSummary(
-                            feature.getId(),
-                            feature.getCode().name(),
-                            purchase != null ? purchase.getPurchasedName() : feature.getName(),
-                            purchase != null ? purchase.getCurrencyCode() : effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
+        return unitProductRepository.findAllById(availableIds).stream()
+                .map(unitProduct -> {
+                    CeremonyUnitProductPurchaseLine line = approvedLineByProductId.get(unitProduct.getId());
+                    // 개별 추가구매(승인됨)한 상품은 구매 시점 스냅샷을 쓰지만, 플랜에 기본 포함된
+                    // 상품(추가구매 기록 없음)은 "오늘" 기준 유효한 판매가격 기간을 그대로 보여준다.
+                    Optional<UnitProductPricePeriod> effective =
+                            unitProductPricePeriodRepository.findEffective(unitProduct.getId(), asOfDate);
+                    return new UnitProductDto.Response.UnitProductSummary(
+                            unitProduct.getId(),
+                            unitProduct.getType().name(),
+                            line != null ? line.getPurchasedName() : unitProduct.getName(),
+                            unitProduct.getCategory().name(),
+                            unitProduct.getExclusivityGroup(),
+                            line != null ? line.getCurrencyCode() : effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                             effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
-                            purchase != null ? purchase.getPurchasedSalePrice() : effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
-                            purchase != null
-                                    ? purchase.getPurchasedDiscountType().name()
-                                    : effective.map(p -> p.getPriceInfo().getDiscount().getDiscountType().name()).orElse(null),
-                            purchase != null
-                                    ? purchase.getPurchasedDiscountValue()
-                                    : effective.map(p -> p.getPriceInfo().getDiscount().getDiscountValue()).orElse(null),
-                            purchase != null ? purchase.getPurchasedTaxCode() : effective.map(p -> p.getPriceInfo().getTaxCode()).orElse(null),
-                            effective.map(OptionalFeaturePricePeriod::isActive).orElse(null),
-                            feature.getExclusivityGroup(),
-                            feature.getCategory().name(),
-                            ceremonyOptionalFeaturePurchaseRepository.countByOptionalFeatureIdAndStatus(
-                                    feature.getId(), PurchaseStatus.APPROVED
+                            line != null ? line.getPurchasedSalePrice() : effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
+                            line != null ? line.getPurchasedTaxCode() : effective.map(p -> p.getPriceInfo().getTaxCode()).orElse(null),
+                            effective.map(UnitProductPricePeriod::isActive).orElse(null),
+                            ceremonyUnitProductPurchaseLineRepository.countByUnitProduct_IdAndPurchase_Status(
+                                    unitProduct.getId(), PurchaseStatus.APPROVED
                             ),
-                            effectDefinitionIdsByFeatureId.getOrDefault(feature.getId(), List.of()),
-                            feature.getCreatedAt(),
-                            effective.map(OptionalFeaturePricePeriod::getEffectiveFrom).orElse(null),
-                            effective.map(OptionalFeaturePricePeriod::getEffectiveTo).orElse(null),
+                            effectDefinitionIdsByProductId.getOrDefault(unitProduct.getId(), List.of()),
+                            unitProduct.getCreatedAt(),
+                            effective.map(UnitProductPricePeriod::getEffectiveFrom).orElse(null),
+                            effective.map(UnitProductPricePeriod::getEffectiveTo).orElse(null),
                             effective.map(p -> p.isActive() ? "ON_SALE" : "INACTIVE").orElse("NO_ACTIVE_PERIOD")
                     );
                 })
@@ -620,124 +574,65 @@ public class CeremonyService {
         }
     }
 
-    // ---- 플랫폼 관리자 — 용량/선택옵션 추가구매 승인 대기열 ----
+    // ---- 플랫폼 관리자 — 단위 상품 추가구매 승인 대기열 ----
     // feature.platformadmin.service에 별도 래퍼를 두지 않고 여기 직접 붙인다(위 updateStatusByPlatformAdmin과 같은 이유).
 
     /** status를 생략하면(null) 전체 상태를 최신순으로 돌려준다(조직 생성 요청 목록과 같은 규약). */
-    public Page<PlatformAdminCeremonyPurchaseDto.Response.CapacityPurchaseRequestSummary> findCapacityPurchaseRequests(
+    public Page<PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary> findUnitProductPurchaseRequests(
             PurchaseStatus status,
             Pageable pageable
     ) {
-        Page<CeremonyCapacityPurchase> purchases = status != null
-                ? ceremonyCapacityPurchaseRepository.findAllByStatus(status, pageable)
-                : ceremonyCapacityPurchaseRepository.findAll(pageable);
+        Page<CeremonyUnitProductPurchase> purchases = status != null
+                ? ceremonyUnitProductPurchaseRepository.findAllByStatus(status, pageable)
+                : ceremonyUnitProductPurchaseRepository.findAll(pageable);
         Map<Long, String> loginIdsByUserId = resolveUserLoginIds(
                 purchases.getContent().stream().flatMap(purchase -> Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy()))
         );
-        return purchases.map(purchase -> toCapacityRequestSummary(purchase, loginIdsByUserId));
+        return purchases.map(purchase -> toUnitProductRequestSummary(purchase, loginIdsByUserId));
     }
 
     @Transactional
-    public PlatformAdminCeremonyPurchaseDto.Response.CapacityPurchaseRequestSummary approveCapacityPurchase(
+    public PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary approveUnitProductPurchase(
             Long purchaseId,
             Long adminUserId,
             String actingPlatformRole
     ) {
         checkAllowed(actingPlatformRole, "ACTION_PURCHASE_APPROVAL");
-        CeremonyCapacityPurchase purchase = findPendingCapacityPurchaseOrThrow(purchaseId);
+        CeremonyUnitProductPurchase purchase = findPendingUnitProductPurchaseOrThrow(purchaseId);
         purchase.approve(adminUserId);
 
         platformAdminAuditLogRecorder.record(
-                adminUserId, PlatformAdminAction.APPROVE_CAPACITY_PURCHASE, null,
+                adminUserId, PlatformAdminAction.APPROVE_UNIT_PRODUCT_PURCHASE, null,
                 purchase.getCeremony().getOrganization().getId(),
                 "purchaseId=" + purchaseId + ", ceremonyId=" + purchase.getCeremony().getId()
         );
-        return toCapacityRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
+        return toUnitProductRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
     }
 
     @Transactional
-    public PlatformAdminCeremonyPurchaseDto.Response.CapacityPurchaseRequestSummary rejectCapacityPurchase(
+    public PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary rejectUnitProductPurchase(
             Long purchaseId,
             Long adminUserId,
             String actingPlatformRole,
             PlatformAdminCeremonyPurchaseDto.Request.Reject request
     ) {
         checkAllowed(actingPlatformRole, "ACTION_PURCHASE_APPROVAL");
-        CeremonyCapacityPurchase purchase = findPendingCapacityPurchaseOrThrow(purchaseId);
+        CeremonyUnitProductPurchase purchase = findPendingUnitProductPurchaseOrThrow(purchaseId);
         purchase.reject(adminUserId, request.getRejectionReason());
 
         platformAdminAuditLogRecorder.record(
-                adminUserId, PlatformAdminAction.REJECT_CAPACITY_PURCHASE, null,
+                adminUserId, PlatformAdminAction.REJECT_UNIT_PRODUCT_PURCHASE, null,
                 purchase.getCeremony().getOrganization().getId(),
                 "purchaseId=" + purchaseId + ", reason=" + request.getRejectionReason()
         );
-        return toCapacityRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
+        return toUnitProductRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
     }
 
-    public Page<PlatformAdminCeremonyPurchaseDto.Response.OptionalFeaturePurchaseRequestSummary> findOptionalFeaturePurchaseRequests(
-            PurchaseStatus status,
-            Pageable pageable
-    ) {
-        Page<CeremonyOptionalFeaturePurchase> purchases = status != null
-                ? ceremonyOptionalFeaturePurchaseRepository.findAllByStatus(status, pageable)
-                : ceremonyOptionalFeaturePurchaseRepository.findAll(pageable);
-        Map<Long, String> loginIdsByUserId = resolveUserLoginIds(
-                purchases.getContent().stream().flatMap(purchase -> Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy()))
-        );
-        return purchases.map(purchase -> toOptionalFeatureRequestSummary(purchase, loginIdsByUserId));
-    }
-
-    @Transactional
-    public PlatformAdminCeremonyPurchaseDto.Response.OptionalFeaturePurchaseRequestSummary approveOptionalFeaturePurchase(
-            Long purchaseId,
-            Long adminUserId,
-            String actingPlatformRole
-    ) {
-        checkAllowed(actingPlatformRole, "ACTION_PURCHASE_APPROVAL");
-        CeremonyOptionalFeaturePurchase purchase = findPendingOptionalFeaturePurchaseOrThrow(purchaseId);
-        purchase.approve(adminUserId);
-
-        platformAdminAuditLogRecorder.record(
-                adminUserId, PlatformAdminAction.APPROVE_OPTIONAL_FEATURE_PURCHASE, null,
-                purchase.getCeremony().getOrganization().getId(),
-                "purchaseId=" + purchaseId + ", ceremonyId=" + purchase.getCeremony().getId()
-        );
-        return toOptionalFeatureRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
-    }
-
-    @Transactional
-    public PlatformAdminCeremonyPurchaseDto.Response.OptionalFeaturePurchaseRequestSummary rejectOptionalFeaturePurchase(
-            Long purchaseId,
-            Long adminUserId,
-            String actingPlatformRole,
-            PlatformAdminCeremonyPurchaseDto.Request.Reject request
-    ) {
-        checkAllowed(actingPlatformRole, "ACTION_PURCHASE_APPROVAL");
-        CeremonyOptionalFeaturePurchase purchase = findPendingOptionalFeaturePurchaseOrThrow(purchaseId);
-        purchase.reject(adminUserId, request.getRejectionReason());
-
-        platformAdminAuditLogRecorder.record(
-                adminUserId, PlatformAdminAction.REJECT_OPTIONAL_FEATURE_PURCHASE, null,
-                purchase.getCeremony().getOrganization().getId(),
-                "purchaseId=" + purchaseId + ", reason=" + request.getRejectionReason()
-        );
-        return toOptionalFeatureRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
-    }
-
-    private CeremonyCapacityPurchase findPendingCapacityPurchaseOrThrow(Long purchaseId) {
-        CeremonyCapacityPurchase purchase = ceremonyCapacityPurchaseRepository.findById(purchaseId)
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_PURCHASE_NOT_FOUND));
+    private CeremonyUnitProductPurchase findPendingUnitProductPurchaseOrThrow(Long purchaseId) {
+        CeremonyUnitProductPurchase purchase = ceremonyUnitProductPurchaseRepository.findById(purchaseId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_PURCHASE_NOT_FOUND));
         if (purchase.getStatus() != PurchaseStatus.PENDING) {
-            throw new ApplicationException(CeremonyErrorCode.CAPACITY_PURCHASE_NOT_PENDING);
-        }
-        return purchase;
-    }
-
-    private CeremonyOptionalFeaturePurchase findPendingOptionalFeaturePurchaseOrThrow(Long purchaseId) {
-        CeremonyOptionalFeaturePurchase purchase = ceremonyOptionalFeaturePurchaseRepository.findById(purchaseId)
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_PURCHASE_NOT_FOUND));
-        if (purchase.getStatus() != PurchaseStatus.PENDING) {
-            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_PURCHASE_NOT_PENDING);
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_PURCHASE_NOT_PENDING);
         }
         return purchase;
     }
@@ -804,7 +699,7 @@ public class CeremonyService {
     }
 
     /**
-     * 행사 생성/수정(용량·옵션 구매, 하위 행사 생성 등) 권한. OWNER/ADMIN은 항상 가능하고,
+     * 행사 생성/수정(단위 상품 구매, 하위 행사 생성 등) 권한. OWNER/ADMIN은 항상 가능하고,
      * OPERATOR는 배정된 행사만, VIEWER는 불가하다(user-organization-design.md 4.2절
      * "행사(Ceremony) 생성/수정/삭제").
      */
@@ -853,13 +748,13 @@ public class CeremonyService {
     }
 
     /**
-     * asOfDate 기준 유효한 판매가격 기간을 찾아 사용여부까지 확인한다 — 기간이 없거나(카탈로그
-     * 등록 실수로 공백이 생긴 경우) 있어도 사용 중지(active=false)면 신규 선택/변경 대상에서
-     * 제외한다(signstage-docs business/billing-catalog-price-validity-period-review.md 결정,
-     * 2026-09-09).
+     * asOfDate 기준 유효한 할인 기간을 찾아 사용여부까지 확인한다 — 기간이 없거나(카탈로그 등록
+     * 실수로 공백이 생긴 경우) 있어도 사용 중지(active=false)면 신규 선택/변경 대상에서 제외한다
+     * (signstage-docs business/billing-catalog-price-validity-period-review.md 결정,
+     * 2026-09-09 원칙을 플랜 할인 기간에도 그대로 적용).
      */
-    private BillingPlanPricePeriod resolveSellablePlanPeriod(BillingPlan plan, LocalDate asOfDate) {
-        BillingPlanPricePeriod period = billingPlanPricePeriodRepository.findEffective(plan.getId(), asOfDate)
+    private BillingPlanDiscountPeriod resolveSellablePlanPeriod(BillingPlan plan, LocalDate asOfDate) {
+        BillingPlanDiscountPeriod period = billingPlanDiscountPeriodRepository.findEffective(plan.getId(), asOfDate)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_INACTIVE));
         if (!period.isActive()) {
             throw new ApplicationException(CeremonyErrorCode.BILLING_PLAN_INACTIVE);
@@ -867,36 +762,42 @@ public class CeremonyService {
         return period;
     }
 
-    /** {@link #resolveSellablePlanPeriod}과 같은 원칙 — 선택옵션. */
-    private OptionalFeaturePricePeriod resolveSellableFeaturePeriod(OptionalFeature feature, LocalDate asOfDate) {
-        OptionalFeaturePricePeriod period = optionalFeaturePricePeriodRepository.findEffective(feature.getId(), asOfDate)
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_INACTIVE));
+    /** {@link #resolveSellablePlanPeriod}과 같은 원칙 — 단위 상품. */
+    private UnitProductPricePeriod resolveSellableUnitProductPeriod(UnitProduct unitProduct, LocalDate asOfDate) {
+        UnitProductPricePeriod period = unitProductPricePeriodRepository.findEffective(unitProduct.getId(), asOfDate)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_INACTIVE));
         if (!period.isActive()) {
-            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_INACTIVE);
-        }
-        return period;
-    }
-
-    /** {@link #resolveSellablePlanPeriod}과 같은 원칙 — 용량 추가구매 상품. */
-    private CapacityAddOnPricePeriod resolveSellableAddOnPeriod(CapacityAddOn addOn, LocalDate asOfDate) {
-        CapacityAddOnPricePeriod period = capacityAddOnPricePeriodRepository.findEffective(addOn.getId(), asOfDate)
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_INACTIVE));
-        if (!period.isActive()) {
-            throw new ApplicationException(CeremonyErrorCode.CAPACITY_ADDON_INACTIVE);
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_INACTIVE);
         }
         return period;
     }
 
     /**
-     * Ceremony 생성 시(최초 플랜 선택)와 {@link #changePlan}에서 매 변경마다 호출한다(3.4절).
-     * 그 순간 플랜에 포함된 선택옵션 구성도 {@link CeremonyPlanHistoryOptionalFeature}로,
-     * 그 순간 플랜에서 구매 가능했던 용량 추가구매 상품 구성도 {@link CeremonyPlanHistoryCapacityAddOn}
-     * 으로 함께 스냅샷한다 — 카탈로그 관리자가 나중에 플랜의 옵션/구매 가능 상품 구성을 바꿔도
-     * 이 Ceremony는 영향받지 않아야 한다(signstage-docs business/ceremony-billing-options-review.md
-     * 9장 후속 결정, business/optional-feature-display-scope-and-plan-capacity-addon-review.md
-     * 5.5절 후속).
+     * 플랜의 통화 — 플랜이 포함하는 단위 상품들의 "오늘" 유효한 통화가 전부 같아야 한다(단위
+     * 상품은 자기 가격 기간에 통화를 갖고, 플랜 자체는 더 이상 통화를 갖지 않는다). 포함
+     * 단위 상품이 하나도 없으면(드문 경우) 통화 검증 자체를 건너뛴다.
      */
-    private void recordPlanHistory(Ceremony ceremony, BillingPlan plan, BillingPlanPricePeriod planPeriod, LocalDate asOfDate) {
+    private String resolvePlanCurrency(BillingPlan plan, LocalDate asOfDate) {
+        Set<String> currencies = billingPlanUnitProductRepository.findAllByBillingPlanId(plan.getId()).stream()
+                .map(BillingPlanUnitProduct::getUnitProduct)
+                .map(unitProduct -> unitProductPricePeriodRepository.findEffective(unitProduct.getId(), asOfDate))
+                .flatMap(Optional::stream)
+                .map(period -> period.getPriceInfo().getCurrencyCode())
+                .collect(Collectors.toSet());
+        if (currencies.size() > 1) {
+            throw new ApplicationException(CeremonyErrorCode.CURRENCY_MISMATCH);
+        }
+        return currencies.stream().findFirst().orElse(null);
+    }
+
+    /**
+     * Ceremony 생성 시(최초 플랜 선택)와 {@link #changePlan}에서 매 변경마다 호출한다(3.4절).
+     * 그 순간 플랜이 포함하던 단위 상품 구성(포함 수량 × 그 순간 단가)을
+     * {@link CeremonyPlanHistoryUnitProduct}로 함께 스냅샷한다 — 카탈로그 관리자가 나중에
+     * 플랜의 구성/가격을 바꿔도 이 Ceremony는 영향받지 않아야 한다(signstage-docs
+     * business/billing-catalog-unit-product-model-redesign-review.md 5장).
+     */
+    private void recordPlanHistory(Ceremony ceremony, BillingPlan plan, BillingPlanDiscountPeriod planPeriod, LocalDate asOfDate) {
         // 조직×플랜 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다
         // (signstage-docs business/organization-event-discount-pricing-review.md 4.1절,
         // 2026-08-21 재검토) — 그 시점의 값을 CeremonyPlanHistory에 고정해 두므로, 오버라이드를
@@ -904,59 +805,41 @@ public class CeremonyService {
         OrganizationDiscountService.EffectiveDiscount discount =
                 organizationDiscountService.resolveBillingPlanDiscount(
                         ceremony.getOrganization(), plan.getId(),
-                        planPeriod.getPriceInfo().getDiscount().getDiscountType(), planPeriod.getPriceInfo().getDiscount().getDiscountValue(),
+                        planPeriod.getDiscount().getDiscountType(), planPeriod.getDiscount().getDiscountValue(),
                         asOfDate
                 );
         CeremonyPlanHistory history = ceremonyPlanHistoryRepository.save(
                 CeremonyPlanHistory.builder()
                         .ceremony(ceremony)
                         .billingPlan(plan)
-                        .currencyCode(planPeriod.getPriceInfo().getCurrencyCode())
-                        .supplyPrice(planPeriod.getPriceInfo().getSupplyPrice())
-                        .salePrice(planPeriod.getPriceInfo().getSalePrice())
-                        .taxCode(planPeriod.getPriceInfo().getTaxCode())
-                        .catalogDiscountType(planPeriod.getPriceInfo().getDiscount().getDiscountType())
-                        .catalogDiscountValue(planPeriod.getPriceInfo().getDiscount().getDiscountValue())
+                        .catalogDiscountType(planPeriod.getDiscount().getDiscountType())
+                        .catalogDiscountValue(planPeriod.getDiscount().getDiscountValue())
                         .discountType(discount.type())
                         .discountValue(discount.value())
                         .build()
         );
-        billingPlanOptionalFeatureRepository.findAllByBillingPlanId(plan.getId()).forEach(mapping ->
-                ceremonyPlanHistoryOptionalFeatureRepository.save(
-                        CeremonyPlanHistoryOptionalFeature.builder()
-                                .ceremonyPlanHistory(history)
-                                .optionalFeature(mapping.getOptionalFeature())
-                                .build()
-                )
-        );
-        billingPlanCapacityAddOnRepository.findAllByBillingPlanId(plan.getId()).forEach(mapping ->
-                ceremonyPlanHistoryCapacityAddOnRepository.save(
-                        CeremonyPlanHistoryCapacityAddOn.builder()
-                                .ceremonyPlanHistory(history)
-                                .capacityAddOn(mapping.getCapacityAddOn())
-                                .build()
-                )
-        );
-        // 그 순간 플랜이 기본 포함하던 한도(용량) 구성도 함께 스냅샷한다 — 예전엔
-        // CeremonyPlanHistory 자체의 planMax* 고정 필드 5개였는데, BillingPlanCapacity 일반화에
-        // 맞춰 별도 스냅샷 테이블로 옮겼다(signstage-docs
-        // business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 B).
-        billingPlanCapacityRepository.findAllByBillingPlanId(plan.getId()).forEach(capacity ->
-                ceremonyPlanHistoryCapacityRepository.save(
-                        CeremonyPlanHistoryCapacity.builder()
-                                .ceremonyPlanHistory(history)
-                                .capacityType(capacity.getCapacityType())
-                                .includedAmount(capacity.getIncludedAmount())
-                                .build()
-                )
-        );
+        billingPlanUnitProductRepository.findAllByBillingPlanId(plan.getId()).forEach(source -> {
+            UnitProduct unitProduct = source.getUnitProduct();
+            Optional<UnitProductPricePeriod> effective = unitProductPricePeriodRepository.findEffective(unitProduct.getId(), asOfDate);
+            ceremonyPlanHistoryUnitProductRepository.save(
+                    CeremonyPlanHistoryUnitProduct.builder()
+                            .ceremonyPlanHistory(history)
+                            .unitProduct(unitProduct)
+                            .includedQuantity(source.getIncludedQuantity())
+                            .purchasable(source.isPurchasable())
+                            .currencyCode(effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null))
+                            .snapshotSalePrice(effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(BigDecimal.ZERO))
+                            .snapshotTaxCode(effective.map(p -> p.getPriceInfo().getTaxCode()).orElse("KR_VAT_STANDARD"))
+                            .build()
+            );
+        });
     }
 
     /**
      * 서명자/문서양식/테스트·본행사 등록 화면이 "등록할 수 있는 개수"를 보여주는 데 쓴다 —
-     * {@link #calculateEffectiveCapacity}(플랜 기본값 + 승인된 추가구매)를 다섯 가지 용량 유형
-     * 전부에 대해 계산해 돌려준다(2026-08-27 REHEARSAL_EVENTS 추가). 플랜이 없는 행사는
-     * 무제한이라 Integer.MAX_VALUE를 그대로 돌려준다(프런트가 "무제한"으로 표시).
+     * {@link #calculateEffectiveCapacity}(플랜 기본값 + 승인된 추가구매)를 다섯 가지 종류
+     * 전부에 대해 계산해 돌려준다. 플랜이 없는 행사는 무제한이라 Integer.MAX_VALUE를 그대로
+     * 돌려준다(프런트가 "무제한"으로 표시).
      */
     public CeremonyDto.Response.CapacityStatus retrieveCapacityStatus(
             Long organizationId,
@@ -968,24 +851,27 @@ public class CeremonyService {
         checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         return new CeremonyDto.Response.CapacityStatus(
-                calculateEffectiveCapacity(ceremony, CapacityType.SIGNERS),
-                calculateEffectiveCapacity(ceremony, CapacityType.TEMPLATES),
-                calculateEffectiveCapacity(ceremony, CapacityType.TEST_EVENTS),
-                calculateEffectiveCapacity(ceremony, CapacityType.REHEARSAL_EVENTS),
-                calculateEffectiveCapacity(ceremony, CapacityType.MAIN_EVENTS)
+                calculateEffectiveCapacity(ceremony, UnitProductType.SIGNERS),
+                calculateEffectiveCapacity(ceremony, UnitProductType.TEMPLATES),
+                calculateEffectiveCapacity(ceremony, UnitProductType.TEST_EVENTS),
+                calculateEffectiveCapacity(ceremony, UnitProductType.REHEARSAL_EVENTS),
+                calculateEffectiveCapacity(ceremony, UnitProductType.MAIN_EVENTS)
         );
     }
 
     /**
-     * 이 Ceremony의 예상 청구 금액 — 품목 할인 → subtotal → 행사 건별 할인의 2단 순차 차감
-     * (signstage-docs business/organization-event-discount-pricing-review.md 4.3절). 실제
-     * 결제/청구서 발행은 여전히 범위 밖이다(같은 문서 5장) — "지금 계산하면 얼마인지"를
-     * 보여주는 견적용 계산이다.
+     * 이 Ceremony의 예상 청구 금액 — signstage-docs
+     * business/billing-catalog-unit-product-model-redesign-review.md 3.5절 계산식.
+     * {@code 플랜 소계 = Σ(포함 단위 상품 snapshot가격 × includedQuantity)} → 플랜 자체 할인을
+     * 한 번 적용 → 추가구매(승인분만, 정가 그대로 — 할인 없음)를 더해 subtotal → 행사 건별
+     * 재량 할인({@code ceremony.finalDiscount})을 다시 한 번 적용 → 세금은 라인별 비례 배분 +
+     * 라인별 taxCode로 계산한다(플랜 소계 자체도 그 안의 단위 상품 줄 수만큼 라인이 늘어난다 —
+     * 옛 "플랜 항목 1줄"에서 "플랜에 포함된 단위 상품 줄 수"로 세분화됐을 뿐 알고리즘은 같다).
      *
-     * <p>플랜 항목은 라이브 {@code BillingPlan}이 아니라 {@link CeremonyPlanHistory} 최신
-     * 스냅샷을 쓴다 — 9장과 같은 원칙으로, 이력이 없는 행사(이 기능 배포 전 기존 행사)만
-     * 라이브로 폴백한다. 용량/선택옵션 추가구매는 승인(APPROVED)된 건만 반영하고, 그 구매
-     * 시점 스냅샷(가격·단가)을 그대로 쓴다.
+     * <p>플랜 항목은 라이브 {@code BillingPlanUnitProduct}가 아니라 {@link CeremonyPlanHistory}
+     * 최신 스냅샷({@link CeremonyPlanHistoryUnitProduct})을 쓴다 — 이력이 없는 행사(이 기능
+     * 배포 전 기존 행사)만 라이브로 폴백한다. 추가구매는 승인(APPROVED)된 건만 반영하고, 그
+     * 구매 시점 스냅샷(가격)을 그대로 쓴다.
      */
     public CeremonyDto.Response.EstimatedTotal calculateEstimatedTotal(
             Long organizationId,
@@ -997,75 +883,69 @@ public class CeremonyService {
         checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
+        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
+
+        // ---- 플랜 소계 → 플랜 적용가(할인 한 번) → 줄별 재배분(세금 계산용) ----
         BigDecimal planApplied = BigDecimal.ZERO;
-        List<TaxableLine> taxableLines = new ArrayList<>();
+        List<TaxableLine> planTaxableLines = List.of();
         BillingPlan plan = ceremony.getBillingPlan();
         if (plan != null) {
             Optional<CeremonyPlanHistory> snapshot =
                     ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
-            // 이력이 없는 경우(플랜 확정 기능 배포 전 기존 행사)만 라이브 값(오늘 기준 유효한
-            // 판매가격 기간)으로 대체한다 — calculateEffectiveCapacity와 같은 원칙.
-            Optional<BillingPlanPricePeriod> livePeriod = snapshot.isPresent()
-                    ? Optional.empty()
-                    : billingPlanPricePeriodRepository.findEffective(plan.getId(), LocalDate.now(ZoneId.of(ceremony.getTimeZoneId())));
-            planApplied = snapshot
-                    .map(history -> moneyCalculator.applyDiscount(
-                            history.getPlanSalePrice(), history.getPlanDiscountType(), history.getPlanDiscountValue(), currencyPolicy
-                    ))
-                    .orElseGet(() -> livePeriod
-                            .map(period -> moneyCalculator.applyDiscount(
-                                    period.getPriceInfo().getSalePrice(), period.getPriceInfo().getDiscount(), currencyPolicy
+            List<TaxableLine> rawPlanLines = snapshot
+                    .map(history -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(history.getId()).stream()
+                            .filter(line -> line.getIncludedQuantity() > 0)
+                            .map(line -> new TaxableLine(
+                                    line.getSnapshotSalePrice().multiply(BigDecimal.valueOf(line.getIncludedQuantity())),
+                                    line.getSnapshotTaxCode()
                             ))
-                            .orElse(BigDecimal.ZERO));
-            String planTaxCode = snapshot.map(CeremonyPlanHistory::getTaxCode)
-                    .orElseGet(() -> livePeriod.map(period -> period.getPriceInfo().getTaxCode()).orElse(null));
-            if (planTaxCode != null) {
-                taxableLines.add(new TaxableLine(planApplied, planTaxCode));
-            }
+                            .toList())
+                    // 이력이 없는 경우(플랜 확정 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
+                    .orElseGet(() -> billingPlanUnitProductRepository.findAllByBillingPlanId(plan.getId()).stream()
+                            .filter(source -> source.getIncludedQuantity() > 0)
+                            .flatMap(source -> unitProductPricePeriodRepository
+                                    .findEffective(source.getUnitProduct().getId(), asOfDate)
+                                    .map(period -> new TaxableLine(
+                                            period.getPriceInfo().getSalePrice().multiply(BigDecimal.valueOf(source.getIncludedQuantity())),
+                                            period.getPriceInfo().getTaxCode()
+                                    ))
+                                    .stream())
+                            .toList());
+
+            DiscountType planDiscountType = snapshot.map(CeremonyPlanHistory::getPlanDiscountType)
+                    .orElseGet(() -> billingPlanDiscountPeriodRepository.findEffective(plan.getId(), asOfDate)
+                            .map(period -> period.getDiscount().getDiscountType()).orElse(DiscountType.PERCENT));
+            BigDecimal planDiscountValue = snapshot.map(CeremonyPlanHistory::getPlanDiscountValue)
+                    .orElseGet(() -> billingPlanDiscountPeriodRepository.findEffective(plan.getId(), asOfDate)
+                            .map(period -> period.getDiscount().getDiscountValue()).orElse(BigDecimal.ZERO));
+
+            BigDecimal planSubtotal = rawPlanLines.stream().map(TaxableLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            planApplied = moneyCalculator.applyDiscount(planSubtotal, planDiscountType, planDiscountValue, currencyPolicy);
+            planTaxableLines = allocateProportionally(rawPlanLines, planApplied, currencyPolicy);
         }
 
-        List<TaxableLine> capacityLines = ceremonyCapacityPurchaseRepository
-                .findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
-                .filter(purchase -> purchase.getStatus() == PurchaseStatus.APPROVED)
-                .map(purchase -> new TaxableLine(
-                        moneyCalculator.applyDiscount(
-                                purchase.getPurchasedSalePrice().multiply(BigDecimal.valueOf(purchase.getQuantity())),
-                                purchase.getPurchasedDiscountType(),
-                                purchase.getPurchasedDiscountValue(),
-                                currencyPolicy
-                        ),
-                        purchase.getPurchasedTaxCode()
+        // ---- 추가구매(승인분, 정가 그대로 — 할인 없음) ----
+        List<TaxableLine> purchaseLines = ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
+                .filter(line -> line.getPurchase().getStatus() == PurchaseStatus.APPROVED)
+                .map(line -> new TaxableLine(
+                        line.getPurchasedSalePrice().multiply(BigDecimal.valueOf(line.getQuantity())),
+                        line.getPurchasedTaxCode()
                 ))
                 .toList();
-        taxableLines.addAll(capacityLines);
-        BigDecimal capacityTotal = capacityLines.stream().map(TaxableLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal purchaseTotal = purchaseLines.stream().map(TaxableLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        List<TaxableLine> featureLines = ceremonyOptionalFeaturePurchaseRepository
-                .findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
-                .filter(purchase -> purchase.getStatus() == PurchaseStatus.APPROVED)
-                .map(purchase -> new TaxableLine(
-                        moneyCalculator.applyDiscount(
-                                purchase.getPurchasedSalePrice(), purchase.getPurchasedDiscountType(),
-                                purchase.getPurchasedDiscountValue(), currencyPolicy
-                        ),
-                        purchase.getPurchasedTaxCode()
-                ))
-                .toList();
-        taxableLines.addAll(featureLines);
-        BigDecimal featureTotal = featureLines.stream().map(TaxableLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<TaxableLine> taxableLines = new ArrayList<>(planTaxableLines);
+        taxableLines.addAll(purchaseLines);
 
-        BigDecimal subtotal = planApplied.add(capacityTotal).add(featureTotal);
+        BigDecimal subtotal = planApplied.add(purchaseTotal);
         BigDecimal netAmount = moneyCalculator.applyDiscount(subtotal, ceremony.getFinalDiscount(), currencyPolicy);
-        BigDecimal taxAmount = calculateLineRoundedTax(
-                taxableLines, subtotal, netAmount, currencyPolicy,
-                LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()))
-        );
+        BigDecimal taxAmount = calculateLineRoundedTax(taxableLines, subtotal, netAmount, currencyPolicy, asOfDate);
         BigDecimal grossAmount = moneyCalculator.normalize(netAmount.add(taxAmount), currencyPolicy);
 
         return new CeremonyDto.Response.EstimatedTotal(
                 planApplied,
-                capacityTotal,
-                featureTotal,
+                purchaseTotal,
                 subtotal,
                 ceremony.getFinalDiscount().getDiscountType().name(),
                 ceremony.getFinalDiscount().getDiscountValue(),
@@ -1076,6 +956,35 @@ public class CeremonyService {
                 grossAmount,
                 grossAmount
         );
+    }
+
+    /**
+     * {@code total}을 {@code lines}의 세전 금액 비중대로 재배분한다 — 반올림 오차는 마지막
+     * 줄이 흡수한다. 플랜 소계에 플랜 할인을 적용한 뒤, 그 적용가를 원래 단위 상품 줄들에
+     * 세금 계산용으로 되돌려 배분하는 데 쓴다({@link #calculateLineRoundedTax}가 행사 건별
+     * 최종 할인에 쓰는 것과 같은 알고리즘).
+     */
+    private List<TaxableLine> allocateProportionally(List<TaxableLine> lines, BigDecimal total, CurrencyPolicy currencyPolicy) {
+        BigDecimal weightSum = lines.stream().map(TaxableLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (weightSum.signum() == 0) {
+            return lines;
+        }
+        List<TaxableLine> allocated = new ArrayList<>();
+        BigDecimal runningTotal = BigDecimal.ZERO;
+        for (int index = 0; index < lines.size(); index++) {
+            BigDecimal share;
+            if (index == lines.size() - 1) {
+                share = total.subtract(runningTotal);
+            } else {
+                share = moneyCalculator.normalize(
+                        lines.get(index).amount().multiply(total).divide(weightSum, 12, currencyPolicy.roundingMode()),
+                        currencyPolicy
+                );
+                runningTotal = runningTotal.add(share);
+            }
+            allocated.add(new TaxableLine(share, lines.get(index).taxCode()));
+        }
+        return allocated;
     }
 
     /** 행사 최종 할인 후 금액을 실제 구매 라인에 비례 배분하고 유효한 세금 정책으로 라인별 반올림한다. */
@@ -1112,70 +1021,61 @@ public class CeremonyService {
     }
 
     /**
-     * 필수옵션(용량) 유효 한도 = 플랜 기본값(스냅샷) + Σ(구매수량 × 구매 시점 단가 스냅샷). 플랜이
+     * 필수옵션(용량) 유효 한도 = 플랜 기본값(스냅샷) + Σ(APPROVED 구매 줄의 수량). 플랜이
      * 없는 행사(4.8 예외 — 이 기능 배포 전 기존 행사)는 한도 강제 자체를 적용하지 않는다(사실상
-     * 무제한).
+     * 무제한). 옛 "묶음 상품의 보조 용량"(secondaryCapacityType) 반영 로직은 사라졌다 — 묶음이
+     * 폐지되고 다중 라인 구매로 대체됐기 때문이다(signstage-docs
+     * business/billing-catalog-unit-product-model-redesign-review.md 3.7절).
      *
-     * <p>플랜 기본값은 라이브 {@code BillingPlan}이 아니라 {@link CeremonyPlanHistory}의 최신
-     * 스냅샷을 쓴다 — 카탈로그 관리자가 나중에 플랜 값을 고쳐도 이미 확정/진행 중인 행사는
-     * 영향받지 않아야 한다(signstage-docs business/ceremony-billing-options-review.md 9장).
-     * 이 기능(플랜 확정) 배포 전에 만들어져 이력이 없는 행사만 예외로 라이브 값에 fallback한다.
-     * 추가구매 단가도 같은 이유로 {@code capacityAddOn.getUnitAmount()} 라이브 조회 대신
-     * 구매 시점 스냅샷({@code purchasedUnitAmount})을 쓴다.
+     * <p>플랜 기본값은 라이브 {@code BillingPlanUnitProduct}가 아니라 {@link CeremonyPlanHistory}의
+     * 최신 스냅샷을 쓴다 — 카탈로그 관리자가 나중에 플랜 값을 고쳐도 이미 확정/진행 중인 행사는
+     * 영향받지 않아야 한다. 이 기능(플랜 확정) 배포 전에 만들어져 이력이 없는 행사만 예외로
+     * 라이브 값에 fallback한다.
      */
-    int calculateEffectiveCapacity(Ceremony ceremony, CapacityType capacityType) {
+    int calculateEffectiveCapacity(Ceremony ceremony, UnitProductType type) {
         BillingPlan plan = ceremony.getBillingPlan();
         if (plan == null) {
             return Integer.MAX_VALUE;
         }
 
-        // 한도 종류별 switch 분기 대신 BillingPlanCapacity/CeremonyPlanHistoryCapacity 조회로
-        // 일반화했다 — signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md
-        // 결정(2026-09-08, 항목 B). 해당 CapacityType 행이 없으면(예: TABLETS — 플랜 기본 포함
-        // 개념이 없다) 0으로 취급한다. 새 용량 종류가 생겨도 이 메서드는 더 이상 손댈 필요가 없다.
         int baseValue = ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId())
-                .map(snapshot -> ceremonyPlanHistoryCapacityRepository
-                        .findByCeremonyPlanHistoryIdAndCapacityType(snapshot.getId(), capacityType)
-                        .map(CeremonyPlanHistoryCapacity::getIncludedAmount)
-                        .orElse(0))
+                .map(snapshot -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(snapshot.getId()).stream()
+                        .filter(line -> line.getUnitProduct().getType() == type)
+                        .mapToInt(CeremonyPlanHistoryUnitProduct::getIncludedQuantity)
+                        .sum())
                 // 이력이 없는 경우(플랜 확정 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
-                .orElseGet(() -> billingPlanCapacityRepository
-                        .findByBillingPlanIdAndCapacityType(plan.getId(), capacityType)
-                        .map(BillingPlanCapacity::getIncludedAmount)
-                        .orElse(0));
+                .orElseGet(() -> billingPlanUnitProductRepository.findAllByBillingPlanId(plan.getId()).stream()
+                        .filter(source -> source.getUnitProduct().getType() == type)
+                        .mapToInt(BillingPlanUnitProduct::getIncludedQuantity)
+                        .sum());
 
         // 승인(APPROVED)된 요청만 한도에 반영한다 — 대기중/반려된 요청은 아직/영영 쓸 수 없다.
-        // 이 유형을 주(capacityType)로 파는 상품과, 묶음 상품의 보조(secondaryCapacityType)로
-        // 파는 상품(예: "서명자+태블릿") 둘 다 반영한다 — signstage-docs
-        // business/ceremony-billing-options-review.md 4.7절 후속(2026-08-21).
-        int purchasedAsPrimary = ceremonyCapacityPurchaseRepository
-                .findAllByCeremonyIdAndCapacityAddOn_CapacityTypeAndStatus(ceremony.getId(), capacityType, PurchaseStatus.APPROVED)
+        int purchased = ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdAndUnitProduct_TypeAndPurchase_Status(ceremony.getId(), type, PurchaseStatus.APPROVED)
                 .stream()
-                .mapToInt(purchase -> purchase.getQuantity() * purchase.getPurchasedUnitAmount())
-                .sum();
-        int purchasedAsSecondary = ceremonyCapacityPurchaseRepository
-                .findAllByCeremonyIdAndCapacityAddOn_SecondaryCapacityTypeAndStatus(ceremony.getId(), capacityType, PurchaseStatus.APPROVED)
-                .stream()
-                .mapToInt(purchase -> purchase.getQuantity() * purchase.getPurchasedSecondaryUnitAmount())
+                .mapToInt(CeremonyUnitProductPurchaseLine::getQuantity)
                 .sum();
 
-        return baseValue + purchasedAsPrimary + purchasedAsSecondary;
+        return baseValue + purchased;
     }
 
     /**
-     * Ceremony가 "구매한"(플랜 기본 포함 또는 추가구매) 선택옵션 id 집합(4.11절). 추가구매 쪽은
-     * 승인(APPROVED)된 요청만 포함한다 — 대기중/반려된 요청은 아직/영영 적용할 수 없다.
+     * Ceremony가 "적용 가능한"(플랜 기본 포함 또는 승인된 추가구매) 단위 상품 id 집합 —
+     * {@code type=EVENT_EFFECT_BUNDLE}로 좁힌다(CeremonyEvent 단위로 켜고 끄는 개념이 있는
+     * 종류는 지금 이것뿐이다, signstage-docs
+     * business/billing-catalog-unit-product-model-redesign-review.md 3.6절).
      *
-     * <p>"플랜 기본 포함" 쪽은 라이브 {@code BillingPlanOptionalFeature} 대신 이 Ceremony의
-     * 최신 {@link CeremonyPlanHistory} 스냅샷(연결된 {@link CeremonyPlanHistoryOptionalFeature})을
-     * 우선 쓴다 — 카탈로그 관리자가 나중에 플랜의 옵션 구성을 바꿔도 영향받지 않아야 한다
-     * (signstage-docs business/ceremony-billing-options-review.md 9장 후속 결정). 이력이 없는
-     * 경우(이 스냅샷 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
+     * <p>"플랜 기본 포함" 쪽은 라이브 {@code BillingPlanUnitProduct} 대신 이 Ceremony의 최신
+     * {@link CeremonyPlanHistory} 스냅샷({@link CeremonyPlanHistoryUnitProduct})을 우선 쓴다 —
+     * 카탈로그 관리자가 나중에 플랜의 구성을 바꿔도 영향받지 않아야 한다. 이력이 없는 경우(이
+     * 스냅샷 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
      */
-    List<Long> retrievePurchasedOptionalFeatureIds(Ceremony ceremony) {
-        List<Long> purchased = ceremonyOptionalFeaturePurchaseRepository
-                .findAllByCeremonyIdAndStatus(ceremony.getId(), PurchaseStatus.APPROVED).stream()
-                .map(purchase -> purchase.getOptionalFeature().getId())
+    List<Long> retrieveApplicableUnitProductIds(Ceremony ceremony) {
+        List<Long> purchased = ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(ceremony.getId()).stream()
+                .filter(line -> line.getPurchase().getStatus() == PurchaseStatus.APPROVED)
+                .filter(line -> line.getUnitProduct().getType() == UnitProductType.EVENT_EFFECT_BUNDLE)
+                .map(line -> line.getUnitProduct().getId())
                 .toList();
         if (ceremony.getBillingPlan() == null) {
             return purchased;
@@ -1184,51 +1084,49 @@ public class CeremonyService {
         Optional<CeremonyPlanHistory> snapshot =
                 ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
         List<Long> includedInPlan = snapshot
-                .map(history -> ceremonyPlanHistoryOptionalFeatureRepository.findAllByCeremonyPlanHistoryId(history.getId())
-                        .stream()
-                        .map(mapping -> mapping.getOptionalFeature().getId())
+                .map(history -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(history.getId()).stream()
+                        .filter(line -> line.getIncludedQuantity() > 0)
+                        .filter(line -> line.getUnitProduct().getType() == UnitProductType.EVENT_EFFECT_BUNDLE)
+                        .map(line -> line.getUnitProduct().getId())
                         .toList())
-                .orElseGet(() -> billingPlanOptionalFeatureRepository
-                        .findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
-                        .map(mapping -> mapping.getOptionalFeature().getId())
+                .orElseGet(() -> billingPlanUnitProductRepository.findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
+                        .filter(source -> source.getIncludedQuantity() > 0)
+                        .filter(source -> source.getUnitProduct().getType() == UnitProductType.EVENT_EFFECT_BUNDLE)
+                        .map(source -> source.getUnitProduct().getId())
                         .toList());
 
         return Stream.concat(purchased.stream(), includedInPlan.stream()).distinct().toList();
     }
 
     /**
-     * 이 Ceremony의 플랜에서 구매 가능한(안 A 큐레이션) {@code CapacityAddOn} id 목록. 라이브
-     * {@code BillingPlanCapacityAddOn} 대신 이 Ceremony의 최신 {@link CeremonyPlanHistory}
-     * 스냅샷(연결된 {@link CeremonyPlanHistoryCapacityAddOn})을 우선 쓴다 — 카탈로그 관리자가
-     * 나중에 플랜의 구매 가능 상품 구성을 바꿔도 영향받지 않아야 한다(signstage-docs
-     * business/optional-feature-display-scope-and-plan-capacity-addon-review.md 5.5절 결정).
-     * 이력이 없는 경우(이 기능 배포 전 기존 행사, 마이그레이션 백필로 대부분 커버되지만 혹시
-     * 놓친 경우)만 라이브 값으로 대체한다. 호출부가 {@code ceremony.getBillingPlan() != null}을
-     * 먼저 확인해야 한다 — 플랜 없는 행사는 제한 자체가 없다.
+     * 이 Ceremony의 플랜에서 구매 가능한(안 A 큐레이션, {@code purchasable=true}) 단위 상품 id
+     * 목록. 라이브 {@code BillingPlanUnitProduct} 대신 이 Ceremony의 최신
+     * {@link CeremonyPlanHistory} 스냅샷을 우선 쓴다 — 카탈로그 관리자가 나중에 플랜의 구매
+     * 가능 상품 구성을 바꿔도 영향받지 않아야 한다. 이력이 없는 경우만 라이브 값으로 대체한다.
+     * 호출부가 {@code ceremony.getBillingPlan() != null}을 먼저 확인해야 한다 — 플랜 없는
+     * 행사는 제한 자체가 없다.
      */
-    List<Long> retrieveAvailableCapacityAddOnIds(Ceremony ceremony) {
+    List<Long> retrievePurchasableUnitProductIds(Ceremony ceremony) {
         Optional<CeremonyPlanHistory> snapshot =
                 ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
         return snapshot
-                .map(history -> ceremonyPlanHistoryCapacityAddOnRepository.findAllByCeremonyPlanHistoryId(history.getId())
-                        .stream()
-                        .map(mapping -> mapping.getCapacityAddOn().getId())
+                .map(history -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(history.getId()).stream()
+                        .filter(CeremonyPlanHistoryUnitProduct::isPurchasable)
+                        .map(line -> line.getUnitProduct().getId())
                         .toList())
-                .orElseGet(() -> billingPlanCapacityAddOnRepository
-                        .findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
-                        .map(mapping -> mapping.getCapacityAddOn().getId())
+                .orElseGet(() -> billingPlanUnitProductRepository.findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
+                        .filter(BillingPlanUnitProduct::isPurchasable)
+                        .map(source -> source.getUnitProduct().getId())
                         .toList());
     }
 
     /**
-     * 이 Ceremony가 실제로 구매 요청할 수 있는 용량 추가구매 상품 카탈로그만 필터링해 돌려준다
-     * (안 A, 2026-08-30) — {@link #retrieveAvailableOptionalFeatures}와 같은 목적으로,
-     * {@code UserCeremonyEdit.tsx}의 구매 드롭다운이 이 목록으로 채워야 플랜에 없는 상품을 골라
-     * 제출한 뒤에야 거부당하는 UX를 피할 수 있다(signstage-docs
-     * business/optional-feature-display-scope-and-plan-capacity-addon-review.md 5.6절). 플랜이
-     * 없는 행사(4.8절 예외)는 활성 상품 전체를 제한 없이 돌려준다.
+     * 이 Ceremony가 실제로 구매 요청할 수 있는 단위 상품 카탈로그만 필터링해 돌려준다(안 A) —
+     * {@link #retrieveApplicableUnitProducts}와 같은 목적으로, 구매 화면의 선택 목록이 이
+     * 목록으로 채워야 플랜에서 열어두지 않은 상품을 골라 제출한 뒤에야 거부당하는 UX를
+     * 피할 수 있다. 플랜이 없는 행사(4.8절 예외)는 활성 상품 전체를 제한 없이 돌려준다.
      */
-    public List<CapacityAddOnDto.Response.CapacityAddOnSummary> retrieveAvailableCapacityAddOns(
+    public List<UnitProductDto.Response.UnitProductSummary> retrievePurchasableUnitProducts(
             Long organizationId,
             Long ceremonyId,
             Long currentUserId
@@ -1238,36 +1136,35 @@ public class CeremonyService {
         checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         if (ceremony.getBillingPlan() == null) {
-            return capacityAddOnRepository.findAll().stream().map(this::toCapacityAddOnSummary).toList();
+            return unitProductRepository.findAll().stream().map(this::toUnitProductSummaryForPurchase).toList();
         }
 
-        List<Long> availableIds = retrieveAvailableCapacityAddOnIds(ceremony);
+        List<Long> availableIds = retrievePurchasableUnitProductIds(ceremony);
         if (availableIds.isEmpty()) {
             return List.of();
         }
-        return capacityAddOnRepository.findAllById(availableIds).stream().map(this::toCapacityAddOnSummary).toList();
+        return unitProductRepository.findAllById(availableIds).stream().map(this::toUnitProductSummaryForPurchase).toList();
     }
 
-    private CapacityAddOnDto.Response.CapacityAddOnSummary toCapacityAddOnSummary(CapacityAddOn addOn) {
-        Optional<CapacityAddOnPricePeriod> effective =
-                capacityAddOnPricePeriodRepository.findEffective(addOn.getId(), LocalDate.now());
-        return new CapacityAddOnDto.Response.CapacityAddOnSummary(
-                addOn.getId(),
-                addOn.getCapacityType().name(),
-                addOn.getUnitAmount(),
-                addOn.getSecondaryCapacityType() == null ? null : addOn.getSecondaryCapacityType().name(),
-                addOn.getSecondaryUnitAmount(),
+    private UnitProductDto.Response.UnitProductSummary toUnitProductSummaryForPurchase(UnitProduct unitProduct) {
+        Optional<UnitProductPricePeriod> effective =
+                unitProductPricePeriodRepository.findEffective(unitProduct.getId(), LocalDate.now());
+        return new UnitProductDto.Response.UnitProductSummary(
+                unitProduct.getId(),
+                unitProduct.getType().name(),
+                unitProduct.getName(),
+                unitProduct.getCategory().name(),
+                unitProduct.getExclusivityGroup(),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
-                effective.map(p -> p.getPriceInfo().getDiscount().getDiscountType().name()).orElse(null),
-                effective.map(p -> p.getPriceInfo().getDiscount().getDiscountValue()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getTaxCode()).orElse(null),
-                effective.map(CapacityAddOnPricePeriod::isActive).orElse(null),
-                ceremonyCapacityPurchaseRepository.countByCapacityAddOnIdAndStatus(addOn.getId(), PurchaseStatus.APPROVED),
-                addOn.getCreatedAt(),
-                effective.map(CapacityAddOnPricePeriod::getEffectiveFrom).orElse(null),
-                effective.map(CapacityAddOnPricePeriod::getEffectiveTo).orElse(null),
+                effective.map(UnitProductPricePeriod::isActive).orElse(null),
+                ceremonyUnitProductPurchaseLineRepository.countByUnitProduct_IdAndPurchase_Status(unitProduct.getId(), PurchaseStatus.APPROVED),
+                List.of(),
+                unitProduct.getCreatedAt(),
+                effective.map(UnitProductPricePeriod::getEffectiveFrom).orElse(null),
+                effective.map(UnitProductPricePeriod::getEffectiveTo).orElse(null),
                 effective.map(p -> p.isActive() ? "ON_SALE" : "INACTIVE").orElse("NO_ACTIVE_PERIOD")
         );
     }
@@ -1285,7 +1182,7 @@ public class CeremonyService {
     }
 
     private void checkCurrencyMatches(String ceremonyCurrencyCode, String itemCurrencyCode) {
-        if (!Objects.equals(ceremonyCurrencyCode, itemCurrencyCode)) {
+        if (itemCurrencyCode != null && !Objects.equals(ceremonyCurrencyCode, itemCurrencyCode)) {
             throw new ApplicationException(CeremonyErrorCode.CURRENCY_MISMATCH);
         }
     }
@@ -1320,66 +1217,39 @@ public class CeremonyService {
     }
 
     private CeremonyDto.Response.PlanHistorySummary toPlanHistorySummary(CeremonyPlanHistory history) {
-        // CeremonyPlanHistoryCapacity 일반화 이후에도 이 응답 DTO의 5개 필드(서명자/템플릿/테스트/
-        // 리허설/본행사)는 그대로 둔다 — 화면(UserCeremonyEdit.tsx 등)이 기대하는 계약을 바꾸지
-        // 않기 위해서다. 해당 CapacityType 행이 없으면 0(신규 CapacityType이 생겨도 이 응답에는
-        // 영향 없음 — 아래 다섯 종류만 골라 읽는다).
-        Map<CapacityType, Integer> capacities = ceremonyPlanHistoryCapacityRepository
+        List<CeremonyDto.Response.PlanHistoryLineSummary> lines = ceremonyPlanHistoryUnitProductRepository
                 .findAllByCeremonyPlanHistoryId(history.getId()).stream()
-                .collect(Collectors.toMap(CeremonyPlanHistoryCapacity::getCapacityType, CeremonyPlanHistoryCapacity::getIncludedAmount));
+                .map(line -> new CeremonyDto.Response.PlanHistoryLineSummary(
+                        line.getUnitProduct().getId(),
+                        line.getUnitProduct().getType().name(),
+                        line.getUnitProduct().getName(),
+                        line.getIncludedQuantity(),
+                        line.isPurchasable(),
+                        line.getCurrencyCode(),
+                        line.getSnapshotSalePrice(),
+                        line.getSnapshotTaxCode()
+                ))
+                .toList();
         return new CeremonyDto.Response.PlanHistorySummary(
                 history.getId(),
                 history.getBillingPlan().getId(),
                 history.getPlanName(),
-                history.getCurrencyCode(),
-                history.getPlanSupplyPrice(),
-                history.getPlanSalePrice(),
                 history.getPlanDiscountType().name(),
                 history.getPlanDiscountValue(),
-                history.getTaxCode(),
-                capacities.getOrDefault(CapacityType.SIGNERS, 0),
-                capacities.getOrDefault(CapacityType.TEMPLATES, 0),
-                capacities.getOrDefault(CapacityType.TEST_EVENTS, 0),
-                capacities.getOrDefault(CapacityType.REHEARSAL_EVENTS, 0),
-                capacities.getOrDefault(CapacityType.MAIN_EVENTS, 0),
+                lines,
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );
     }
 
-    private CeremonyDto.Response.CapacityPurchaseSummary toCapacitySummary(CeremonyCapacityPurchase purchase) {
-        return new CeremonyDto.Response.CapacityPurchaseSummary(
-                purchase.getId(),
-                purchase.getCeremony().getId(),
-                purchase.getCapacityAddOn().getId(),
-                purchase.getQuantity(),
-                purchase.getPurchasedUnitAmount(),
-                purchase.getPurchasedSecondaryUnitAmount(),
-                purchase.getCurrencyCode(),
-                purchase.getPurchasedSalePrice(),
-                purchase.getPurchasedDiscountType().name(),
-                purchase.getPurchasedDiscountValue(),
-                purchase.getPurchasedTaxCode(),
-                purchase.getStatus().name(),
-                purchase.getRejectionReason(),
-                purchase.getReviewedAt(),
-                purchase.getCreatedAt()
-        );
-    }
-
-    private CeremonyDto.Response.OptionalFeaturePurchaseSummary toOptionalFeatureSummary(
-            CeremonyOptionalFeaturePurchase purchase
+    private CeremonyDto.Response.UnitProductPurchaseSummary toUnitProductPurchaseSummary(
+            CeremonyUnitProductPurchase purchase,
+            List<CeremonyUnitProductPurchaseLine> lines
     ) {
-        return new CeremonyDto.Response.OptionalFeaturePurchaseSummary(
+        return new CeremonyDto.Response.UnitProductPurchaseSummary(
                 purchase.getId(),
                 purchase.getCeremony().getId(),
-                purchase.getOptionalFeature().getId(),
-                purchase.getPurchasedName(),
-                purchase.getCurrencyCode(),
-                purchase.getPurchasedSalePrice(),
-                purchase.getPurchasedDiscountType().name(),
-                purchase.getPurchasedDiscountValue(),
-                purchase.getPurchasedTaxCode(),
+                lines.stream().map(this::toUnitProductPurchaseLineSummary).toList(),
                 purchase.getStatus().name(),
                 purchase.getRejectionReason(),
                 purchase.getReviewedAt(),
@@ -1387,41 +1257,35 @@ public class CeremonyService {
         );
     }
 
-    private PlatformAdminCeremonyPurchaseDto.Response.CapacityPurchaseRequestSummary toCapacityRequestSummary(
-            CeremonyCapacityPurchase purchase,
+    private CeremonyDto.Response.UnitProductPurchaseLineSummary toUnitProductPurchaseLineSummary(CeremonyUnitProductPurchaseLine line) {
+        return new CeremonyDto.Response.UnitProductPurchaseLineSummary(
+                line.getId(),
+                line.getUnitProduct().getId(),
+                line.getUnitProduct().getType().name(),
+                line.getQuantity(),
+                line.getCurrencyCode(),
+                line.getPurchasedName(),
+                line.getPurchasedSalePrice(),
+                line.getPurchasedTaxCode()
+        );
+    }
+
+    private PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary toUnitProductRequestSummary(
+            CeremonyUnitProductPurchase purchase,
             Map<Long, String> loginIdsByUserId
     ) {
-        return new PlatformAdminCeremonyPurchaseDto.Response.CapacityPurchaseRequestSummary(
+        List<CeremonyDto.Response.UnitProductPurchaseLineSummary> lines = ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchaseIdOrderByIdAsc(purchase.getId()).stream()
+                .map(this::toUnitProductPurchaseLineSummary)
+                .toList();
+        return new PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary(
                 purchase.getId(),
                 purchase.getCreatedBy(),
                 loginIdsByUserId.get(purchase.getCreatedBy()),
                 purchase.getCeremony().getOrganization().getId(),
                 purchase.getCeremony().getId(),
                 purchase.getCeremony().getTitle(),
-                purchase.getCapacityAddOn().getId(),
-                purchase.getQuantity(),
-                purchase.getPurchasedSalePrice(),
-                purchase.getStatus().name(),
-                purchase.getRejectionReason(),
-                purchase.getReviewedBy() != null ? loginIdsByUserId.get(purchase.getReviewedBy()) : null,
-                purchase.getReviewedAt(),
-                purchase.getCreatedAt()
-        );
-    }
-
-    private PlatformAdminCeremonyPurchaseDto.Response.OptionalFeaturePurchaseRequestSummary toOptionalFeatureRequestSummary(
-            CeremonyOptionalFeaturePurchase purchase,
-            Map<Long, String> loginIdsByUserId
-    ) {
-        return new PlatformAdminCeremonyPurchaseDto.Response.OptionalFeaturePurchaseRequestSummary(
-                purchase.getId(),
-                purchase.getCreatedBy(),
-                loginIdsByUserId.get(purchase.getCreatedBy()),
-                purchase.getCeremony().getOrganization().getId(),
-                purchase.getCeremony().getId(),
-                purchase.getCeremony().getTitle(),
-                purchase.getOptionalFeature().getId(),
-                purchase.getPurchasedSalePrice(),
+                lines,
                 purchase.getStatus().name(),
                 purchase.getRejectionReason(),
                 purchase.getReviewedBy() != null ? loginIdsByUserId.get(purchase.getReviewedBy()) : null,

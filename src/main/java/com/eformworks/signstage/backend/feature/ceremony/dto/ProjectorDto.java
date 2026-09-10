@@ -34,9 +34,11 @@ public final class ProjectorDto {
             private final ExhibitionDocument exhibition;
 
             /**
-             * 이 하위 행사에 실제로 적용된 선택옵션 코드({@code OptionalFeatureCode.name()}) 목록 —
-             * 서명 하이라이트/폭죽 같은 프로젝터 전용 연출 효과를 켤지 판단하는 데 쓴다. 관리자 콘솔
-             * DTO(`CeremonyEventDto`)에는 이 필드가 없다 — 연출 효과는 프로젝터 화면 전용이라
+             * 이 하위 행사에 실제로 적용된 단위 상품 유형({@code UnitProductType.name()}) 목록 —
+             * 서명 하이라이트/폭죽 같은 프로젝터 전용 연출 효과를 켤지 판단하는 데 쓴다(옛
+             * {@code OptionalFeatureCode.name()} 목록을 대체, signstage-docs
+             * business/billing-catalog-unit-product-model-redesign-review.md 2026-09-10). 관리자
+             * 콘솔 DTO(`CeremonyEventDto`)에는 이 필드가 없다 — 연출 효과는 프로젝터 화면 전용이라
              * 다른 화면에는 노출할 필요가 없다.
              */
             private final List<String> appliedOptionalFeatureCodes;

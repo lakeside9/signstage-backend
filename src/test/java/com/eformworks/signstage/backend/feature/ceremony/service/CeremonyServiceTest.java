@@ -16,37 +16,31 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
-import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanPricePeriod;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOn;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityAddOnPricePeriod;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanDiscountPeriod;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyCapacityPurchase;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOptionalFeaturePurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchase;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeaturePricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TaxPolicy;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityAddOnRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanCapacityRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanOptionalFeatureRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanPricePeriodRepository;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductCategory;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductPricePeriod;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanDiscountPeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnPricePeriodRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyCapacityPurchaseRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOptionalFeaturePurchaseRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityAddOnRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryCapacityRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryOptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeaturePricePeriodRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductPricePeriodRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.PlatformRole;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
@@ -78,15 +72,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * 조직×품목 할인 오버라이드가 Ceremony 생성(플랜)/구매 요청(선택옵션·용량 추가구매) 시점에
- * 스냅샷 컬럼으로 올바르게 반영되는지 검증한다. signstage-docs
- * business/organization-event-discount-pricing-review.md 4.1절(2026-08-21 재검토) 참고 —
- * {@link OrganizationDiscountService}는 이 테스트에서 목(mock) 처리하고, "그 결과를
- * CeremonyService가 올바른 스냅샷 컬럼에 옮겨 담는지"만 검증한다. 오버라이드 자체의 해석
- * 로직(있으면 오버라이드, 없으면 카탈로그 값)은 {@link OrganizationDiscountServiceTest}가
- * 검증한다. 카탈로그 가격/사용여부는 이제 {@code *PricePeriod} 기간에서 나오므로(signstage-docs
- * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09), 각 시나리오는
- * {@code findEffective}가 그 기간을 돌려주도록 목을 세팅한다.
+ * {@link CeremonyService}의 과금 관련 로직 단위 테스트 — signstage-docs
+ * business/billing-catalog-unit-product-model-redesign-review.md(2026-09-10, 2단계) 재설계
+ * 이후의 모델을 검증한다. 조직×플랜 할인 오버라이드가 Ceremony 생성 시점에 스냅샷 컬럼으로
+ * 올바르게 반영되는지, 단위 상품 추가구매(장바구니형)가 한 헤더 아래 여러 줄로 저장되는지,
+ * 유효 한도 계산이 승인된 구매 줄만 반영하는지를 다룬다. {@link OrganizationDiscountService}는
+ * 이 테스트에서 목(mock) 처리하고, "그 결과를 CeremonyService가 올바른 스냅샷 컬럼에 옮겨
+ * 담는지"만 검증한다 — 오버라이드 자체의 해석 로직은 {@link OrganizationDiscountServiceTest}가
+ * 검증한다.
  */
 @ExtendWith(MockitoExtension.class)
 class CeremonyServiceTest {
@@ -96,19 +89,17 @@ class CeremonyServiceTest {
     @Mock
     private CeremonyAssignmentRepository ceremonyAssignmentRepository;
     @Mock
-    private CeremonyCapacityPurchaseRepository ceremonyCapacityPurchaseRepository;
+    private CeremonyUnitProductPurchaseRepository ceremonyUnitProductPurchaseRepository;
     @Mock
-    private CeremonyOptionalFeaturePurchaseRepository ceremonyOptionalFeaturePurchaseRepository;
+    private CeremonyUnitProductPurchaseLineRepository ceremonyUnitProductPurchaseLineRepository;
+    @Mock
+    private CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
     @Mock
     private CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
     @Mock
-    private CeremonyPlanHistoryOptionalFeatureRepository ceremonyPlanHistoryOptionalFeatureRepository;
+    private CeremonyPlanHistoryUnitProductRepository ceremonyPlanHistoryUnitProductRepository;
     @Mock
-    private CeremonyPlanHistoryCapacityAddOnRepository ceremonyPlanHistoryCapacityAddOnRepository;
-    @Mock
-    private CeremonyPlanHistoryCapacityRepository ceremonyPlanHistoryCapacityRepository;
-    @Mock
-    private BillingPlanCapacityRepository billingPlanCapacityRepository;
+    private BillingPlanUnitProductRepository billingPlanUnitProductRepository;
     @Mock
     private OrganizationRepository organizationRepository;
     @Mock
@@ -116,19 +107,11 @@ class CeremonyServiceTest {
     @Mock
     private BillingPlanRepository billingPlanRepository;
     @Mock
-    private BillingPlanPricePeriodRepository billingPlanPricePeriodRepository;
+    private BillingPlanDiscountPeriodRepository billingPlanDiscountPeriodRepository;
     @Mock
-    private BillingPlanOptionalFeatureRepository billingPlanOptionalFeatureRepository;
+    private UnitProductRepository unitProductRepository;
     @Mock
-    private BillingPlanCapacityAddOnRepository billingPlanCapacityAddOnRepository;
-    @Mock
-    private CapacityAddOnRepository capacityAddOnRepository;
-    @Mock
-    private CapacityAddOnPricePeriodRepository capacityAddOnPricePeriodRepository;
-    @Mock
-    private OptionalFeatureRepository optionalFeatureRepository;
-    @Mock
-    private OptionalFeaturePricePeriodRepository optionalFeaturePricePeriodRepository;
+    private UnitProductPricePeriodRepository unitProductPricePeriodRepository;
     @Mock
     private UserRepository userRepository;
     @Mock
@@ -167,34 +150,24 @@ class CeremonyServiceTest {
         return ceremony;
     }
 
-    private BillingPlanPricePeriod planPeriod(
-            BillingPlan plan, BigDecimal supplyPrice, BigDecimal salePrice, DiscountType discountType, BigDecimal discountValue
-    ) {
-        return BillingPlanPricePeriod.builder()
+    private UnitProduct unitProduct(Long id, UnitProductType type) {
+        UnitProduct unitProduct = UnitProduct.builder()
+                .type(type).name(type.name()).category(UnitProductCategory.ESSENTIAL).build();
+        ReflectionTestUtils.setField(unitProduct, "id", id);
+        return unitProduct;
+    }
+
+    private UnitProductPricePeriod unitProductPeriod(UnitProduct unitProduct, BigDecimal supplyPrice, BigDecimal salePrice) {
+        return UnitProductPricePeriod.builder()
+                .unitProduct(unitProduct)
+                .supplyPrice(supplyPrice).salePrice(salePrice)
+                .active(true).effectiveFrom(LocalDate.of(2026, 1, 1))
+                .build();
+    }
+
+    private BillingPlanDiscountPeriod planDiscountPeriod(BillingPlan plan, DiscountType discountType, BigDecimal discountValue) {
+        return BillingPlanDiscountPeriod.builder()
                 .billingPlan(plan)
-                .supplyPrice(supplyPrice).salePrice(salePrice)
-                .discountType(discountType).discountValue(discountValue)
-                .active(true).effectiveFrom(LocalDate.of(2026, 1, 1))
-                .build();
-    }
-
-    private CapacityAddOnPricePeriod addOnPeriod(
-            CapacityAddOn addOn, BigDecimal supplyPrice, BigDecimal salePrice, DiscountType discountType, BigDecimal discountValue
-    ) {
-        return CapacityAddOnPricePeriod.builder()
-                .capacityAddOn(addOn)
-                .supplyPrice(supplyPrice).salePrice(salePrice)
-                .discountType(discountType).discountValue(discountValue)
-                .active(true).effectiveFrom(LocalDate.of(2026, 1, 1))
-                .build();
-    }
-
-    private OptionalFeaturePricePeriod featurePeriod(
-            OptionalFeature feature, BigDecimal supplyPrice, BigDecimal salePrice, DiscountType discountType, BigDecimal discountValue
-    ) {
-        return OptionalFeaturePricePeriod.builder()
-                .optionalFeature(feature)
-                .supplyPrice(supplyPrice).salePrice(salePrice)
                 .discountType(discountType).discountValue(discountValue)
                 .active(true).effectiveFrom(LocalDate.of(2026, 1, 1))
                 .build();
@@ -211,14 +184,20 @@ class CeremonyServiceTest {
         Member member = Member.builder().role(MemberRole.OWNER).build();
         TaxPolicy taxPolicy = mock(TaxPolicy.class);
 
+        UnitProduct signers = unitProduct(901L, UnitProductType.SIGNERS);
+        BillingPlanUnitProduct line = BillingPlanUnitProduct.builder()
+                .billingPlan(plan).unitProduct(signers).includedQuantity(1).purchasable(false).build();
+
         given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(member));
         given(ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(Optional.empty());
-        given(billingPlanPricePeriodRepository.findEffective(eq(101L), any(LocalDate.class)))
-                .willReturn(Optional.of(planPeriod(plan, new BigDecimal("10000"), new BigDecimal("10005"), DiscountType.FIXED_AMOUNT, BigDecimal.ZERO)));
-        given(ceremonyCapacityPurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(List.of());
-        given(ceremonyOptionalFeaturePurchaseRepository.findAllByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(List.of());
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of(line));
+        given(unitProductPricePeriodRepository.findEffective(eq(901L), any(LocalDate.class)))
+                .willReturn(Optional.of(unitProductPeriod(signers, new BigDecimal("10000"), new BigDecimal("10005"))));
+        given(billingPlanDiscountPeriodRepository.findEffective(eq(101L), any(LocalDate.class)))
+                .willReturn(Optional.of(planDiscountPeriod(plan, DiscountType.FIXED_AMOUNT, BigDecimal.ZERO)));
+        given(ceremonyUnitProductPurchaseLineRepository.findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(10L)).willReturn(List.of());
         given(taxPolicyResolver.resolve(any(), any(), any())).willReturn(taxPolicy);
         given(taxPolicy.getRatePercent()).willReturn(new BigDecimal("10.0000"));
 
@@ -247,10 +226,11 @@ class CeremonyServiceTest {
                 .willReturn(Optional.of(member));
         given(billingPlanRepository.findById(101L)).willReturn(Optional.of(plan));
         given(userRepository.findById(CURRENT_USER_ID)).willReturn(Optional.of(creator));
-        given(billingPlanPricePeriodRepository.findEffective(eq(101L), any(LocalDate.class)))
-                .willReturn(Optional.of(planPeriod(
-                        plan, new BigDecimal("100000"), new BigDecimal("90000"), DiscountType.FIXED_AMOUNT, new BigDecimal("10000")
-                )));
+        // 이 플랜은 포함 단위 상품이 없다고 가정한다 — 통화 검증(resolvePlanCurrency)이
+        // 자연히 건너뛰어지고, recordPlanHistory의 스냅샷 루프도 빈 채로 끝난다.
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of());
+        given(billingPlanDiscountPeriodRepository.findEffective(eq(101L), any(LocalDate.class)))
+                .willReturn(Optional.of(planDiscountPeriod(plan, DiscountType.FIXED_AMOUNT, new BigDecimal("10000"))));
 
         OrganizationDiscountService.EffectiveDiscount overrideDiscount =
                 new OrganizationDiscountService.EffectiveDiscount(DiscountType.PERCENT, new BigDecimal("30"));
@@ -271,162 +251,112 @@ class CeremonyServiceTest {
     }
 
     @Test
-    @DisplayName("조직×용량추가구매 할인 오버라이드가 있으면 카탈로그 값 대신 그 값을 CeremonyCapacityPurchase에 스냅샷한다")
-    void purchaseCapacity_withDiscountOverride_snapshotsOverride() {
+    @DisplayName("단위 상품 추가구매는 여러 줄을 한 번에 담아 하나의 요청 헤더 아래 저장한다(장바구니형)")
+    void purchaseUnitProducts_multipleLines_savesOneHeaderWithLines() {
         // given
         Organization organization = organization();
         Ceremony ceremony = ceremony(organization, 10L);
         Member member = Member.builder().role(MemberRole.OWNER).build();
 
-        CapacityAddOn addOn = CapacityAddOn.builder().capacityType(CapacityType.SIGNERS).unitAmount(10).build();
-        ReflectionTestUtils.setField(addOn, "id", 201L);
+        UnitProduct signers = unitProduct(201L, UnitProductType.SIGNERS);
+        UnitProduct tablets = unitProduct(202L, UnitProductType.TABLETS);
 
         given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(member));
-        given(capacityAddOnRepository.findById(201L)).willReturn(Optional.of(addOn));
-        given(capacityAddOnPricePeriodRepository.findEffective(eq(201L), any(LocalDate.class)))
-                .willReturn(Optional.of(addOnPeriod(
-                        addOn, new BigDecimal("50000"), new BigDecimal("45000"), DiscountType.FIXED_AMOUNT, new BigDecimal("5000")
-                )));
+        given(unitProductRepository.findById(201L)).willReturn(Optional.of(signers));
+        given(unitProductRepository.findById(202L)).willReturn(Optional.of(tablets));
+        given(unitProductPricePeriodRepository.findEffective(eq(201L), any(LocalDate.class)))
+                .willReturn(Optional.of(unitProductPeriod(signers, new BigDecimal("8000"), new BigDecimal("10000"))));
+        given(unitProductPricePeriodRepository.findEffective(eq(202L), any(LocalDate.class)))
+                .willReturn(Optional.of(unitProductPeriod(tablets, new BigDecimal("40000"), new BigDecimal("50000"))));
+        given(ceremonyUnitProductPurchaseRepository.save(any(CeremonyUnitProductPurchase.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+        given(ceremonyUnitProductPurchaseLineRepository.save(any(CeremonyUnitProductPurchaseLine.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
 
-        OrganizationDiscountService.EffectiveDiscount overrideDiscount =
-                new OrganizationDiscountService.EffectiveDiscount(DiscountType.PERCENT, new BigDecimal("20"));
-        given(organizationDiscountService.resolveCapacityAddOnDiscount(eq(organization), eq(201L), any(), any(), any(LocalDate.class)))
-                .willReturn(overrideDiscount);
-
-        CeremonyDto.Request.PurchaseCapacity request = new CeremonyDto.Request.PurchaseCapacity(201L, 2);
+        CeremonyDto.Request.PurchaseUnitProducts request = new CeremonyDto.Request.PurchaseUnitProducts(List.of(
+                new CeremonyDto.Request.PurchaseUnitProductLine(201L, 10),
+                new CeremonyDto.Request.PurchaseUnitProductLine(202L, 5)
+        ));
 
         // when
-        ceremonyService.purchaseCapacity(ORGANIZATION_ID, 10L, CURRENT_USER_ID, request);
+        CeremonyDto.Response.UnitProductPurchaseSummary result =
+                ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, 10L, CURRENT_USER_ID, request);
 
-        // then
-        ArgumentCaptor<CeremonyCapacityPurchase> captor = ArgumentCaptor.forClass(CeremonyCapacityPurchase.class);
-        verify(ceremonyCapacityPurchaseRepository).save(captor.capture());
-        CeremonyCapacityPurchase purchase = captor.getValue();
-        assertThat(purchase.getPurchasedDiscountType()).isEqualTo(DiscountType.PERCENT);
-        assertThat(purchase.getPurchasedDiscountValue()).isEqualByComparingTo("20");
+        // then — 옛 "묶음 상품"(secondaryCapacityType)이 하던 역할을 이제 한 요청의 여러 줄이 대신한다.
+        assertThat(result.getLines()).hasSize(2);
+        assertThat(result.getStatus()).isEqualTo("PENDING");
+        verify(ceremonyUnitProductPurchaseRepository).save(any(CeremonyUnitProductPurchase.class));
+        verify(ceremonyUnitProductPurchaseLineRepository, org.mockito.Mockito.times(2)).save(any(CeremonyUnitProductPurchaseLine.class));
     }
 
     @Test
-    @DisplayName("묶음 상품(예: 서명자+태블릿) 구매는 보조 용량 단가도 함께 스냅샷한다")
-    void purchaseCapacity_comboProduct_snapshotsSecondaryUnitAmount() {
-        // given
+    @DisplayName("이벤트 효과 묶음(토글형)은 수량 2 이상을 요청하면 거부된다")
+    void purchaseUnitProducts_effectBundleQuantityOverOne_rejected() {
         Organization organization = organization();
         Ceremony ceremony = ceremony(organization, 10L);
         Member member = Member.builder().role(MemberRole.OWNER).build();
 
-        CapacityAddOn comboAddOn = CapacityAddOn.builder()
-                .capacityType(CapacityType.SIGNERS)
-                .unitAmount(10)
-                .secondaryCapacityType(CapacityType.TABLETS)
-                .secondaryUnitAmount(10)
-                .build();
-        ReflectionTestUtils.setField(comboAddOn, "id", 301L);
+        UnitProduct bundle = unitProduct(301L, UnitProductType.EVENT_EFFECT_BUNDLE);
 
         given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(member));
-        given(capacityAddOnRepository.findById(301L)).willReturn(Optional.of(comboAddOn));
-        given(capacityAddOnPricePeriodRepository.findEffective(eq(301L), any(LocalDate.class)))
-                .willReturn(Optional.of(addOnPeriod(
-                        comboAddOn, new BigDecimal("100000"), new BigDecimal("90000"), DiscountType.FIXED_AMOUNT, BigDecimal.ZERO
-                )));
-        given(organizationDiscountService.resolveCapacityAddOnDiscount(eq(organization), eq(301L), any(), any(), any(LocalDate.class)))
-                .willReturn(new OrganizationDiscountService.EffectiveDiscount(DiscountType.FIXED_AMOUNT, BigDecimal.ZERO));
+        given(ceremonyUnitProductPurchaseRepository.save(any(CeremonyUnitProductPurchase.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+        given(unitProductRepository.findById(301L)).willReturn(Optional.of(bundle));
+        given(unitProductPricePeriodRepository.findEffective(eq(301L), any(LocalDate.class)))
+                .willReturn(Optional.of(unitProductPeriod(bundle, new BigDecimal("50000"), new BigDecimal("60000"))));
 
-        CeremonyDto.Request.PurchaseCapacity request = new CeremonyDto.Request.PurchaseCapacity(301L, 2);
+        CeremonyDto.Request.PurchaseUnitProducts request =
+                new CeremonyDto.Request.PurchaseUnitProducts(List.of(new CeremonyDto.Request.PurchaseUnitProductLine(301L, 2)));
 
-        // when
-        ceremonyService.purchaseCapacity(ORGANIZATION_ID, 10L, CURRENT_USER_ID, request);
-
-        // then
-        ArgumentCaptor<CeremonyCapacityPurchase> captor = ArgumentCaptor.forClass(CeremonyCapacityPurchase.class);
-        verify(ceremonyCapacityPurchaseRepository).save(captor.capture());
-        CeremonyCapacityPurchase purchase = captor.getValue();
-        assertThat(purchase.getPurchasedUnitAmount()).isEqualTo(10);
-        assertThat(purchase.getPurchasedSecondaryUnitAmount()).isEqualTo(10);
+        assertThatThrownBy(() -> ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, 10L, CURRENT_USER_ID, request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CommonErrorCode.INVALID_REQUEST);
+        verify(ceremonyUnitProductPurchaseLineRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("묶음 상품(예: 서명자+태블릿) 구매는 보조 용량 쪽 유효 한도에도 반영된다")
-    void calculateEffectiveCapacity_comboPurchase_addsToSecondaryCapacityType() {
+    @DisplayName("유효 한도는 플랜 기본값(스냅샷) + 승인된 구매 줄의 수량 합이다 — 묶음 상품의 보조 용량 개념은 폐지됐다")
+    void calculateEffectiveCapacity_sumsApprovedPurchaseLines() {
         // given
         Organization organization = organization();
         BillingPlan plan = BillingPlan.builder().name("스탠다드").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
         Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
         ReflectionTestUtils.setField(ceremony, "id", 10L);
 
-        CapacityAddOn comboAddOn = CapacityAddOn.builder()
-                .capacityType(CapacityType.SIGNERS)
-                .unitAmount(10)
-                .secondaryCapacityType(CapacityType.TABLETS)
-                .secondaryUnitAmount(10)
-                .build();
-        ReflectionTestUtils.setField(comboAddOn, "id", 301L);
-
-        CeremonyCapacityPurchase comboPurchase = CeremonyCapacityPurchase.builder()
-                .ceremony(ceremony)
-                .capacityAddOn(comboAddOn)
-                .quantity(2)
-                .currencyCode("KRW")
-                .purchasedUnitAmount(10)
-                .purchasedSecondaryUnitAmount(10)
-                .purchasedSalePrice(new BigDecimal("90000"))
-                .purchasedDiscountType(DiscountType.FIXED_AMOUNT)
-                .purchasedDiscountValue(BigDecimal.ZERO)
-                .purchasedTaxCode("KR_VAT_STANDARD")
-                .build();
-
-        given(ceremonyCapacityPurchaseRepository
-                .findAllByCeremonyIdAndCapacityAddOn_SecondaryCapacityTypeAndStatus(10L, CapacityType.TABLETS, PurchaseStatus.APPROVED))
-                .willReturn(List.of(comboPurchase));
-
-        // when — 플랜 기본 포함 0(TABLETS는 플랜 기본값 개념이 없다) + 묶음 구매(수량 2 × 보조 단가 10)
-        int effective = ceremonyService.calculateEffectiveCapacity(ceremony, CapacityType.TABLETS);
-
-        // then
-        assertThat(effective).isEqualTo(20);
-    }
-
-    @Test
-    @DisplayName("조직×선택옵션 할인 오버라이드가 없으면 카탈로그 자체의 할인값을 그대로 CeremonyOptionalFeaturePurchase에 스냅샷한다")
-    void purchaseOptionalFeature_withoutDiscountOverride_snapshotsCatalogValue() {
-        // given
-        Organization organization = organization();
-        Ceremony ceremony = ceremony(organization, 10L);
-        Member member = Member.builder().role(MemberRole.OWNER).build();
-
-        OptionalFeature feature = OptionalFeature.builder()
-                .code(OptionalFeatureCode.SIGNER_FIELD_ZOOM)
-                .name("서명 하이라이트")
-                .build();
-        ReflectionTestUtils.setField(feature, "id", 301L);
-
-        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
-        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
-                .willReturn(Optional.of(member));
-        given(optionalFeatureRepository.findById(301L)).willReturn(Optional.of(feature));
-        given(optionalFeaturePricePeriodRepository.findEffective(eq(301L), any(LocalDate.class)))
-                .willReturn(Optional.of(featurePeriod(
-                        feature, new BigDecimal("30000"), new BigDecimal("27000"), DiscountType.FIXED_AMOUNT, new BigDecimal("3000")
-                )));
-
-        // 오버라이드 없음 — OrganizationDiscountService가 카탈로그 값을 그대로 돌려주는 상황을 흉내낸다.
-        given(organizationDiscountService.resolveOptionalFeatureDiscount(eq(organization), eq(301L), any(), any(), any(LocalDate.class)))
-                .willReturn(new OrganizationDiscountService.EffectiveDiscount(DiscountType.FIXED_AMOUNT, new BigDecimal("3000")));
-
-        CeremonyDto.Request.PurchaseOptionalFeature request = new CeremonyDto.Request.PurchaseOptionalFeature(301L);
+        given(ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(Optional.empty());
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of());
+        given(ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdAndUnitProduct_TypeAndPurchase_Status(10L, UnitProductType.TABLETS, PurchaseStatus.APPROVED))
+                .willReturn(List.of(
+                        purchaseLine(unitProduct(401L, UnitProductType.TABLETS), 10),
+                        purchaseLine(unitProduct(401L, UnitProductType.TABLETS), 5)
+                ));
 
         // when
-        ceremonyService.purchaseOptionalFeature(ORGANIZATION_ID, 10L, CURRENT_USER_ID, request);
+        int effective = ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.TABLETS);
 
-        // then
-        ArgumentCaptor<CeremonyOptionalFeaturePurchase> captor = ArgumentCaptor.forClass(CeremonyOptionalFeaturePurchase.class);
-        verify(ceremonyOptionalFeaturePurchaseRepository).save(captor.capture());
-        CeremonyOptionalFeaturePurchase purchase = captor.getValue();
-        assertThat(purchase.getPurchasedDiscountType()).isEqualTo(DiscountType.FIXED_AMOUNT);
-        assertThat(purchase.getPurchasedDiscountValue()).isEqualByComparingTo("3000");
+        // then — 플랜 기본 포함 0(TABLETS는 플랜 기본값 개념이 없다) + 승인된 구매 줄 합(10+5)
+        assertThat(effective).isEqualTo(15);
+    }
+
+    private CeremonyUnitProductPurchaseLine purchaseLine(UnitProduct unitProduct, int quantity) {
+        CeremonyUnitProductPurchase header = CeremonyUnitProductPurchase.builder().build();
+        ReflectionTestUtils.setField(header, "status", PurchaseStatus.APPROVED);
+        return CeremonyUnitProductPurchaseLine.builder()
+                .purchase(header)
+                .unitProduct(unitProduct)
+                .quantity(quantity)
+                .currencyCode("KRW")
+                .purchasedName(unitProduct.getName())
+                .purchasedSalePrice(new BigDecimal("10000"))
+                .purchasedTaxCode("KR_VAT_STANDARD")
+                .build();
     }
 
     @Test

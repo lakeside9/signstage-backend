@@ -3,9 +3,12 @@ package com.eformworks.signstage.backend.feature.ceremony.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -64,28 +67,35 @@ public final class CeremonyDto {
             private String contactEmail;
         }
 
+        /** 장바구니형 구매 요청 한 줄 — 단위 상품 하나 + 수량. */
         @Getter
         @Setter
         @NoArgsConstructor
         @AllArgsConstructor
-        public static class PurchaseCapacity {
+        public static class PurchaseUnitProductLine {
 
             @NotNull
-            private Long capacityAddOnId;
+            private Long unitProductId;
 
             @NotNull
             @Min(1)
             private Integer quantity;
         }
 
+        /**
+         * 단위 상품 추가구매 — 옛 {@code PurchaseCapacity}/{@code PurchaseOptionalFeature} 통합
+         * (signstage-docs business/billing-catalog-unit-product-model-redesign-review.md 결정,
+         * 2026-09-10, 3.4절). 한 번에 여러 단위 상품 줄을 담아 제출할 수 있다("장바구니형") —
+         * 승인/반려는 이 요청 전체를 한 단위로 처리된다.
+         */
         @Getter
         @Setter
         @NoArgsConstructor
         @AllArgsConstructor
-        public static class PurchaseOptionalFeature {
+        public static class PurchaseUnitProducts {
 
-            @NotNull
-            private Long optionalFeatureId;
+            @NotEmpty
+            private List<PurchaseUnitProductLine> lines;
         }
 
         /** 플랫폼 관리자 전용. IN_PROGRESS/COMPLETED만 허용한다. */
@@ -162,41 +172,33 @@ public final class CeremonyDto {
             private final LocalDateTime createdAt;
         }
 
+        /** 구매 요청 한 줄 — 단위 상품 하나 + 수량 + 구매 시점 스냅샷(할인 없음). */
         @Getter
         @AllArgsConstructor
-        public static class CapacityPurchaseSummary {
+        public static class UnitProductPurchaseLineSummary {
 
             private final Long id;
-            private final Long ceremonyId;
-            private final Long capacityAddOnId;
+            private final Long unitProductId;
+            private final String unitProductType;
             private final Integer quantity;
-            private final Integer purchasedUnitAmount;
-            /** 묶음 상품(예: "서명자+태블릿")이었을 때만 값이 있다 — 구매 시점 보조 용량 단가 스냅샷. */
-            private final Integer purchasedSecondaryUnitAmount;
             private final String currencyCode;
+            private final String purchasedName;
             private final BigDecimal purchasedSalePrice;
-            private final String purchasedDiscountType;
-            private final BigDecimal purchasedDiscountValue;
             private final String purchasedTaxCode;
-            private final String status;
-            private final String rejectionReason;
-            private final LocalDateTime reviewedAt;
-            private final LocalDateTime createdAt;
         }
 
+        /**
+         * 단위 상품 추가구매 요청 헤더 + 그 줄 전체 — 옛 {@code CapacityPurchaseSummary}/
+         * {@code OptionalFeaturePurchaseSummary} 통합(signstage-docs
+         * business/billing-catalog-unit-product-model-redesign-review.md 결정, 2026-09-10).
+         */
         @Getter
         @AllArgsConstructor
-        public static class OptionalFeaturePurchaseSummary {
+        public static class UnitProductPurchaseSummary {
 
             private final Long id;
             private final Long ceremonyId;
-            private final Long optionalFeatureId;
-            private final String purchasedName;
-            private final String currencyCode;
-            private final BigDecimal purchasedSalePrice;
-            private final String purchasedDiscountType;
-            private final BigDecimal purchasedDiscountValue;
-            private final String purchasedTaxCode;
+            private final List<UnitProductPurchaseLineSummary> lines;
             private final String status;
             private final String rejectionReason;
             private final LocalDateTime reviewedAt;
@@ -229,9 +231,10 @@ public final class CeremonyDto {
         @AllArgsConstructor
         public static class EstimatedTotal {
 
+            /** 플랜 소계(Σ 포함 단위 상품 판매가 × 포함 수량)에 플랜 자체 할인을 적용한 값. */
             private final BigDecimal planAppliedPrice;
-            private final BigDecimal capacityPurchasesTotal;
-            private final BigDecimal optionalFeaturePurchasesTotal;
+            /** 추가구매(승인된 것만) 합 — 정가 그대로, 할인 없음(3.5절 결정). */
+            private final BigDecimal unitProductPurchasesTotal;
             private final BigDecimal subtotal;
             private final String finalDiscountType;
             private final BigDecimal finalDiscountValue;
@@ -243,10 +246,26 @@ public final class CeremonyDto {
             private final BigDecimal finalTotal;
         }
 
+        /** 플랜 이력 스냅샷의 단위 상품 한 줄 — 포함 수량 × 그 순간 단가. */
+        @Getter
+        @AllArgsConstructor
+        public static class PlanHistoryLineSummary {
+
+            private final Long unitProductId;
+            private final String unitProductType;
+            private final String unitProductName;
+            private final Integer includedQuantity;
+            private final Boolean purchasable;
+            private final String currencyCode;
+            private final BigDecimal snapshotSalePrice;
+            private final String snapshotTaxCode;
+        }
+
         /**
-         * 플랜 변경 이력 한 행 — 그 변경 시점의 플랜 이름/가격/한도 스냅샷이다(카탈로그가
-         * 나중에 바뀌어도 안 바뀜). signstage-docs business/ceremony-plan-confirmation-review.md
-         * 3.4절.
+         * 플랜 변경 이력 한 행 — 그 변경 시점의 플랜 이름/할인/단위 상품 구성(줄 단위 가격
+         * 포함) 스냅샷이다(카탈로그가 나중에 바뀌어도 안 바뀜). signstage-docs
+         * business/ceremony-plan-confirmation-review.md 3.4절,
+         * business/billing-catalog-unit-product-model-redesign-review.md 5장.
          */
         @Getter
         @AllArgsConstructor
@@ -255,17 +274,9 @@ public final class CeremonyDto {
             private final Long id;
             private final Long billingPlanId;
             private final String planName;
-            private final String currencyCode;
-            private final BigDecimal planSupplyPrice;
-            private final BigDecimal planSalePrice;
             private final String planDiscountType;
             private final BigDecimal planDiscountValue;
-            private final String taxCode;
-            private final Integer planMaxSigners;
-            private final Integer planMaxTemplates;
-            private final Integer planMaxTestEvents;
-            private final Integer planMaxRehearsalEvents;
-            private final Integer planMaxMainEvents;
+            private final List<PlanHistoryLineSummary> lines;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }

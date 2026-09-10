@@ -16,19 +16,20 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventOptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyTemplate;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeatureCode;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
 import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductCategory;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.SignerRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
@@ -59,7 +60,7 @@ class CeremonyEventServiceTest {
     @Mock
     private CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
     @Mock
-    private OptionalFeatureRepository optionalFeatureRepository;
+    private UnitProductRepository unitProductRepository;
     @Mock
     private CeremonyTemplateRepository ceremonyTemplateRepository;
     @Mock
@@ -125,14 +126,15 @@ class CeremonyEventServiceTest {
         return signer;
     }
 
-    private OptionalFeature optionalFeature(Long id, String name, String exclusivityGroup) {
-        OptionalFeature feature = OptionalFeature.builder()
-                .code(OptionalFeatureCode.SIGNER_FIELD_ZOOM)
+    private UnitProduct unitProduct(Long id, String name, String exclusivityGroup) {
+        UnitProduct unitProduct = UnitProduct.builder()
+                .type(UnitProductType.EVENT_EFFECT_BUNDLE)
                 .name(name)
+                .category(UnitProductCategory.APPLICATION)
                 .exclusivityGroup(exclusivityGroup)
                 .build();
-        ReflectionTestUtils.setField(feature, "id", id);
-        return feature;
+        ReflectionTestUtils.setField(unitProduct, "id", id);
+        return unitProduct;
     }
 
     private void stubAccess(Ceremony ceremony) {
@@ -194,13 +196,13 @@ class CeremonyEventServiceTest {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
         CeremonyEvent event = event(EVENT_ID, ceremony);
-        OptionalFeature blueHighlight = optionalFeature(201L, "파란 하이라이트", "SIGNER_HIGHLIGHT_COLOR");
-        OptionalFeature redHighlight = optionalFeature(202L, "빨간 하이라이트", "SIGNER_HIGHLIGHT_COLOR");
+        UnitProduct blueHighlight = unitProduct(201L, "파란 하이라이트", "SIGNER_HIGHLIGHT_COLOR");
+        UnitProduct redHighlight = unitProduct(202L, "빨간 하이라이트", "SIGNER_HIGHLIGHT_COLOR");
 
         stubAccess(ceremony);
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
-        given(ceremonyService.retrievePurchasedOptionalFeatureIds(ceremony)).willReturn(List.of(201L, 202L));
-        given(optionalFeatureRepository.findAllByIdIn(List.of(201L, 202L))).willReturn(List.of(blueHighlight, redHighlight));
+        given(ceremonyService.retrieveApplicableUnitProductIds(ceremony)).willReturn(List.of(201L, 202L));
+        given(unitProductRepository.findAllByIdIn(List.of(201L, 202L))).willReturn(List.of(blueHighlight, redHighlight));
 
         CeremonyEventDto.Request.UpdateOptionalFeatures request =
                 new CeremonyEventDto.Request.UpdateOptionalFeatures(List.of(201L, 202L));
@@ -209,7 +211,7 @@ class CeremonyEventServiceTest {
         assertThatThrownBy(() -> eventService.updateOptionalFeatures(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID, request))
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
-                .isEqualTo(CeremonyErrorCode.OPTIONAL_FEATURE_GROUP_CONFLICT);
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_GROUP_CONFLICT);
         verify(ceremonyEventOptionalFeatureRepository, never()).save(any(CeremonyEventOptionalFeature.class));
     }
 
@@ -219,13 +221,13 @@ class CeremonyEventServiceTest {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
         CeremonyEvent event = event(EVENT_ID, ceremony);
-        OptionalFeature signerFieldZoom = optionalFeature(201L, "서명 하이라이트", null);
-        OptionalFeature fireworks = optionalFeature(203L, "폭죽", null);
+        UnitProduct signerFieldZoom = unitProduct(201L, "서명 하이라이트", null);
+        UnitProduct fireworks = unitProduct(203L, "폭죽", null);
 
         stubAccess(ceremony);
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
-        given(ceremonyService.retrievePurchasedOptionalFeatureIds(ceremony)).willReturn(List.of(201L, 203L));
-        given(optionalFeatureRepository.findAllByIdIn(List.of(201L, 203L))).willReturn(List.of(signerFieldZoom, fireworks));
+        given(ceremonyService.retrieveApplicableUnitProductIds(ceremony)).willReturn(List.of(201L, 203L));
+        given(unitProductRepository.findAllByIdIn(List.of(201L, 203L))).willReturn(List.of(signerFieldZoom, fireworks));
 
         CeremonyEventDto.Request.UpdateOptionalFeatures request =
                 new CeremonyEventDto.Request.UpdateOptionalFeatures(List.of(201L, 203L));

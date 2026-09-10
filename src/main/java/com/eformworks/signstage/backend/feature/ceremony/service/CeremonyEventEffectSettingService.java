@@ -111,7 +111,7 @@ public class CeremonyEventEffectSettingService {
             if (definition.getTargetType() != targetType || definition.getTriggerType() != triggerType) {
                 throw new ApplicationException(CeremonyErrorCode.EFFECT_SELECTION_CLASSIFICATION_MISMATCH);
             }
-            if (!ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(
+            if (!ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndUnitProductIdIn(
                     definition.getId(), List.copyOf(appliedFeatureIds)
             )) {
                 throw new ApplicationException(CeremonyErrorCode.EFFECT_SELECTION_OPTIONAL_FEATURE_NOT_APPLIED);
@@ -137,7 +137,7 @@ public class CeremonyEventEffectSettingService {
     @Transactional
     public void pruneSettingsRequiringUnappliedFeatures(Long eventId, List<Long> appliedOptionalFeatureIds) {
         for (CeremonyEventEffectSetting setting : ceremonyEventEffectSettingRepository.findAllByEventIdWithDefinition(eventId)) {
-            if (!ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(
+            if (!ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndUnitProductIdIn(
                     setting.getDefinition().getId(), appliedOptionalFeatureIds
             )) {
                 ceremonyEventEffectSettingRepository.delete(setting);
@@ -147,7 +147,7 @@ public class CeremonyEventEffectSettingService {
 
     private List<Long> retrieveAppliedOptionalFeatureIds(Long eventId) {
         return ceremonyEventOptionalFeatureRepository.findAllByCeremonyEventId(eventId).stream()
-                .map(mapping -> mapping.getOptionalFeature().getId())
+                .map(mapping -> mapping.getUnitProduct().getId())
                 .toList();
     }
 

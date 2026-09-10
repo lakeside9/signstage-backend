@@ -264,13 +264,13 @@ class CeremonyEffectDefinitionServiceTest {
         return definition;
     }
 
-    /** {@code findAllByEffectDefinitionId} mocking 전용 — {@code optionalFeature.id}만 있으면 충분하다. */
-    private com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption mappingTo(Long optionalFeatureId) {
-        com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature feature =
-                com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature.builder().build();
-        ReflectionTestUtils.setField(feature, "id", optionalFeatureId);
+    /** {@code findAllByEffectDefinitionId} mocking 전용 — {@code unitProduct.id}만 있으면 충분하다. */
+    private com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption mappingTo(Long unitProductId) {
+        com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct unitProduct =
+                com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct.builder().build();
+        ReflectionTestUtils.setField(unitProduct, "id", unitProductId);
         return com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption.builder()
-                .optionalFeature(feature)
+                .unitProduct(unitProduct)
                 .build();
     }
 }

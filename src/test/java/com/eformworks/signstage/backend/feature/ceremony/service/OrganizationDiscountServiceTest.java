@@ -18,14 +18,8 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationBill
 import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationBillingPlanDiscountHistory;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.CapacityAddOnRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationBillingPlanDiscountHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationBillingPlanDiscountRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationCapacityAddOnDiscountHistoryRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationCapacityAddOnDiscountRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationOptionalFeatureDiscountHistoryRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationOptionalFeatureDiscountRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
@@ -58,21 +52,9 @@ class OrganizationDiscountServiceTest {
     @Mock
     private BillingPlanRepository billingPlanRepository;
     @Mock
-    private OptionalFeatureRepository optionalFeatureRepository;
-    @Mock
-    private CapacityAddOnRepository capacityAddOnRepository;
-    @Mock
     private OrganizationBillingPlanDiscountRepository organizationBillingPlanDiscountRepository;
     @Mock
-    private OrganizationOptionalFeatureDiscountRepository organizationOptionalFeatureDiscountRepository;
-    @Mock
-    private OrganizationCapacityAddOnDiscountRepository organizationCapacityAddOnDiscountRepository;
-    @Mock
     private OrganizationBillingPlanDiscountHistoryRepository organizationBillingPlanDiscountHistoryRepository;
-    @Mock
-    private OrganizationOptionalFeatureDiscountHistoryRepository organizationOptionalFeatureDiscountHistoryRepository;
-    @Mock
-    private OrganizationCapacityAddOnDiscountHistoryRepository organizationCapacityAddOnDiscountHistoryRepository;
     @Mock
     private PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     @Mock

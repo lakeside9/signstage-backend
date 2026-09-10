@@ -4,9 +4,8 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
-import com.eformworks.signstage.backend.feature.ceremony.dto.CapacityAddOnDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
-import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -155,97 +154,66 @@ public class CeremonyController {
     }
 
     @Operation(
-            summary = "필수옵션(용량) 추가구매",
-            description = "예: 서명자 +10명. 요청 즉시 PENDING으로 생기고, 플랫폼 관리자가 승인해야 한도에 반영된다."
+            summary = "단위 상품 추가구매",
+            description = "여러 단위 상품 줄을 한 번에 담을 수 있다(장바구니형). 요청 즉시 PENDING으로 생기고, "
+                    + "플랫폼 관리자가 승인해야 한도/적용 가능 목록에 반영된다."
     )
-    @PostMapping("/{ceremonyId}/capacity-purchases")
-    public ApiResponse<CeremonyDto.Response.CapacityPurchaseSummary> purchaseCapacity(
+    @PostMapping("/{ceremonyId}/unit-product-purchases")
+    public ApiResponse<CeremonyDto.Response.UnitProductPurchaseSummary> purchaseUnitProducts(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long organizationId,
             @PathVariable Long ceremonyId,
-            @Valid @RequestBody CeremonyDto.Request.PurchaseCapacity request
+            @Valid @RequestBody CeremonyDto.Request.PurchaseUnitProducts request
     ) {
-        CeremonyDto.Response.CapacityPurchaseSummary response =
-                ceremonyService.purchaseCapacity(organizationId, ceremonyId, currentUser.userId(), request);
+        CeremonyDto.Response.UnitProductPurchaseSummary response =
+                ceremonyService.purchaseUnitProducts(organizationId, ceremonyId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
     @Operation(
-            summary = "용량 추가구매 이력 조회",
+            summary = "단위 상품 추가구매 이력 조회",
             description = "요청자 본인이 볼 수 있는 이력이다. 대기중(PENDING)/승인됨(APPROVED)/반려됨(REJECTED) 전부 포함한다."
     )
-    @GetMapping("/{ceremonyId}/capacity-purchases")
-    public ApiResponse<List<CeremonyDto.Response.CapacityPurchaseSummary>> findCapacityPurchases(
+    @GetMapping("/{ceremonyId}/unit-product-purchases")
+    public ApiResponse<List<CeremonyDto.Response.UnitProductPurchaseSummary>> findUnitProductPurchases(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long organizationId,
             @PathVariable Long ceremonyId
     ) {
-        List<CeremonyDto.Response.CapacityPurchaseSummary> response =
-                ceremonyService.findCapacityPurchases(organizationId, ceremonyId, currentUser.userId());
+        List<CeremonyDto.Response.UnitProductPurchaseSummary> response =
+                ceremonyService.findUnitProductPurchases(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
     @Operation(
-            summary = "선택옵션 구매",
-            description = "행사 마스터 단위 구매다. 실제 적용은 이벤트 단위로 별도 선택한다. 승인 전(PENDING)에는 "
-                    + "적용할 수 없다 — 플랫폼 관리자 승인이 필요하다."
+            summary = "적용 가능한 단위 상품 조회",
+            description = "이 행사가 실제로 하위 행사에 적용할 수 있는 단위 상품(플랜 포함분 + 승인된 추가구매, "
+                    + "type=EVENT_EFFECT_BUNDLE)만 필터링해 돌려준다. 하위 행사 등록/수정/상세 화면이 이 목록으로 체크박스를 채운다."
     )
-    @PostMapping("/{ceremonyId}/optional-feature-purchases")
-    public ApiResponse<CeremonyDto.Response.OptionalFeaturePurchaseSummary> purchaseOptionalFeature(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long organizationId,
-            @PathVariable Long ceremonyId,
-            @Valid @RequestBody CeremonyDto.Request.PurchaseOptionalFeature request
-    ) {
-        CeremonyDto.Response.OptionalFeaturePurchaseSummary response =
-                ceremonyService.purchaseOptionalFeature(organizationId, ceremonyId, currentUser.userId(), request);
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
-    }
-
-    @Operation(
-            summary = "선택옵션 구매 이력 조회",
-            description = "요청자 본인이 볼 수 있는 이력이다. 대기중(PENDING)/승인됨(APPROVED)/반려됨(REJECTED) 전부 포함한다."
-    )
-    @GetMapping("/{ceremonyId}/optional-feature-purchases")
-    public ApiResponse<List<CeremonyDto.Response.OptionalFeaturePurchaseSummary>> findOptionalFeaturePurchases(
+    @GetMapping("/{ceremonyId}/applicable-unit-products")
+    public ApiResponse<List<UnitProductDto.Response.UnitProductSummary>> findApplicableUnitProducts(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long organizationId,
             @PathVariable Long ceremonyId
     ) {
-        List<CeremonyDto.Response.OptionalFeaturePurchaseSummary> response =
-                ceremonyService.findOptionalFeaturePurchases(organizationId, ceremonyId, currentUser.userId());
+        List<UnitProductDto.Response.UnitProductSummary> response =
+                ceremonyService.retrieveApplicableUnitProducts(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
     @Operation(
-            summary = "적용 가능한 선택옵션 조회",
-            description = "이 행사가 실제로 하위 행사에 적용할 수 있는 선택옵션(플랜 포함분 + 승인된 추가구매)만 "
-                    + "필터링해 돌려준다. 하위 행사 등록/수정/상세 화면이 이 목록으로 체크박스를 채운다."
+            summary = "구매 가능한 단위 상품 조회",
+            description = "이 행사의 플랜에서 구매 후보로 열어둔(안 A 큐레이션) 단위 상품만 필터링해 돌려준다. "
+                    + "추가구매 폼이 이 목록으로 드롭다운을 채운다. 플랜이 없는 행사는 활성 상품 전체를 제한 없이 돌려준다."
     )
-    @GetMapping("/{ceremonyId}/available-optional-features")
-    public ApiResponse<List<OptionalFeatureDto.Response.OptionalFeatureSummary>> findAvailableOptionalFeatures(
+    @GetMapping("/{ceremonyId}/purchasable-unit-products")
+    public ApiResponse<List<UnitProductDto.Response.UnitProductSummary>> findPurchasableUnitProducts(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long organizationId,
             @PathVariable Long ceremonyId
     ) {
-        List<OptionalFeatureDto.Response.OptionalFeatureSummary> response =
-                ceremonyService.retrieveAvailableOptionalFeatures(organizationId, ceremonyId, currentUser.userId());
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
-    }
-
-    @Operation(
-            summary = "구매 가능한 용량 추가구매 상품 조회",
-            description = "이 행사의 플랜에서 구매 후보로 열어둔(안 A 큐레이션) 용량 추가구매 상품만 필터링해 돌려준다. "
-                    + "용량 추가구매 구매 폼이 이 목록으로 드롭다운을 채운다. 플랜이 없는 행사는 활성 상품 전체를 제한 없이 돌려준다."
-    )
-    @GetMapping("/{ceremonyId}/available-capacity-addons")
-    public ApiResponse<List<CapacityAddOnDto.Response.CapacityAddOnSummary>> findAvailableCapacityAddOns(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long organizationId,
-            @PathVariable Long ceremonyId
-    ) {
-        List<CapacityAddOnDto.Response.CapacityAddOnSummary> response =
-                ceremonyService.retrieveAvailableCapacityAddOns(organizationId, ceremonyId, currentUser.userId());
+        List<UnitProductDto.Response.UnitProductSummary> response =
+                ceremonyService.retrievePurchasableUnitProducts(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

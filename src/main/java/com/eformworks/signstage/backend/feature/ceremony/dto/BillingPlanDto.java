@@ -6,12 +6,18 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * 과금 플랜 — 단위 상품 묶음 + 전체 할인(signstage-docs
+ * business/billing-catalog-unit-product-model-redesign-review.md 결정, 2026-09-10, 3.3절).
+ * 플랜은 더 이상 자기 가격을 갖지 않는다 — "오늘 가격"은
+ * {@code Σ(unitProduct.effectivePrice × includedQuantity)}로 조회 시점에 계산되고, 그 합계에
+ * 적용할 할인만 {@code BillingPlanDiscountPeriod}로 기간별 관리한다.
+ */
 public final class BillingPlanDto {
 
     private BillingPlanDto() {
@@ -22,10 +28,30 @@ public final class BillingPlanDto {
         private Request() {
         }
 
+        /** 플랜을 구성하는 단위 상품 한 줄 — {@code UnitProduct.id} + 포함 수량 + 구매 가능 여부. */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class PlanUnitProductLine {
+
+            @NotNull
+            private Long unitProductId;
+
+            /** 기본 포함 수량 — 0 이상. 0이면 "기본 미포함, 추가구매로만 확보". */
+            @NotNull
+            private Integer includedQuantity;
+
+            /** 이 플랜을 쓰는 행사가 이 단위 상품을 추가구매 후보로 고를 수 있는지. */
+            @NotNull
+            private Boolean purchasable;
+        }
+
         /**
-         * 플랜 생성은 정체성(name 등)과 최초 판매가격 기간을 함께 만든다 — 모든 플랜은 최소
-         * 1개의 {@code BillingPlanPricePeriod}를 가져야 하기 때문이다(signstage-docs
-         * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09).
+         * 플랜 생성은 정체성(name)과 단위 상품 구성, 최초 할인 기간을 함께 만든다 — 모든 플랜은
+         * 최소 1개의 {@code BillingPlanDiscountPeriod}를 가져야 한다(signstage-docs
+         * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09의 원칙을
+         * 할인 기간에도 그대로 적용).
          */
         @Getter
         @Setter
@@ -36,21 +62,14 @@ public final class BillingPlanDto {
             @NotBlank
             private String name;
 
-            private String currencyCode;
-
-            /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
-            private BigDecimal supplyPrice;
-
-            @NotNull
-            private BigDecimal salePrice;
+            /** 이 플랜이 포함하는 단위 상품 구성 전체(생략하면 빈 목록). */
+            private List<PlanUnitProductLine> unitProducts;
 
             @NotBlank
             private String discountType;
 
             @NotNull
             private BigDecimal discountValue;
-
-            private String taxCode;
 
             /** 최초 기간의 사용여부(보통 true). */
             @NotNull
@@ -62,42 +81,15 @@ public final class BillingPlanDto {
 
             /** 최초 기간의 종료일(무기한이면 생략). */
             private LocalDate effectiveTo;
-
-            /**
-             * 이 플랜이 기본 포함하는 용량 한도 — {@code CapacityType} 이름을 키로 하는 맵(예:
-             * {@code {"SIGNERS": 100, "TEMPLATES": 10, "TEST_EVENTS": 3, "REHEARSAL_EVENTS": 3,
-             * "MAIN_EVENTS": 1}}). 정확히 {@code CapacityType.planIncludableTypes()}(플랜 기본
-             * 포함이 가능한 종류)와 같은 키 집합이어야 하고, 값은 0 이상이어야 한다 — 서비스
-             * 계층에서 검증한다(signstage-docs
-             * business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08,
-             * 항목 B). {@code TABLETS} 같은 "플랜 기본 포함 불가" 종류를 키로 넣으면 거부된다.
-             */
-            @NotNull
-            private Map<String, Integer> capacities;
-
-            /** 이 플랜에 기본으로 포함할 선택옵션 id 목록(생략하면 빈 목록). */
-            private List<Long> optionalFeatureIds;
-
-            /**
-             * 이 플랜에서 구매 가능하게 열어줄 용량 추가구매 상품 id 목록(생략하면 빈 목록) — 안 A,
-             * 무료 포함이 아니라 "구매 후보로 고를 수 있는" 큐레이션이다(signstage-docs
-             * business/optional-feature-display-scope-and-plan-capacity-addon-review.md 4.1/5장).
-             */
-            private List<Long> capacityAddOnIds;
         }
 
         /**
-         * 선택옵션 구성({@code optionalFeatureIds})·구매 가능 용량 추가구매 상품 구성
-         * ({@code capacityAddOnIds})도 여기서 통째로 교체할 수 있다(9장 후속 결정 — 처음엔
-         * 생성 후 불변이었으나 뺄 방법이 없어 문제였다). 생략하면 빈 목록으로 취급한다
-         * ({@link CreatePlan}과 같은 규약). 이미 확정/진행 중인 행사는
-         * {@code CeremonyPlanHistoryOptionalFeature}/{@code CeremonyPlanHistoryCapacityAddOn}
-         * 스냅샷으로 보호되어 이 수정에 영향받지 않는다. {@code capacities}도 같은 방식으로
-         * 통째로 교체한다({@link CreatePlan}과 같은 검증 규약).
+         * 단위 상품 구성({@code unitProducts})을 여기서 통째로 교체할 수 있다(생략하면 빈 목록 —
+         * 전부 뺀다는 뜻, {@link CreatePlan}과 같은 규약). 이미 확정/진행 중인 행사는
+         * {@code CeremonyPlanHistoryUnitProduct} 스냅샷으로 보호되어 이 수정에 영향받지 않는다.
          *
-         * <p>가격/사용여부/판매기간은 여기서 다루지 않는다 — {@link CreatePeriod}/{@link UpdatePeriod}
-         * 기간 단위 API로 관리한다(signstage-docs
-         * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09).
+         * <p>할인/사용여부/판매기간은 여기서 다루지 않는다 — {@link CreatePeriod}/{@link UpdatePeriod}
+         * 기간 단위 API로 관리한다.
          */
         @Getter
         @Setter
@@ -108,36 +100,21 @@ public final class BillingPlanDto {
             @NotBlank
             private String name;
 
-            @NotNull
-            private Map<String, Integer> capacities;
-
-            /** 이 플랜에 기본으로 포함할 선택옵션 id 목록(생략하면 빈 목록 — 전부 뺀다는 뜻). */
-            private List<Long> optionalFeatureIds;
-
-            /** 이 플랜에서 구매 가능하게 열어줄 용량 추가구매 상품 id 목록(생략하면 빈 목록 — 전부 뺀다는 뜻). */
-            private List<Long> capacityAddOnIds;
+            private List<PlanUnitProductLine> unitProducts;
         }
 
-        /** 판매가격 기간 하나를 새로 추가한다. */
+        /** 할인 기간 하나를 새로 추가한다. */
         @Getter
         @Setter
         @NoArgsConstructor
         @AllArgsConstructor
         public static class CreatePeriod {
 
-            private String currencyCode;
-            private BigDecimal supplyPrice;
-
-            @NotNull
-            private BigDecimal salePrice;
-
             @NotBlank
             private String discountType;
 
             @NotNull
             private BigDecimal discountValue;
-
-            private String taxCode;
 
             @NotNull
             private Boolean active;
@@ -148,26 +125,18 @@ public final class BillingPlanDto {
             private LocalDate effectiveTo;
         }
 
-        /** 이미 있는 판매가격 기간 하나를 고친다({@link CreatePeriod}와 같은 필드). */
+        /** 이미 있는 할인 기간 하나를 고친다({@link CreatePeriod}와 같은 필드). */
         @Getter
         @Setter
         @NoArgsConstructor
         @AllArgsConstructor
         public static class UpdatePeriod {
 
-            private String currencyCode;
-            private BigDecimal supplyPrice;
-
-            @NotNull
-            private BigDecimal salePrice;
-
             @NotBlank
             private String discountType;
 
             @NotNull
             private BigDecimal discountValue;
-
-            private String taxCode;
 
             @NotNull
             private Boolean active;
@@ -184,9 +153,25 @@ public final class BillingPlanDto {
         private Response() {
         }
 
+        /** 플랜이 포함하는 단위 상품 한 줄 — 목록/상세 화면용. */
+        @Getter
+        @AllArgsConstructor
+        public static class PlanUnitProductLineSummary {
+
+            private final Long unitProductId;
+            private final String unitProductType;
+            private final String unitProductName;
+            private final String unitProductCategory;
+            private final Integer includedQuantity;
+            private final Boolean purchasable;
+            /** "오늘" 기준 단위 상품 자체의 판매가(할인 없음) — 플랜 소계 계산에 쓰이는 값 그대로. */
+            private final BigDecimal salePrice;
+            private final String currencyCode;
+        }
+
         /**
-         * 목록 화면용 — "오늘" 기준 유효한 판매가격 기간({@code findEffective})을 같이 보여준다.
-         * 기간 사이 공백으로 오늘 유효한 기간이 없으면 가격 관련 필드는 전부 null이고
+         * 목록 화면용 — "오늘" 기준 유효한 할인 기간({@code findEffective})을 같이 보여준다.
+         * 기간 사이 공백으로 오늘 유효한 기간이 없으면 할인 관련 필드는 전부 null이고
          * {@code periodStatus}가 "NO_ACTIVE_PERIOD"다.
          */
         @Getter
@@ -195,52 +180,40 @@ public final class BillingPlanDto {
 
             private final Long id;
             private final String name;
-            /** {@code CapacityType} 이름 → 포함 수량. {@link Request.CreatePlan#capacities}와 같은 규약. */
-            private final Map<String, Integer> capacities;
-            private final List<Long> optionalFeatureIds;
-            /** 이 플랜에서 구매 가능한 용량 추가구매 상품 id 목록(안 A 큐레이션). */
-            private final List<Long> capacityAddOnIds;
+            private final List<PlanUnitProductLineSummary> unitProducts;
             /** 이 플랜을 쓰는 행사(Ceremony) 수 — 카탈로그 관리 화면의 "사용 중" 경고용. */
             private final Long usageCount;
             private final LocalDateTime createdAt;
 
-            // 오늘 기준 유효한 판매가격 기간(없으면 전부 null/NO_ACTIVE_PERIOD).
-            private final String currencyCode;
-            private final BigDecimal supplyPrice;
-            private final BigDecimal salePrice;
+            // 오늘 기준 유효한 할인 기간(없으면 전부 null/NO_ACTIVE_PERIOD).
             private final String discountType;
             private final BigDecimal discountValue;
-            private final String taxCode;
             private final Boolean active;
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;
             private final String periodStatus;
         }
 
-        /** 플랜 이름/배타 속성 변경 이력 한 행(가격/사용여부는 {@link BillingPlanPeriodSummary} 쪽 이력 참고). */
+        /** 플랜 이름/단위 상품 구성 변경 이력 한 행(할인/사용여부는 {@link BillingPlanPeriodSummary} 쪽 이력 참고). */
         @Getter
         @AllArgsConstructor
         public static class BillingPlanHistorySummary {
 
             private final Long id;
             private final String name;
-            private final Map<String, Integer> capacities;
+            private final List<PlanUnitProductLineSummary> unitProducts;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }
 
-        /** 판매가격 기간 목록/상세 화면 한 행. */
+        /** 할인 기간 목록/상세 화면 한 행. */
         @Getter
         @AllArgsConstructor
         public static class BillingPlanPeriodSummary {
 
             private final Long id;
-            private final String currencyCode;
-            private final BigDecimal supplyPrice;
-            private final BigDecimal salePrice;
             private final String discountType;
             private final BigDecimal discountValue;
-            private final String taxCode;
             private final Boolean active;
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;
@@ -248,18 +221,14 @@ public final class BillingPlanDto {
             private final LocalDateTime createdAt;
         }
 
-        /** 판매가격 기간의 생성/수정/삭제 이력 한 행. */
+        /** 할인 기간의 생성/수정/삭제 이력 한 행. */
         @Getter
         @AllArgsConstructor
         public static class BillingPlanPeriodHistorySummary {
 
             private final Long id;
-            private final String currencyCode;
-            private final BigDecimal supplyPrice;
-            private final BigDecimal salePrice;
             private final String discountType;
             private final BigDecimal discountValue;
-            private final String taxCode;
             private final Boolean active;
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;

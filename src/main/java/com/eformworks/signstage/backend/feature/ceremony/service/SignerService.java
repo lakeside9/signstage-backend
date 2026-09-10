@@ -4,7 +4,7 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.SignerDto;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
@@ -71,7 +71,7 @@ public class SignerService {
         ceremonyService.checkCeremonyEditable(ceremony);
         ceremonyService.checkCeremonyPlanConfirmed(ceremony);
 
-        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, CapacityType.SIGNERS);
+        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.SIGNERS);
         long currentCount = signerRepository.countByCeremonyId(ceremonyId);
         if (currentCount >= effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_SIGNER_LIMIT_EXCEEDED);
@@ -170,7 +170,7 @@ public class SignerService {
             throw new ApplicationException(CeremonyErrorCode.SIGNER_EXCEL_NO_VALID_ROWS);
         }
 
-        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, CapacityType.SIGNERS);
+        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.SIGNERS);
         if (currentCount + toCreate.size() > effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_SIGNER_LIMIT_EXCEEDED);
         }

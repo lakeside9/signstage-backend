@@ -18,18 +18,17 @@ import lombok.NoArgsConstructor;
  * signstage-docs business/ceremony-billing-options-review.md 4.9절 결정에 따라
  * "무제한"을 표현하는 별도 sentinel 값이 없다.
  *
- * <p>한도(서명자/템플릿/테스트행사/리허설행사/본행사)는 예전엔 이 엔티티의 고정 컬럼 5개였는데,
- * {@link BillingPlanCapacity} 조인 테이블로 일반화됐다(signstage-docs
- * business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 B) —
- * {@code BillingPlanOptionalFeature}/{@code BillingPlanCapacityAddOn}과 같은 패턴으로
- * {@code BillingPlanService}가 별도 리포지토리로 관리하고, 이 엔티티는 그 구성을 직접 갖지 않는다.
+ * <p>포함하는 단위 상품 구성(한도/무료 포함 옵션/추가구매 큐레이션)은 예전엔 이 엔티티가 직접
+ * 갖거나 3개 조인 테이블로 나뉘어 있었는데, {@link BillingPlanUnitProduct} 조인 테이블 하나로
+ * 통합됐다(signstage-docs business/billing-catalog-unit-product-model-redesign-review.md 결정,
+ * 2026-09-10) — {@code BillingPlanService}가 별도 리포지토리로 관리하고, 이 엔티티는 그 구성을
+ * 직접 갖지 않는다.
  *
- * <p>가격정보({@link CatalogPriceInfo})와 사용여부(active)는 이 엔티티가 아니라
- * {@link BillingPlanPricePeriod}로 옮겨졌다(signstage-docs
- * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09, 다중버전 채택) —
- * 이 엔티티는 이제 이름만 갖는 정체성일 뿐이고, "지금 판매 가능한지·얼마인지"는 항상
- * {@code BillingPlanPricePeriodRepository.findEffective}로 그때그때 조회한다. 플랜 id는
- * {@code Ceremony} 등에서 FK로 널리 참조되므로 정체성은 그대로 유지한다.
+ * <p>이 플랜은 더 이상 자기 가격을 갖지 않는다 — "오늘 가격"은
+ * {@code Σ(BillingPlanUnitProduct.unitProduct.effectivePrice × includedQuantity)}로 조회
+ * 시점에 계산되고, 그 합계에 적용할 할인만 {@link BillingPlanDiscountPeriod}로 기간별 관리한다
+ * (같은 문서 결정). 이 엔티티는 이제 이름만 갖는 정체성일 뿐이다. 플랜 id는 {@code Ceremony}
+ * 등에서 FK로 널리 참조되므로 정체성은 그대로 유지한다.
  */
 @Entity
 @Table(name = "billing_plans")

@@ -216,7 +216,7 @@ public class CeremonyEffectDefinitionService {
         return ceremonyEffectDefinitionOptionRepository.findAllByEffectDefinitionIdIn(definitionIds).stream()
                 .collect(Collectors.groupingBy(
                         mapping -> mapping.getEffectDefinition().getId(),
-                        Collectors.mapping(mapping -> mapping.getOptionalFeature().getId(), Collectors.toList())
+                        Collectors.mapping(mapping -> mapping.getUnitProduct().getId(), Collectors.toList())
                 ));
     }
 
@@ -270,7 +270,7 @@ public class CeremonyEffectDefinitionService {
     private CeremonyEffectDefinitionDto.Response.CeremonyEffectDefinitionSummary toSummary(CeremonyEffectDefinition definition) {
         List<Long> optionalFeatureIds = ceremonyEffectDefinitionOptionRepository.findAllByEffectDefinitionId(definition.getId())
                 .stream()
-                .map(mapping -> mapping.getOptionalFeature().getId())
+                .map(mapping -> mapping.getUnitProduct().getId())
                 .toList();
         return toSummary(definition, optionalFeatureIds);
     }
