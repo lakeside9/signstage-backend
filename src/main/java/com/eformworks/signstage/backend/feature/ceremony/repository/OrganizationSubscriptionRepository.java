@@ -28,4 +28,11 @@ public interface OrganizationSubscriptionRepository extends JpaRepository<Organi
     List<OrganizationSubscription> findAllByStatusAndEndDateBefore(
             OrganizationSubscriptionStatus status, LocalDate date
     );
+
+    /**
+     * 과금 플랜 삭제 가능 여부(사용 이력 없음) 판정에 쓴다 — 구독은 하드 삭제되지 않고
+     * 재계약 시 {@code SUPERSEDED}로 상태만 바뀌므로(클래스 javadoc 참고), 이 행 존재 여부만으로
+     * "지금이든 과거든 이 플랜을 구독한 적이 있는지"까지 전부 확인된다.
+     */
+    boolean existsByBillingPlanId(Long billingPlanId);
 }

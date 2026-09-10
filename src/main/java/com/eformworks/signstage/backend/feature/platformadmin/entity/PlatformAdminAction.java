@@ -22,11 +22,13 @@ public enum PlatformAdminAction {
     REJECT_ORGANIZATION_REQUEST,
     CREATE_BILLING_PLAN,
     UPDATE_BILLING_PLAN,
+    DELETE_BILLING_PLAN,
     /** {@code UnitProduct} 통합 카탈로그(signstage-docs
      * business/billing-catalog-unit-product-model-redesign-review.md, 2026-09-10) — 옛
      * {@code CREATE/UPDATE_OPTIONAL_FEATURE}, {@code CREATE/UPDATE_CAPACITY_ADDON}을 대체했다. */
     CREATE_UNIT_PRODUCT,
     UPDATE_UNIT_PRODUCT,
+    DELETE_UNIT_PRODUCT,
     UPDATE_CEREMONY_STATUS,
     UPDATE_CEREMONY_FINAL_DISCOUNT,
     UPDATE_ORGANIZATION_BILLING_PLAN_DISCOUNT,

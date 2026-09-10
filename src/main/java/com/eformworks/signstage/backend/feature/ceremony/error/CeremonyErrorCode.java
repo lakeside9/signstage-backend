@@ -11,6 +11,11 @@ import org.springframework.http.HttpStatus;
 public enum CeremonyErrorCode implements ErrorCode {
 
     BILLING_PLAN_NOT_FOUND("CEREMONY_BILLING_PLAN_NOT_FOUND", HttpStatus.NOT_FOUND, "과금 플랜을 찾을 수 없습니다."),
+    BILLING_PLAN_IN_USE(
+            "CEREMONY_BILLING_PLAN_IN_USE",
+            HttpStatus.CONFLICT,
+            "행사에 적용되었거나 조직 구독·할인 오버라이드에 사용된 적이 있는 과금 플랜은 삭제할 수 없습니다."
+    ),
     CURRENCY_MISMATCH(
             "CEREMONY_CURRENCY_MISMATCH",
             HttpStatus.CONFLICT,
@@ -234,6 +239,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_UNIT_PRODUCT_NOT_AVAILABLE_FOR_PLAN",
             HttpStatus.CONFLICT,
             "이 행사의 플랜에서는 구매할 수 없는 단위 상품입니다."
+    ),
+    UNIT_PRODUCT_IN_USE(
+            "CEREMONY_UNIT_PRODUCT_IN_USE",
+            HttpStatus.CONFLICT,
+            "플랜에 포함되었거나 구매·적용된 적이 있는 단위 상품은 삭제할 수 없습니다."
     ),
     SIGNER_EXCEL_INVALID_FORMAT(
             "CEREMONY_SIGNER_EXCEL_INVALID_FORMAT",

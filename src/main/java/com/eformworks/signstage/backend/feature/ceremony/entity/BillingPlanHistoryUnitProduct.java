@@ -20,9 +20,10 @@ import org.hibernate.annotations.Immutable;
  * {@link BillingPlanHistory} 스냅샷 시점의 {@link BillingPlanUnitProduct} 구성 전체 — append-only다.
  * 옛 {@code BillingPlanHistoryCapacity}(한도 5종만 스냅샷하고 선택옵션/용량추가구매 구성 변경은
  * 이력화하지 않던 결함)를 대체하며 일반화한다 — {@code BillingPlanService#recordPlanHistory}가
- * 생성/수정 시점마다 그 순간의 {@code BillingPlanUnitProduct} 행 전체(포함 수량이든 구매 가능
- * 큐레이션이든 전부)를 복사해 저장한다(signstage-docs
- * business/billing-catalog-unit-product-model-redesign-review.md 결정, 2026-09-10).
+ * 생성/수정 시점마다 그 순간의 {@code BillingPlanUnitProduct} 행 전체를 복사해 저장한다
+ * (signstage-docs business/billing-catalog-unit-product-model-redesign-review.md 결정,
+ * 2026-09-10). {@code purchasable} 컬럼은 폐지했다(2026-09-10, {@link BillingPlanUnitProduct}
+ * javadoc 참고) — 행 존재 자체가 추가구매 가능을 뜻한다.
  */
 @Entity
 @Table(name = "billing_plan_history_unit_products")
@@ -46,14 +47,10 @@ public class BillingPlanHistoryUnitProduct extends BaseEntity {
     @Column(name = "included_quantity", nullable = false)
     private Integer includedQuantity;
 
-    @Column(nullable = false)
-    private boolean purchasable;
-
     @Builder
     private BillingPlanHistoryUnitProduct(BillingPlanHistory billingPlanHistory, BillingPlanUnitProduct source) {
         this.billingPlanHistory = billingPlanHistory;
         this.unitProduct = source.getUnitProduct();
         this.includedQuantity = source.getIncludedQuantity();
-        this.purchasable = source.isPurchasable();
     }
 }

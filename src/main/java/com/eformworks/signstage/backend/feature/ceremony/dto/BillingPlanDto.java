@@ -28,7 +28,12 @@ public final class BillingPlanDto {
         private Request() {
         }
 
-        /** 플랜을 구성하는 단위 상품 한 줄 — {@code UnitProduct.id} + 포함 수량 + 구매 가능 여부. */
+        /**
+         * 플랜을 구성하는 단위 상품 한 줄 — {@code UnitProduct.id} + 포함 수량. 행이 존재하는 것
+         * 자체가 "이 플랜의 행사가 추가구매할 수 있다"는 뜻이다(2026-09-10, {@code purchasable}
+         * 필드 폐지 — {@code BillingPlanUnitProduct} javadoc 참고). {@code EVENT_EFFECT_BUNDLE}
+         * 타입은 수량이 0 또는 1만 허용된다.
+         */
         @Getter
         @Setter
         @NoArgsConstructor
@@ -38,13 +43,12 @@ public final class BillingPlanDto {
             @NotNull
             private Long unitProductId;
 
-            /** 기본 포함 수량 — 0 이상. 0이면 "기본 미포함, 추가구매로만 확보". */
+            /**
+             * 기본 포함 수량 — 0 이상. 0이면 "기본 미포함, 추가구매로만 확보"(이 행이 존재한다는
+             * 것 자체가 추가구매 후보라는 뜻이므로, 0이라고 해서 줄을 생략하면 안 된다).
+             */
             @NotNull
             private Integer includedQuantity;
-
-            /** 이 플랜을 쓰는 행사가 이 단위 상품을 추가구매 후보로 고를 수 있는지. */
-            @NotNull
-            private Boolean purchasable;
         }
 
         /**
@@ -184,7 +188,6 @@ public final class BillingPlanDto {
             private final String unitProductName;
             private final String unitProductCategory;
             private final Integer includedQuantity;
-            private final Boolean purchasable;
             /** "오늘" 기준 단위 상품 자체의 판매가(할인 없음) — 플랜 소계 계산에 쓰이는 값 그대로. */
             private final BigDecimal salePrice;
             private final String currencyCode;
@@ -220,6 +223,14 @@ public final class BillingPlanDto {
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;
             private final String periodStatus;
+            /**
+             * 삭제 가능 여부 — 행사(현재/이력)·조직 구독·조직×플랜 할인 오버라이드(현재/이력)
+             * 어디에도 한 번도 등장한 적이 없어야 true다(signstage-docs
+             * billing-catalog-unit-product-model-redesign-review.md 11장, 2026-09-10 삭제 기능
+             * 추가 — 단위 상품 삭제와 같은 조건). {@code usageCount}(현재 이 플랜을 쓰는 행사 수)
+             * 보다 훨씬 넓은 범위를 본다.
+             */
+            private final boolean canDelete;
         }
 
         /** 플랜 이름/단위 상품 구성 변경 이력 한 행(할인/사용여부는 {@link BillingPlanPeriodSummary} 쪽 이력 참고). */

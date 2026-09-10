@@ -12,4 +12,7 @@ public interface BillingPlanUnitProductRepository extends JpaRepository<BillingP
     Optional<BillingPlanUnitProduct> findByBillingPlanIdAndUnitProductId(Long billingPlanId, Long unitProductId);
 
     void deleteAllByBillingPlanId(Long billingPlanId);
+
+    /** 단위 상품 삭제 가능 여부(사용 이력 없음) 판정에 쓴다 — 현재 어떤 플랜에 포함돼 있는지. */
+    boolean existsByUnitProductId(Long unitProductId);
 }

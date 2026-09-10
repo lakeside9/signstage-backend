@@ -54,9 +54,6 @@ public class CeremonyPlanHistoryUnitProduct extends BaseEntity {
     @Column(name = "included_quantity", nullable = false)
     private Integer includedQuantity;
 
-    @Column(nullable = false)
-    private boolean purchasable;
-
     @Column(name = "currency_code", nullable = false, length = 3)
     private String currencyCode;
 
@@ -77,7 +74,6 @@ public class CeremonyPlanHistoryUnitProduct extends BaseEntity {
             CeremonyPlanHistory ceremonyPlanHistory,
             UnitProduct unitProduct,
             Integer includedQuantity,
-            boolean purchasable,
             String currencyCode,
             BigDecimal snapshotSalePrice,
             String snapshotTaxCode
@@ -85,7 +81,6 @@ public class CeremonyPlanHistoryUnitProduct extends BaseEntity {
         this.ceremonyPlanHistory = ceremonyPlanHistory;
         this.unitProduct = unitProduct;
         this.includedQuantity = includedQuantity;
-        this.purchasable = purchasable;
         this.currencyCode = currencyCode;
         this.snapshotSalePrice = snapshotSalePrice;
         this.snapshotTaxCode = snapshotTaxCode;

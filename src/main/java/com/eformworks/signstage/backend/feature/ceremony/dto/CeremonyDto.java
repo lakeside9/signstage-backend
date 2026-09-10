@@ -255,7 +255,6 @@ public final class CeremonyDto {
             private final String unitProductType;
             private final String unitProductName;
             private final Integer includedQuantity;
-            private final Boolean purchasable;
             private final String currencyCode;
             private final BigDecimal snapshotSalePrice;
             private final String snapshotTaxCode;

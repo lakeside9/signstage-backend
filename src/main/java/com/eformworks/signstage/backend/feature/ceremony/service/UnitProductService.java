@@ -4,7 +4,10 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinition;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption;
 import com.eformworks.signstage.backend.feature.ceremony.entity.ProductPriceInfo;
+import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductCategory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductHistory;
@@ -12,6 +15,13 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductPrice
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductPricePeriodHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanHistoryUnitProductRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanUnitProductRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryUnitProductRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductPricePeriodHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductPricePeriodRepository;
@@ -20,7 +30,6 @@ import com.eformworks.signstage.backend.feature.permission.service.RolePermissio
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.time.LocalDate;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -44,17 +53,18 @@ import org.springframework.transaction.annotation.Transactional;
  * 할인 필드가 없다 — 단위 상품은 할인을 갖지 않는다(할인은 오직 BillingPlan에만 있다, 같은 문서
  * §3.5 결정).
  *
- * <p><b>1단계(추가 전용) 범위 안내</b> — 이 서비스는 아직 {@code Ceremony*Purchase}/
- * {@code CeremonyEffectDefinitionOption}과 연결되지 않았다(둘 다 옛 {@code OptionalFeature}/
- * {@code CapacityAddOn}을 참조하는 2단계 전환 대상이라서다). 그래서 지금은
- * <ul>
- *   <li>{@code usageCount}가 항상 0이다 — 아직 어떤 구매도 {@code UnitProduct}를 참조하지
- *       않기 때문에 실제로 맞는 값이다. 2단계에서 구매 엔티티가 전환되면 실제 집계로 바뀐다.</li>
- *   <li>{@code effectDefinitionIds}는 읽기 전용으로 항상 빈 배열을 내려주고, 쓰기(생성/수정
- *       요청에 값이 오는 경우)는 거부한다 — {@code EVENT_EFFECT_BUNDLE} 연결은
- *       {@code CeremonyEffectDefinitionOption}의 외래키가 {@code unit_product_id}로 바뀌는
- *       2단계에서 함께 연결한다.</li>
- * </ul>
+ * <p><b>{@code effectDefinitionIds} 읽기/쓰기 완성(2단계, 2026-09-10)</b> —
+ * {@code CeremonyEffectDefinitionOption}이 이미 {@code unit_product_id}를 참조하도록 전환돼
+ * 있었는데(2026-09-10 카탈로그 재설계), 단위 상품 삭제 기능 추가 작업 중 두 가지 결함을
+ * 발견했다: {@code toSummary}의 {@code usageCount}/{@code effectDefinitionIds}가 항상
+ * 0/빈 배열을 내려주던 것(읽기, 그때 고침), 생성/수정 요청이 {@code effectDefinitionIds}를
+ * 실어 보내도 {@link #checkEffectDefinitionIdsAllowed}가 항상 거부해 이 매핑을 실제로 만드는
+ * API가 코드베이스 어디에도 없던 것(쓰기, 이번에 고침 — 사용자가 이벤트 효과 묶음 등록 시
+ * "EVENT_EFFECT_BUNDLE 종류에서만 지정할 수 있다"는 오류를 겪어 발견됨). 지금은
+ * {@code type=EVENT_EFFECT_BUNDLE}일 때만 값을 허용하고(그 외 타입에 비어있지 않은 값이
+ * 오면 거부), 생성 시 그대로 저장, 수정 시 통째로 교체(delete-all-then-recreate,
+ * {@link UnitProductDto.Request.UpdateUnitProduct} javadoc 참고)한다. 삭제
+ * ({@link #deleteUnitProduct})는 이 매핑을 포함해 6곳 어디에도 사용된 적이 없어야만 허용한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -65,6 +75,13 @@ public class UnitProductService {
     private final UnitProductHistoryRepository unitProductHistoryRepository;
     private final UnitProductPricePeriodRepository unitProductPricePeriodRepository;
     private final UnitProductPricePeriodHistoryRepository unitProductPricePeriodHistoryRepository;
+    private final BillingPlanUnitProductRepository billingPlanUnitProductRepository;
+    private final BillingPlanHistoryUnitProductRepository billingPlanHistoryUnitProductRepository;
+    private final CeremonyPlanHistoryUnitProductRepository ceremonyPlanHistoryUnitProductRepository;
+    private final CeremonyUnitProductPurchaseLineRepository ceremonyUnitProductPurchaseLineRepository;
+    private final CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
+    private final CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
+    private final CeremonyEffectDefinitionRepository ceremonyEffectDefinitionRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     private final RolePermissionService rolePermissionService;
 
@@ -77,7 +94,7 @@ public class UnitProductService {
         checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
 
         UnitProductType type = parseType(request.getType());
-        checkEffectDefinitionIdsAllowed(request.getEffectDefinitionIds());
+        checkEffectDefinitionIdsAllowed(type, request.getEffectDefinitionIds());
         LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
         checkPeriodValid(effectiveFrom, request.getEffectiveTo());
 
@@ -89,6 +106,7 @@ public class UnitProductService {
                 .build();
         unitProductRepository.save(unitProduct);
         recordProductHistory(unitProduct);
+        saveEffectDefinitionOptions(unitProduct, request.getEffectDefinitionIds());
 
         UnitProductPricePeriod period = UnitProductPricePeriod.builder()
                 .unitProduct(unitProduct)
@@ -125,7 +143,7 @@ public class UnitProductService {
 
         UnitProduct unitProduct = unitProductRepository.findById(unitProductId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
-        checkEffectDefinitionIdsAllowed(request.getEffectDefinitionIds());
+        checkEffectDefinitionIdsAllowed(unitProduct.getType(), request.getEffectDefinitionIds());
 
         String detail = "unitProductId=" + unitProductId
                 + ", name: " + unitProduct.getName() + " -> " + request.getName();
@@ -133,11 +151,55 @@ public class UnitProductService {
         unitProduct.updateInfo(request.getName(), parseCategory(request.getCategory()), request.getExclusivityGroup());
         recordProductHistory(unitProduct);
 
+        // null이면(생략) 기존 구성을 그대로 두고, 값이 오면(빈 배열 포함) 통째로 교체한다
+        // (UnitProductDto.Request.UpdateUnitProduct javadoc 참고). flush()가 반드시 필요하다 —
+        // deleteAllByUnitProductId는 파생 delete 쿼리라 DELETE SQL이 즉시 나가지 않는데,
+        // CeremonyEffectDefinitionOption은 IDENTITY 채번이라 재저장 시 즉시 INSERT를 실행한다.
+        // 그 사이 flush가 없으면 이번 교체에도 그대로 남는 효과(같은 effect_definition_id+
+        // unit_product_id 조합)의 INSERT가 아직 DB에 남은 옛 행과 충돌해
+        // uq_cedo_definition_product 유니크 제약 위반으로 실패한다(BillingPlanService#updatePlan/
+        // CeremonyEventService#applyOptionalFeatures와 같은 패턴, 2026-09-10에 발견해 고친 버그).
+        if (request.getEffectDefinitionIds() != null) {
+            ceremonyEffectDefinitionOptionRepository.deleteAllByUnitProductId(unitProductId);
+            ceremonyEffectDefinitionOptionRepository.flush();
+            saveEffectDefinitionOptions(unitProduct, request.getEffectDefinitionIds());
+        }
+
         platformAdminAuditLogRecorder.record(
                 adminUserId, PlatformAdminAction.UPDATE_UNIT_PRODUCT, null, null, detail
         );
 
         return toSummary(unitProduct);
+    }
+
+    /**
+     * 단위 상품을 완전히 삭제한다 — 사용한 적이 전혀 없는 상품만 지울 수 있다(signstage-docs
+     * business/billing-catalog-unit-product-model-redesign-review.md 결정, 2026-09-10 삭제
+     * 기능 추가). "사용"은 {@link #checkNeverUsed}가 6곳(현재 플랜 구성/플랜 구성 이력/행사
+     * 플랜 스냅샷/추가구매/행사 적용/이벤트 효과 묶음 매핑)을 전부 확인해 판정한다 — 이미 다른
+     * 곳에서 참조된 적이 있으면 소급 삭제로 그 기록의 정합성이 깨지므로 하나라도 걸리면 거부한다.
+     * 통과하면 이 상품 자신의 가격 기간/가격 기간 이력/상품 이력까지 함께 지운다(FK 위반 없이
+     * 부모 행을 지우려면 자식부터 지워야 한다) — append-only 이력이라도 "그 상품이 아예 없었던
+     * 것"으로 완전히 정리하는 게 맞다(어떤 실사용 기록도 참조하지 않는 이력이라 보존할 가치가
+     * 없다).
+     */
+    @Transactional
+    public void deleteUnitProduct(Long unitProductId, String actingPlatformRole, Long adminUserId) {
+        checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
+
+        UnitProduct unitProduct = unitProductRepository.findById(unitProductId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
+        checkNeverUsed(unitProductId);
+
+        unitProductPricePeriodHistoryRepository.deleteAllByUnitProductId(unitProductId);
+        unitProductPricePeriodRepository.deleteAllByUnitProductId(unitProductId);
+        unitProductHistoryRepository.deleteAllByUnitProductId(unitProductId);
+        unitProductRepository.delete(unitProduct);
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.DELETE_UNIT_PRODUCT, null, null,
+                "unitProductId=" + unitProductId + ", name=" + unitProduct.getName()
+        );
     }
 
     /** 새 판매가격 기간을 추가한다. */
@@ -263,15 +325,44 @@ public class UnitProductService {
     }
 
     /**
-     * 1단계에서는 어떤 종류든 이벤트 효과 목록 지정을 받지 않는다 — 클래스 javadoc 참고. 2단계에서
-     * {@code CeremonyEffectDefinitionOption}이 {@code unit_product_id}를 참조하게 되면 옛
-     * {@code OptionalFeatureService#checkEffectDefinitionIdsAllowed}처럼
-     * {@code type != EVENT_EFFECT_BUNDLE}일 때만 거부하는 로직으로 바뀐다.
+     * {@code EVENT_EFFECT_BUNDLE} 종류가 아닌데 비어있지 않은 {@code effectDefinitionIds}가
+     * 오면 거부한다 — 옛 {@code OptionalFeatureService#checkEffectDefinitionIdsAllowed}와 같은
+     * 규칙(생략/빈 배열은 항상 허용, 값이 있을 때만 타입을 검사한다).
      */
-    private void checkEffectDefinitionIdsAllowed(List<Long> effectDefinitionIds) {
-        if (effectDefinitionIds != null && !effectDefinitionIds.isEmpty()) {
+    private void checkEffectDefinitionIdsAllowed(UnitProductType type, List<Long> effectDefinitionIds) {
+        if (effectDefinitionIds != null && !effectDefinitionIds.isEmpty() && type != UnitProductType.EVENT_EFFECT_BUNDLE) {
             throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_EFFECT_BUNDLE_ONLY);
         }
+    }
+
+    /**
+     * {@code checkEffectDefinitionIdsAllowed}를 통과한 뒤 호출한다 — 생략/빈 배열이면 아무것도
+     * 만들지 않는다(생성 시 "빈 묶음으로 시작"). {@code CeremonyEffectDefinitionOption}은 효과
+     * 하나가 여러 묶음에 속할 수 있는 N:N 매핑이라, 여기서 만드는 행은 이 단위 상품 쪽만 새로
+     * 추가한다 — 이미 다른 묶음에 속한 효과라도 그대로 둔 채 이 상품에도 추가된다.
+     */
+    private void saveEffectDefinitionOptions(UnitProduct unitProduct, List<Long> effectDefinitionIds) {
+        if (effectDefinitionIds == null || effectDefinitionIds.isEmpty()) {
+            return;
+        }
+        for (CeremonyEffectDefinition definition : resolveEffectDefinitions(effectDefinitionIds)) {
+            ceremonyEffectDefinitionOptionRepository.save(
+                    CeremonyEffectDefinitionOption.builder().effectDefinition(definition).unitProduct(unitProduct).build()
+            );
+        }
+    }
+
+    /** 중복 없이 전부 존재하는지 확인하고 {@code CeremonyEffectDefinition} 목록으로 정규화한다. */
+    private List<CeremonyEffectDefinition> resolveEffectDefinitions(List<Long> effectDefinitionIds) {
+        List<Long> distinctIds = effectDefinitionIds.stream().distinct().toList();
+        if (distinctIds.size() != effectDefinitionIds.size()) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+        List<CeremonyEffectDefinition> found = ceremonyEffectDefinitionRepository.findAllById(distinctIds);
+        if (found.size() != distinctIds.size()) {
+            throw new ApplicationException(CeremonyErrorCode.EFFECT_DEFINITION_NOT_FOUND);
+        }
+        return found;
     }
 
     public List<UnitProductDto.Response.UnitProductSummary> findUnitProducts() {
@@ -363,6 +454,25 @@ public class UnitProductService {
         return active ? "ON_SALE" : "INACTIVE";
     }
 
+    private void checkNeverUsed(Long unitProductId) {
+        if (hasAnyUsage(unitProductId)) {
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_IN_USE);
+        }
+    }
+
+    /**
+     * "사용한 적이 있는가"를 판정하는 6곳 — {@link #deleteUnitProduct}와 {@link #toSummary}의
+     * {@code canDelete} 계산이 공유한다.
+     */
+    private boolean hasAnyUsage(Long unitProductId) {
+        return billingPlanUnitProductRepository.existsByUnitProductId(unitProductId)
+                || billingPlanHistoryUnitProductRepository.existsByUnitProductId(unitProductId)
+                || ceremonyPlanHistoryUnitProductRepository.existsByUnitProductId(unitProductId)
+                || ceremonyUnitProductPurchaseLineRepository.existsByUnitProduct_Id(unitProductId)
+                || ceremonyEventOptionalFeatureRepository.existsByUnitProductId(unitProductId)
+                || ceremonyEffectDefinitionOptionRepository.existsByUnitProductId(unitProductId);
+    }
+
     private String describe(UnitProductPricePeriod period) {
         return period.getPriceInfo().getSalePrice() + " " + period.getPriceInfo().getCurrencyCode()
                 + " (" + period.getEffectiveFrom() + " ~ " + (period.getEffectiveTo() == null ? "무기한" : period.getEffectiveTo()) + ")";
@@ -371,6 +481,10 @@ public class UnitProductService {
     private UnitProductDto.Response.UnitProductSummary toSummary(UnitProduct unitProduct) {
         Optional<UnitProductPricePeriod> effective =
                 unitProductPricePeriodRepository.findEffective(unitProduct.getId(), InternationalizationDefaults.today());
+        List<Long> effectDefinitionIds = ceremonyEffectDefinitionOptionRepository.findAllByUnitProductId(unitProduct.getId())
+                .stream()
+                .map(option -> option.getEffectDefinition().getId())
+                .toList();
         return new UnitProductDto.Response.UnitProductSummary(
                 unitProduct.getId(),
                 unitProduct.getType().name(),
@@ -382,14 +496,15 @@ public class UnitProductService {
                 effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getTaxCode()).orElse(null),
                 effective.map(UnitProductPricePeriod::isActive).orElse(null),
-                // 1단계 임시값 — 클래스 javadoc 참고. 아직 어떤 구매도 UnitProduct를 참조하지 않아
-                // 실제로 0이 맞다. 2단계에서 CeremonyUnitProductPurchaseLine 집계로 바뀐다.
-                0L,
-                Collections.emptyList(),
+                ceremonyUnitProductPurchaseLineRepository.countByUnitProduct_IdAndPurchase_Status(
+                        unitProduct.getId(), PurchaseStatus.APPROVED
+                ),
+                effectDefinitionIds,
                 unitProduct.getCreatedAt(),
                 effective.map(UnitProductPricePeriod::getEffectiveFrom).orElse(null),
                 effective.map(UnitProductPricePeriod::getEffectiveTo).orElse(null),
-                effective.map(p -> computeStatus(p.isActive(), p.getEffectiveFrom(), p.getEffectiveTo())).orElse("NO_ACTIVE_PERIOD")
+                effective.map(p -> computeStatus(p.isActive(), p.getEffectiveFrom(), p.getEffectiveTo())).orElse("NO_ACTIVE_PERIOD"),
+                !hasAnyUsage(unitProduct.getId())
         );
     }
 

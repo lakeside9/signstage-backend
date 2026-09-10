@@ -363,7 +363,7 @@ public class CeremonyService {
                 throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_AVAILABLE_FOR_PLAN);
             }
 
-            if (unitProduct.getType() == UnitProductType.EVENT_EFFECT_BUNDLE) {
+            if (unitProduct.getType().isToggle()) {
                 if (line.getQuantity() > 1) {
                     throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
                 }
@@ -475,7 +475,13 @@ public class CeremonyService {
                             unitProduct.getCreatedAt(),
                             effective.map(UnitProductPricePeriod::getEffectiveFrom).orElse(null),
                             effective.map(UnitProductPricePeriod::getEffectiveTo).orElse(null),
-                            effective.map(p -> p.isActive() ? "ON_SALE" : "INACTIVE").orElse("NO_ACTIVE_PERIOD")
+                            effective.map(p -> p.isActive() ? "ON_SALE" : "INACTIVE").orElse("NO_ACTIVE_PERIOD"),
+                            // 이 목록에 나오는 상품은 이미 이 행사의 플랜 구성이나 승인된 추가구매로
+                            // 참조되고 있다는 뜻이라 정의상 항상 "사용됨"이다 — canDelete는 카탈로그
+                            // 관리 화면 전용 필드라 이 조직 사용자 화면에서는 어차피 안 쓰지만, 값
+                            // 자체는 정확하게 false로 채운다(UnitProductService#toSummary만 실제
+                            // 6곳 조회로 계산한다).
+                            false
                     );
                 })
                 .toList();
@@ -830,7 +836,6 @@ public class CeremonyService {
                             .ceremonyPlanHistory(history)
                             .unitProduct(unitProduct)
                             .includedQuantity(source.getIncludedQuantity())
-                            .purchasable(source.isPurchasable())
                             .currencyCode(effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null))
                             .snapshotSalePrice(effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(BigDecimal.ZERO))
                             .snapshotTaxCode(effective.map(p -> p.getPriceInfo().getTaxCode()).orElse("KR_VAT_STANDARD"))
@@ -1201,23 +1206,23 @@ public class CeremonyService {
     }
 
     /**
-     * 이 Ceremony의 플랜에서 구매 가능한(안 A 큐레이션, {@code purchasable=true}) 단위 상품 id
-     * 목록. 라이브 {@code BillingPlanUnitProduct} 대신 이 Ceremony의 최신
-     * {@link CeremonyPlanHistory} 스냅샷을 우선 쓴다 — 카탈로그 관리자가 나중에 플랜의 구매
-     * 가능 상품 구성을 바꿔도 영향받지 않아야 한다. 이력이 없는 경우만 라이브 값으로 대체한다.
-     * 호출부가 {@code ceremony.getBillingPlan() != null}을 먼저 확인해야 한다 — 플랜 없는
-     * 행사는 제한 자체가 없다.
+     * 이 Ceremony의 플랜에서 구매 가능한(안 A 큐레이션) 단위 상품 id 목록. 플랜 구성에 행이
+     * 있으면(포함 수량이 0이든 N이든) 그 자체로 추가구매 후보다 — 별도 {@code purchasable}
+     * 플래그는 2026-09-10에 폐지했다({@code BillingPlanUnitProduct} javadoc 참고). 라이브
+     * {@code BillingPlanUnitProduct} 대신 이 Ceremony의 최신 {@link CeremonyPlanHistory} 스냅샷을
+     * 우선 쓴다 — 카탈로그 관리자가 나중에 플랜의 단위 상품 구성을 바꿔도 영향받지 않아야 한다.
+     * 이력이 없는 경우만 라이브 값으로 대체한다. 호출부가
+     * {@code ceremony.getBillingPlan() != null}을 먼저 확인해야 한다 — 플랜 없는 행사는 제한
+     * 자체가 없다.
      */
     List<Long> retrievePurchasableUnitProductIds(Ceremony ceremony) {
         Optional<CeremonyPlanHistory> snapshot =
                 ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
         return snapshot
                 .map(history -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(history.getId()).stream()
-                        .filter(CeremonyPlanHistoryUnitProduct::isPurchasable)
                         .map(line -> line.getUnitProduct().getId())
                         .toList())
                 .orElseGet(() -> billingPlanUnitProductRepository.findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
-                        .filter(BillingPlanUnitProduct::isPurchasable)
                         .map(source -> source.getUnitProduct().getId())
                         .toList());
     }
@@ -1267,7 +1272,11 @@ public class CeremonyService {
                 unitProduct.getCreatedAt(),
                 effective.map(UnitProductPricePeriod::getEffectiveFrom).orElse(null),
                 effective.map(UnitProductPricePeriod::getEffectiveTo).orElse(null),
-                effective.map(p -> p.isActive() ? "ON_SALE" : "INACTIVE").orElse("NO_ACTIVE_PERIOD")
+                effective.map(p -> p.isActive() ? "ON_SALE" : "INACTIVE").orElse("NO_ACTIVE_PERIOD"),
+                // canDelete는 카탈로그 관리 화면 전용 필드다(UnitProductService#toSummary만 실제
+                // 6곳 조회로 계산한다) — 이 조직 사용자 화면(구매 후보 목록)은 어차피 이 값을
+                // 쓰지 않으므로 보수적으로 false를 채운다.
+                false
         );
     }
 
@@ -1326,7 +1335,6 @@ public class CeremonyService {
                         line.getUnitProduct().getType().name(),
                         line.getUnitProduct().getName(),
                         line.getIncludedQuantity(),
-                        line.isPurchasable(),
                         line.getCurrencyCode(),
                         line.getSnapshotSalePrice(),
                         line.getSnapshotTaxCode()

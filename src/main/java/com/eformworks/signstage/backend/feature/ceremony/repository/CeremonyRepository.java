@@ -11,6 +11,9 @@ public interface CeremonyRepository extends JpaRepository<Ceremony, Long>, Cerem
     /** 카탈로그 관리 화면의 "사용 중" 경고용 — 이 플랜을 쓰는 행사 수(signstage-docs 9장). */
     long countByBillingPlanId(Long billingPlanId);
 
+    /** 과금 플랜 삭제 가능 여부(사용 이력 없음) 판정에 쓴다 — 지금 이 플랜을 쓰는 행사가 있는지. */
+    boolean existsByBillingPlanId(Long billingPlanId);
+
     /**
      * 구독 잔여 횟수 계산에 쓴다 — 별도 카운터 컬럼을 두지 않고 그때그때 센다(signstage-docs
      * business/organization-event-discount-pricing-review.md 8.2-9번, 2026-09-10).
