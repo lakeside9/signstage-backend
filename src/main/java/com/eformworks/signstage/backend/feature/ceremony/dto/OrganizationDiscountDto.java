@@ -28,9 +28,12 @@ public final class OrganizationDiscountDto {
 
         /**
          * 기간 하나를 새로 만들거나(POST) 이미 있는 기간 하나를 고칠 때(PUT) 공통으로 쓴다.
-         * {@code effectiveFrom}은 결정 #5(오늘 판단 타임존)가 유보라 자동 기본값을 채우지 않고
-         * 항상 필수 입력으로 받는다 — signstage-docs
+         * {@code effectiveFrom}은 결정 #5(오늘 판단 타임존, 2026-09-10 — 조직 기본 타임존
+         * 채택) 이후로 생성(POST) 시 생략하면 그 조직의 {@code defaultTimeZoneId} 기준 오늘로
+         * 채운다 — signstage-docs
          * business/organization-discount-override-security-and-validity-period-review.md 3.2절.
+         * 수정(PUT)은 편집 중인 기간의 시작일을 묵시적으로 오늘로 되돌리면 안 되므로 여전히
+         * 필수 입력이다(서비스 레이어에서 검사).
          */
         @Getter
         @Setter
@@ -44,7 +47,6 @@ public final class OrganizationDiscountDto {
             @NotNull
             private BigDecimal discountValue;
 
-            @NotNull
             private LocalDate effectiveFrom;
 
             /** null이면 무기한(그 뒤로 다른 기간이 없는 한). */

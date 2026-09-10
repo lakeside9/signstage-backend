@@ -13,10 +13,10 @@ import com.eformworks.signstage.backend.feature.organization.repository.MemberRe
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminMemberDto;
 import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import com.eformworks.signstage.backend.feature.platformadmin.error.PlatformAdminErrorCode;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,12 +38,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PlatformAdminMemberService {
 
-    private static final Set<String> MEMBER_CONTROL_ALLOWED_ROLES = Set.of("PLATFORM_OPS", "PLATFORM_SUPER");
-
     private final MemberRepository memberRepository;
     private final OrganizationRepository organizationRepository;
     private final UserRepository userRepository;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
+    private final RolePermissionService rolePermissionService;
 
     public List<PlatformAdminMemberDto.Response.MemberSummary> findMembers(Long organizationId) {
         return memberRepository.findAllByOrganizationIdAndStatusNot(organizationId, MemberStatus.REMOVED).stream()
@@ -156,7 +155,7 @@ public class PlatformAdminMemberService {
     }
 
     private void checkCanManage(String actingPlatformRole) {
-        if (!MEMBER_CONTROL_ALLOWED_ROLES.contains(actingPlatformRole)) {
+        if (!rolePermissionService.isAllowed(actingPlatformRole, "ACTION_PARTNER_MEMBER_CONTROL")) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
     }

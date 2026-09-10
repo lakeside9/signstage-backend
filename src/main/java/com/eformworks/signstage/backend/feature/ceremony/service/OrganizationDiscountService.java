@@ -19,6 +19,7 @@ import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdm
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -74,12 +75,13 @@ public class OrganizationDiscountService {
         BillingPlan plan = billingPlanRepository.findById(billingPlanId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
         DiscountType newType = parseDiscountType(request.getDiscountType());
-        checkPeriodValid(request.getEffectiveFrom(), request.getEffectiveTo());
+        LocalDate effectiveFrom = resolveEffectiveFrom(organization, request.getEffectiveFrom());
+        checkPeriodValid(effectiveFrom, request.getEffectiveTo());
         checkNoOverlap(
                 organizationBillingPlanDiscountRepository.findAllByOrganizationIdAndBillingPlanIdOrderByEffectiveFromAsc(
                         organizationId, billingPlanId
                 ).stream().map(d -> new PeriodRange(d.getId(), d.getEffectiveFrom(), d.getEffectiveTo())).toList(),
-                null, request.getEffectiveFrom(), request.getEffectiveTo()
+                null, effectiveFrom, request.getEffectiveTo()
         );
 
         OrganizationBillingPlanDiscount period = OrganizationBillingPlanDiscount.builder()
@@ -87,16 +89,16 @@ public class OrganizationDiscountService {
                 .billingPlan(plan)
                 .discountType(newType)
                 .discountValue(request.getDiscountValue())
-                .effectiveFrom(request.getEffectiveFrom())
+                .effectiveFrom(effectiveFrom)
                 .effectiveTo(request.getEffectiveTo())
                 .build();
         organizationBillingPlanDiscountRepository.save(period);
-        recordBillingPlanDiscountHistory(organization, plan, newType, request.getDiscountValue(), request.getEffectiveFrom(), request.getEffectiveTo(), false);
+        recordBillingPlanDiscountHistory(organization, plan, newType, request.getDiscountValue(), effectiveFrom, request.getEffectiveTo(), false);
 
         platformAdminAuditLogRecorder.record(
                 adminUserId, PlatformAdminAction.UPDATE_ORGANIZATION_BILLING_PLAN_DISCOUNT, null, organizationId,
                 "billingPlanId=" + billingPlanId + ", 기간 생성: " + describe(newType, request.getDiscountValue())
-                        + " (" + request.getEffectiveFrom() + " ~ " + describeEnd(request.getEffectiveTo()) + ")"
+                        + " (" + effectiveFrom + " ~ " + describeEnd(request.getEffectiveTo()) + ")"
         );
 
         return toBillingPlanDiscountSummary(period);
@@ -115,6 +117,11 @@ public class OrganizationDiscountService {
         Organization organization = findOrganizationOrThrow(organizationId);
         OrganizationBillingPlanDiscount period = findBillingPlanDiscountPeriodOrThrow(organizationId, billingPlanId, periodId);
         DiscountType newType = parseDiscountType(request.getDiscountType());
+        // 편집 중인 기간의 시작일을 묵시적으로 "오늘"로 되돌리면 안 되므로, 생성(POST)과 달리
+        // 수정(PUT)은 effectiveFrom을 여전히 필수 입력으로 받는다.
+        if (request.getEffectiveFrom() == null) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
         checkPeriodValid(request.getEffectiveFrom(), request.getEffectiveTo());
         checkNoOverlap(
                 organizationBillingPlanDiscountRepository.findAllByOrganizationIdAndBillingPlanIdOrderByEffectiveFromAsc(
@@ -245,6 +252,17 @@ public class OrganizationDiscountService {
         }
     }
 
+    /**
+     * effectiveFrom 생략(null) 시 "오늘"로 채운다 — signstage-docs
+     * business/organization-discount-override-security-and-validity-period-review.md 결정
+     * #5(2026-09-10, 조직 기본 타임존 채택) — 이 오버라이드는 조직 스코프가 있으므로
+     * {@code Organization.defaultTimeZoneId}를 쓴다(단위 상품/플랜 카탈로그처럼 조직 스코프가
+     * 없는 값은 플랫폼 기본 타임존을 쓴다, {@link InternationalizationDefaults#today()}).
+     */
+    private LocalDate resolveEffectiveFrom(Organization organization, LocalDate requested) {
+        return requested != null ? requested : LocalDate.now(ZoneId.of(organization.getDefaultTimeZoneId()));
+    }
+
     private void checkPeriodValid(LocalDate effectiveFrom, LocalDate effectiveTo) {
         if (effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
             throw new ApplicationException(CeremonyErrorCode.DISCOUNT_PERIOD_INVALID);
@@ -290,12 +308,12 @@ public class OrganizationDiscountService {
 
     /**
      * PENDING(아직 effectiveFrom 전)/ACTIVE(오늘이 기간 안)/EXPIRED(effectiveTo가 지남) —
-     * 관리 화면 배지용으로 서버가 계산해 내려준다. "오늘"의 타임존은 결정 #5가 유보라 서버 기본
-     * 타임존(JVM LocalDate.now())을 잠정적으로 쓴다 — 실제 청구 계산(resolveBillingPlanDiscount)과는
-     * 무관한 표시 전용 값이다.
+     * 관리 화면 배지용으로 서버가 계산해 내려준다. "오늘"은 이 조직의 {@code defaultTimeZoneId}
+     * 기준이다(결정 #5, 2026-09-10) — 실제 청구 계산(resolveBillingPlanDiscount)과는 무관한
+     * 표시 전용 값이다.
      */
-    private String computeStatus(LocalDate effectiveFrom, LocalDate effectiveTo) {
-        LocalDate today = LocalDate.now();
+    private String computeStatus(Organization organization, LocalDate effectiveFrom, LocalDate effectiveTo) {
+        LocalDate today = LocalDate.now(ZoneId.of(organization.getDefaultTimeZoneId()));
         if (today.isBefore(effectiveFrom)) {
             return "PENDING";
         }
@@ -334,7 +352,7 @@ public class OrganizationDiscountService {
                 period.getDiscount().getDiscountValue(),
                 period.getEffectiveFrom(),
                 period.getEffectiveTo(),
-                computeStatus(period.getEffectiveFrom(), period.getEffectiveTo()),
+                computeStatus(period.getOrganization(), period.getEffectiveFrom(), period.getEffectiveTo()),
                 period.getCreatedAt()
         );
     }

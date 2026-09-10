@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import com.eformworks.signstage.backend.feature.ceremony.dto.BillingPlanDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanDiscountPeriod;
@@ -76,7 +77,8 @@ public class BillingPlanService {
                 ? List.of() : request.getUnitProducts();
         Map<Long, UnitProduct> unitProducts = resolveUnitProducts(lines);
 
-        checkPeriodValid(request.getEffectiveFrom(), request.getEffectiveTo());
+        LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
+        checkPeriodValid(effectiveFrom, request.getEffectiveTo());
         DiscountType discountType = parseDiscountType(request.getDiscountType());
 
         BillingPlan plan = BillingPlan.builder().name(request.getName()).build();
@@ -89,7 +91,7 @@ public class BillingPlanService {
                 .discountType(discountType)
                 .discountValue(request.getDiscountValue())
                 .active(request.getActive())
-                .effectiveFrom(request.getEffectiveFrom())
+                .effectiveFrom(effectiveFrom)
                 .effectiveTo(request.getEffectiveTo())
                 .build();
         billingPlanDiscountPeriodRepository.save(period);
@@ -148,15 +150,16 @@ public class BillingPlanService {
         checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
         BillingPlan plan = billingPlanRepository.findById(planId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
-        checkPeriodValid(request.getEffectiveFrom(), request.getEffectiveTo());
-        checkNoOverlap(planId, null, request.getEffectiveFrom(), request.getEffectiveTo());
+        LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
+        checkPeriodValid(effectiveFrom, request.getEffectiveTo());
+        checkNoOverlap(planId, null, effectiveFrom, request.getEffectiveTo());
 
         BillingPlanDiscountPeriod period = BillingPlanDiscountPeriod.builder()
                 .billingPlan(plan)
                 .discountType(parseDiscountType(request.getDiscountType()))
                 .discountValue(request.getDiscountValue())
                 .active(request.getActive())
-                .effectiveFrom(request.getEffectiveFrom())
+                .effectiveFrom(effectiveFrom)
                 .effectiveTo(request.getEffectiveTo())
                 .build();
         billingPlanDiscountPeriodRepository.save(period);
@@ -332,6 +335,17 @@ public class BillingPlanService {
         }
     }
 
+    /**
+     * effectiveFrom 생략(null) 시 "오늘"로 채운다 — signstage-docs
+     * business/organization-discount-override-security-and-validity-period-review.md 결정
+     * #5(2026-09-10) — 플랜 카탈로그는 조직/행사 스코프가 없어 플랫폼 기본 타임존(Asia/Seoul)을
+     * 쓴다. 이미 있는 기간을 고치는 {@code UpdatePeriod}는 이 헬퍼를 쓰지 않는다 — 편집 중인
+     * 기간의 시작일을 묵시적으로 오늘로 되돌리면 안 되므로 여전히 필수 입력이다.
+     */
+    private LocalDate resolveEffectiveFrom(LocalDate requested) {
+        return requested != null ? requested : InternationalizationDefaults.today();
+    }
+
     private void checkPeriodValid(LocalDate effectiveFrom, LocalDate effectiveTo) {
         if (effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
             throw new ApplicationException(CeremonyErrorCode.DISCOUNT_PERIOD_INVALID);
@@ -359,7 +373,7 @@ public class BillingPlanService {
      * 지남)/INACTIVE(기간 안이지만 active=false) — 관리 화면 배지용.
      */
     private String computeStatus(boolean active, LocalDate effectiveFrom, LocalDate effectiveTo) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = InternationalizationDefaults.today();
         if (today.isBefore(effectiveFrom)) {
             return "PENDING";
         }
@@ -376,7 +390,7 @@ public class BillingPlanService {
 
     private BillingPlanDto.Response.BillingPlanSummary toSummary(BillingPlan plan) {
         Optional<BillingPlanDiscountPeriod> effective =
-                billingPlanDiscountPeriodRepository.findEffective(plan.getId(), LocalDate.now());
+                billingPlanDiscountPeriodRepository.findEffective(plan.getId(), InternationalizationDefaults.today());
         List<BillingPlanDto.Response.PlanUnitProductLineSummary> lines =
                 billingPlanUnitProductRepository.findAllByBillingPlanId(plan.getId()).stream()
                         .map(this::toLineSummary)
@@ -399,7 +413,7 @@ public class BillingPlanService {
     private BillingPlanDto.Response.PlanUnitProductLineSummary toLineSummary(BillingPlanUnitProduct source) {
         UnitProduct unitProduct = source.getUnitProduct();
         Optional<UnitProductPricePeriod> effective =
-                unitProductPricePeriodRepository.findEffective(unitProduct.getId(), LocalDate.now());
+                unitProductPricePeriodRepository.findEffective(unitProduct.getId(), InternationalizationDefaults.today());
         return new BillingPlanDto.Response.PlanUnitProductLineSummary(
                 unitProduct.getId(),
                 unitProduct.getType().name(),
