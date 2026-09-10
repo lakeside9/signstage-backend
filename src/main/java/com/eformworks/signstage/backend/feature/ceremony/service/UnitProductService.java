@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
+import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinition;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption;
@@ -31,7 +32,10 @@ import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdm
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -366,9 +370,46 @@ public class UnitProductService {
     }
 
     public List<UnitProductDto.Response.UnitProductSummary> findUnitProducts() {
-        return unitProductRepository.findAll().stream()
+        return unitProductRepository.findAllByOrderByDisplayOrderAscIdAsc().stream()
                 .map(this::toSummary)
                 .toList();
+    }
+
+    /**
+     * 카탈로그 목록의 위/아래 이동 버튼이 호출한다 — {@code Signer}/{@code Template}/
+     * {@code CeremonyEvent}와 같은 패턴이다({@link DisplayOrderRequest.UpdateDisplayOrders}
+     * javadoc 참고): 전체 목록을 원하는 순서로 다시 인덱싱해 통째로 보낸다. displayOrder
+     * 변경은 {@link UnitProductHistory}에 남기지 않는다 — 이름/분류/배타그룹과 달리 업무적
+     * 의미가 없는 화면 표시 순서일 뿐이라, {@code Signer}/{@code Template} 재정렬도 이력화하지
+     * 않는 것과 같은 이유다.
+     */
+    @Transactional
+    public List<UnitProductDto.Response.UnitProductSummary> updateDisplayOrders(
+            String actingPlatformRole,
+            Long adminUserId,
+            DisplayOrderRequest.UpdateDisplayOrders request
+    ) {
+        checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
+
+        Map<Long, UnitProduct> byId = unitProductRepository
+                .findAllById(request.getItems().stream().map(DisplayOrderRequest.Item::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(UnitProduct::getId, Function.identity()));
+
+        for (DisplayOrderRequest.Item item : request.getItems()) {
+            UnitProduct unitProduct = byId.get(item.getId());
+            if (unitProduct == null) {
+                throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND);
+            }
+            unitProduct.updateDisplayOrder(item.getDisplayOrder());
+        }
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.REORDER_UNIT_PRODUCTS, null, null,
+                "unitProductIds=" + request.getItems().stream().map(DisplayOrderRequest.Item::getId).toList()
+        );
+
+        return findUnitProducts();
     }
 
     /** 최신순 — 생성 시점 1건 + 이후 수정할 때마다 1건씩(이름/분류/배타그룹이 바뀔 때). */
@@ -504,6 +545,7 @@ public class UnitProductService {
                 effective.map(UnitProductPricePeriod::getEffectiveFrom).orElse(null),
                 effective.map(UnitProductPricePeriod::getEffectiveTo).orElse(null),
                 effective.map(p -> computeStatus(p.isActive(), p.getEffectiveFrom(), p.getEffectiveTo())).orElse("NO_ACTIVE_PERIOD"),
+                unitProduct.getDisplayOrder(),
                 !hasAnyUsage(unitProduct.getId())
         );
     }

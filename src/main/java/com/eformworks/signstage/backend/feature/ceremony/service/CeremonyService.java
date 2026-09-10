@@ -476,6 +476,7 @@ public class CeremonyService {
                             effective.map(UnitProductPricePeriod::getEffectiveFrom).orElse(null),
                             effective.map(UnitProductPricePeriod::getEffectiveTo).orElse(null),
                             effective.map(p -> p.isActive() ? "ON_SALE" : "INACTIVE").orElse("NO_ACTIVE_PERIOD"),
+                            unitProduct.getDisplayOrder(),
                             // 이 목록에 나오는 상품은 이미 이 행사의 플랜 구성이나 승인된 추가구매로
                             // 참조되고 있다는 뜻이라 정의상 항상 "사용됨"이다 — canDelete는 카탈로그
                             // 관리 화면 전용 필드라 이 조직 사용자 화면에서는 어차피 안 쓰지만, 값
@@ -1273,6 +1274,7 @@ public class CeremonyService {
                 effective.map(UnitProductPricePeriod::getEffectiveFrom).orElse(null),
                 effective.map(UnitProductPricePeriod::getEffectiveTo).orElse(null),
                 effective.map(p -> p.isActive() ? "ON_SALE" : "INACTIVE").orElse("NO_ACTIVE_PERIOD"),
+                unitProduct.getDisplayOrder(),
                 // canDelete는 카탈로그 관리 화면 전용 필드다(UnitProductService#toSummary만 실제
                 // 6곳 조회로 계산한다) — 이 조직 사용자 화면(구매 후보 목록)은 어차피 이 값을
                 // 쓰지 않으므로 보수적으로 false를 채운다.
