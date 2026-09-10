@@ -25,11 +25,17 @@ import org.hibernate.annotations.Immutable;
  * 한 행씩 쌓인다 — signstage-docs business/ceremony-plan-confirmation-review.md 3.4절.
  *
  * <p>"지금 유효한 플랜"은 여전히 {@link Ceremony#getBillingPlan()}이 가리킨다. 이 테이블은
- * "그동안 어떤 플랜을 거쳐왔는지"와 "그때 그 플랜의 이름/가격/한도가 뭐였는지"(카탈로그가
- * 나중에 바뀌어도 안 바뀌는 스냅샷)를 보여주는 이력 전용이다 — {@code누가/언제}는
- * {@link BaseEntity#getCreatedBy()}/{@link BaseEntity#getCreatedAt()}로 충분해 별도 컬럼을
- * 두지 않는다. 한도(용량) 구성은 이 엔티티의 고정 필드가 아니라 {@link CeremonyPlanHistoryCapacity}로
- * 별도 스냅샷된다(2026-09-08, 항목 B).
+ * "그동안 어떤 플랜을 거쳐왔는지"와 "그때 그 플랜의 이름/할인이 뭐였는지"(카탈로그가 나중에
+ * 바뀌어도 안 바뀌는 스냅샷)를 보여주는 이력 전용이다. 플랜이 포함하던 단위 상품 구성(수량 ×
+ * 그 순간 단가)은 이 엔티티의 고정 필드가 아니라 {@link CeremonyPlanHistoryUnitProduct}로 별도
+ * 스냅샷된다.
+ *
+ * <p>플랜은 이제 자기 가격을 갖지 않으므로(signstage-docs
+ * business/billing-catalog-unit-product-model-redesign-review.md 결정, 2026-09-10) 옛
+ * {@code planSupplyPrice}/{@code planSalePrice}/{@code taxCode} 필드가 없다 — "그때 그 플랜의
+ * 가격"은 이제 {@link CeremonyPlanHistoryUnitProduct} 스냅샷들로부터
+ * {@code CeremonyService#calculateEstimatedTotal}이 다시 계산한다. 이 엔티티엔 그 계산에
+ * 적용할 플랜 자체 할인(카탈로그 기본값 또는 조직×플랜 오버라이드)만 남는다.
  */
 @Entity
 @Table(name = "ceremony_plan_histories")
@@ -53,16 +59,6 @@ public class CeremonyPlanHistory extends BaseEntity {
     @Column(name = "plan_name", nullable = false, length = 100)
     private String planName;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
-    private String currencyCode;
-
-    /** nullable — 원가 미상 플랜을 스냅샷할 수 있어야 한다(2026-09-08, 항목 G). */
-    @Column(name = "plan_supply_price", precision = 19, scale = 4)
-    private BigDecimal planSupplyPrice;
-
-    @Column(name = "plan_sale_price", nullable = false, precision = 19, scale = 4)
-    private BigDecimal planSalePrice;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "plan_discount_type", nullable = false, length = 20)
     private DiscountType planDiscountType;
@@ -70,17 +66,11 @@ public class CeremonyPlanHistory extends BaseEntity {
     @Column(name = "plan_discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal planDiscountValue;
 
-    @Column(name = "tax_code", nullable = false, length = 50)
-    private String taxCode;
-
     /**
-     * 가격 관련 값(currencyCode/supplyPrice/salePrice/taxCode)은 호출부
+     * 카탈로그 기본 할인({@code catalogDiscountType}/{@code catalogDiscountValue})은 호출부
      * ({@code CeremonyService#recordPlanHistory})가 그 순간 유효한
-     * {@link BillingPlanPricePeriod}를 {@code findEffective}로 조회해 넘긴다 — 이 엔티티는
-     * DB 조회를 하지 않는다(signstage-docs
-     * business/billing-catalog-price-validity-period-review.md 결정, 2026-09-09). 카탈로그
-     * 기본 할인({@code catalogDiscountType}/{@code catalogDiscountValue})도 같은 이유로 호출부가
-     * 그 기간의 값을 넘기고, 조직×플랜 오버라이드가 있으면({@link OrganizationBillingPlanDiscount},
+     * {@link BillingPlanDiscountPeriod}를 {@code findEffective}로 조회해 넘긴다 — 이 엔티티는
+     * DB 조회를 하지 않는다. 조직×플랜 오버라이드가 있으면({@link OrganizationBillingPlanDiscount},
      * {@code OrganizationDiscountService#resolveBillingPlanDiscount}) {@code discountType}/
      * {@code discountValue}에 그 값을 대신 넘긴다 — null이면(오버라이드 없음) 카탈로그 값으로
      * 그대로 떨어진다.
@@ -89,10 +79,6 @@ public class CeremonyPlanHistory extends BaseEntity {
     private CeremonyPlanHistory(
             Ceremony ceremony,
             BillingPlan billingPlan,
-            String currencyCode,
-            BigDecimal supplyPrice,
-            BigDecimal salePrice,
-            String taxCode,
             DiscountType catalogDiscountType,
             BigDecimal catalogDiscountValue,
             DiscountType discountType,
@@ -101,11 +87,7 @@ public class CeremonyPlanHistory extends BaseEntity {
         this.ceremony = ceremony;
         this.billingPlan = billingPlan;
         this.planName = billingPlan.getName();
-        this.currencyCode = currencyCode;
-        this.planSupplyPrice = supplyPrice;
-        this.planSalePrice = salePrice;
         this.planDiscountType = discountType != null ? discountType : catalogDiscountType;
         this.planDiscountValue = discountValue != null ? discountValue : catalogDiscountValue;
-        this.taxCode = taxCode;
     }
 }

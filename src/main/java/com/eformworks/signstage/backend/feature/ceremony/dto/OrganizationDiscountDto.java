@@ -76,50 +76,17 @@ public final class OrganizationDiscountDto {
             private final LocalDateTime createdAt;
         }
 
-        @Getter
-        @AllArgsConstructor
-        public static class OptionalFeatureDiscountSummary {
-
-            private final Long id;
-            private final Long organizationId;
-            private final String organizationName;
-            private final Long optionalFeatureId;
-            private final String optionalFeatureName;
-            private final String discountType;
-            private final BigDecimal discountValue;
-            private final LocalDate effectiveFrom;
-            private final LocalDate effectiveTo;
-            private final String status;
-            private final LocalDateTime createdAt;
-        }
-
-        @Getter
-        @AllArgsConstructor
-        public static class CapacityAddOnDiscountSummary {
-
-            private final Long id;
-            private final Long organizationId;
-            private final String organizationName;
-            private final Long capacityAddOnId;
-            /** SIGNERS/TEMPLATES/TEST_EVENTS/MAIN_EVENTS — 다른 CapacityAddOn 관련 DTO와 같이 name()을 그대로 내려주고, 라벨링은 프런트가 한다. */
-            private final String capacityType;
-            private final Integer unitAmount;
-            private final String discountType;
-            private final BigDecimal discountValue;
-            private final LocalDate effectiveFrom;
-            private final LocalDate effectiveTo;
-            private final String status;
-            private final LocalDateTime createdAt;
-        }
-
-        /** 조직별 할인 관리 화면이 한 조직에 걸린 세 카탈로그 종류의 오버라이드(모든 품목·모든 기간)를 한 번에 받는 데 쓴다. */
+        /**
+         * 조직별 할인 관리 화면이 한 조직에 걸린 플랜 오버라이드(모든 플랜·모든 기간)를 받는
+         * 데 쓴다. 옛 선택옵션/용량추가구매 오버라이드는 폐지됐다(signstage-docs
+         * business/billing-catalog-unit-product-model-redesign-review.md 결정, 2026-09-10, 4장) —
+         * 조직별 할인은 이제 플랜에만 있다.
+         */
         @Getter
         @AllArgsConstructor
         public static class OrganizationDiscountOverview {
 
             private final List<BillingPlanDiscountSummary> billingPlanDiscounts;
-            private final List<OptionalFeatureDiscountSummary> optionalFeatureDiscounts;
-            private final List<CapacityAddOnDiscountSummary> capacityAddOnDiscounts;
         }
 
         /**
@@ -144,39 +111,5 @@ public final class OrganizationDiscountDto {
             private final LocalDateTime createdAt;
         }
 
-        @Getter
-        @AllArgsConstructor
-        public static class OptionalFeatureDiscountHistorySummary {
-
-            private final Long id;
-            private final Long organizationId;
-            private final Long optionalFeatureId;
-            private final String optionalFeatureName;
-            private final String discountType;
-            private final BigDecimal discountValue;
-            private final LocalDate effectiveFrom;
-            private final LocalDate effectiveTo;
-            private final boolean removed;
-            private final Long createdBy;
-            private final LocalDateTime createdAt;
-        }
-
-        @Getter
-        @AllArgsConstructor
-        public static class CapacityAddOnDiscountHistorySummary {
-
-            private final Long id;
-            private final Long organizationId;
-            private final Long capacityAddOnId;
-            private final String capacityType;
-            private final Integer unitAmount;
-            private final String discountType;
-            private final BigDecimal discountValue;
-            private final LocalDate effectiveFrom;
-            private final LocalDate effectiveTo;
-            private final boolean removed;
-            private final Long createdBy;
-            private final LocalDateTime createdAt;
-        }
     }
 }

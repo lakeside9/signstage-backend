@@ -162,7 +162,7 @@ class CeremonyEventEffectSettingServiceTest {
         CeremonyEvent event = event(CeremonyEventStatus.DRAFT);
         given(ceremonyEffectDefinitionRepository.findById(1L)).willReturn(Optional.of(definition(1L, true)));
         given(ceremonyEffectDefinitionRepository.findById(2L)).willReturn(Optional.empty());
-        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(
+        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndUnitProductIdIn(
                 1L, List.of(REQUIRED_FEATURE_ID)
         )).willReturn(true);
 
@@ -185,7 +185,7 @@ class CeremonyEventEffectSettingServiceTest {
         CeremonyEvent event = event(CeremonyEventStatus.DRAFT);
         given(ceremonyEffectDefinitionRepository.findById(1L)).willReturn(Optional.of(definition(1L, true)));
         given(ceremonyEventEffectSettingRepository.findAllByEventIdWithDefinition(EVENT_ID)).willReturn(List.of());
-        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(
+        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndUnitProductIdIn(
                 1L, List.of(REQUIRED_FEATURE_ID)
         )).willReturn(true);
 
@@ -253,9 +253,9 @@ class CeremonyEventEffectSettingServiceTest {
 
         given(ceremonyEventEffectSettingRepository.findAllByEventIdWithDefinition(EVENT_ID))
                 .willReturn(List.of(settingToRemove, settingToKeep));
-        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(1L, List.of(30L)))
+        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndUnitProductIdIn(1L, List.of(30L)))
                 .willReturn(false);
-        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndOptionalFeatureIdIn(2L, List.of(30L)))
+        given(ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndUnitProductIdIn(2L, List.of(30L)))
                 .willReturn(true);
 
         // REQUIRED_FEATURE_ID(하이라이트)는 더 이상 적용되지 않고, 30L(폭죽)만 남았다고 가정.

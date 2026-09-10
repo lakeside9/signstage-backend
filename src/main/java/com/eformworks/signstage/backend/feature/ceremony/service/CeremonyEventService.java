@@ -9,7 +9,7 @@ import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto
 import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.ActorType;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventAction;
@@ -18,7 +18,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventOpt
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyTemplate;
-import com.eformworks.signstage.backend.feature.ceremony.entity.OptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
 import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
@@ -30,7 +30,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEven
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.OptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.SignerRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
@@ -64,7 +64,7 @@ public class CeremonyEventService {
 
     private final CeremonyEventRepository ceremonyEventRepository;
     private final CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
-    private final OptionalFeatureRepository optionalFeatureRepository;
+    private final UnitProductRepository unitProductRepository;
     private final CeremonyTemplateRepository ceremonyTemplateRepository;
     private final TemplateRepository templateRepository;
     private final TemplateFieldRepository templateFieldRepository;
@@ -92,10 +92,10 @@ public class CeremonyEventService {
         CeremonyEventType eventType = parseEventType(request.getEventType());
         // REHEARSAL은 TEST/MAIN과 별도인 자기 용량 버킷(BillingPlan.maxRehearsalEvents)을 쓴다
         // (2026-08-27 legacy 포팅).
-        CapacityType capacityType = switch (eventType) {
-            case TEST -> CapacityType.TEST_EVENTS;
-            case REHEARSAL -> CapacityType.REHEARSAL_EVENTS;
-            case MAIN -> CapacityType.MAIN_EVENTS;
+        UnitProductType capacityType = switch (eventType) {
+            case TEST -> UnitProductType.TEST_EVENTS;
+            case REHEARSAL -> UnitProductType.REHEARSAL_EVENTS;
+            case MAIN -> UnitProductType.MAIN_EVENTS;
         };
 
         // 한도 하드 블록(4.5절) — 유효 한도 = 플랜 기본값 + Σ 추가구매.
@@ -292,20 +292,20 @@ public class CeremonyEventService {
      * 검증·저장 로직을 공유한다.
      */
     private List<Long> applyOptionalFeatures(Ceremony ceremony, CeremonyEvent event, List<Long> requestedIds) {
-        List<Long> purchasedIds = ceremonyService.retrievePurchasedOptionalFeatureIds(ceremony);
-        if (!purchasedIds.containsAll(requestedIds)) {
-            throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_NOT_PURCHASED);
+        List<Long> applicableIds = ceremonyService.retrieveApplicableUnitProductIds(ceremony);
+        if (!applicableIds.containsAll(requestedIds)) {
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_PURCHASED);
         }
 
-        List<OptionalFeature> features = requestedIds.isEmpty()
+        List<UnitProduct> unitProducts = requestedIds.isEmpty()
                 ? List.of()
-                : optionalFeatureRepository.findAllByIdIn(requestedIds);
-        checkExclusivityGroups(features);
+                : unitProductRepository.findAllByIdIn(requestedIds);
+        checkExclusivityGroups(unitProducts);
 
         ceremonyEventOptionalFeatureRepository.deleteAllByCeremonyEventId(event.getId());
-        for (OptionalFeature feature : features) {
+        for (UnitProduct unitProduct : unitProducts) {
             ceremonyEventOptionalFeatureRepository.save(
-                    CeremonyEventOptionalFeature.builder().ceremonyEvent(event).optionalFeature(feature).build()
+                    CeremonyEventOptionalFeature.builder().ceremonyEvent(event).unitProduct(unitProduct).build()
             );
         }
 
@@ -324,13 +324,13 @@ public class CeremonyEventService {
      * (null)은 다른 옵션과 배타 관계가 아니므로 검사 대상에서 뺀다 — 지금 있는 두 옵션(서명
      * 하이라이트/폭죽)은 전부 null이라 이 검사가 추가돼도 기존 동작은 그대로다.
      */
-    private void checkExclusivityGroups(List<OptionalFeature> features) {
+    private void checkExclusivityGroups(List<UnitProduct> unitProducts) {
         Set<String> seenGroups = new HashSet<>();
-        for (OptionalFeature feature : features) {
-            String group = feature.getExclusivityGroup();
+        for (UnitProduct unitProduct : unitProducts) {
+            String group = unitProduct.getExclusivityGroup();
             if (group == null) continue;
             if (!seenGroups.add(group)) {
-                throw new ApplicationException(CeremonyErrorCode.OPTIONAL_FEATURE_GROUP_CONFLICT);
+                throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_GROUP_CONFLICT);
             }
         }
     }
@@ -908,7 +908,7 @@ public class CeremonyEventService {
 
     private List<Long> retrieveAppliedOptionalFeatureIds(CeremonyEvent event) {
         return ceremonyEventOptionalFeatureRepository.findAllByCeremonyEventId(event.getId()).stream()
-                .map(mapping -> mapping.getOptionalFeature().getId())
+                .map(mapping -> mapping.getUnitProduct().getId())
                 .toList();
     }
 

@@ -4,11 +4,9 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.BillingPlanDto;
-import com.eformworks.signstage.backend.feature.ceremony.dto.CapacityAddOnDto;
-import com.eformworks.signstage.backend.feature.ceremony.dto.OptionalFeatureDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.BillingPlanService;
-import com.eformworks.signstage.backend.feature.ceremony.service.CapacityAddOnService;
-import com.eformworks.signstage.backend.feature.ceremony.service.OptionalFeatureService;
+import com.eformworks.signstage.backend.feature.ceremony.service.UnitProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -25,10 +23,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 행사 과금 카탈로그(플랜/선택옵션/용량 추가구매 상품) 등록·수정. PLATFORM_SUPPORT 이상만 도달할 수 있고
+ * 행사 과금 카탈로그(플랜/단위 상품) 등록·수정. PLATFORM_SUPPORT 이상만 도달할 수 있고
  * (SecurityConfig에서 /api/platform-admin/** 전체를 게이트), 실제 등록·수정은 PLATFORM_OPS 이상만
  * 서비스에서 한 번 더 검사한다 — 다른 PlatformAdminXxxController와 같은 패턴이다.
- * signstage-docs business/ceremony-billing-options-review.md 참고.
+ * signstage-docs business/billing-catalog-unit-product-model-redesign-review.md 참고 — 옛
+ * {@code /optional-features}/{@code /capacity-addons} 엔드포인트는 2단계 전환으로 제거됐다.
  */
 @Tag(name = "PlatformAdmin", description = "플랫폼 관리자 행사 과금 카탈로그 API")
 @RestController
@@ -37,8 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PlatformAdminBillingCatalogController {
 
     private final BillingPlanService billingPlanService;
-    private final OptionalFeatureService optionalFeatureService;
-    private final CapacityAddOnService capacityAddOnService;
+    private final UnitProductService unitProductService;
     private final TraceIdProvider traceIdProvider;
 
     @Operation(summary = "과금 플랜 등록", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
@@ -54,8 +52,7 @@ public class PlatformAdminBillingCatalogController {
 
     @Operation(
             summary = "과금 플랜 수정",
-            description = "PLATFORM_OPS 이상만 호출할 수 있다. 선택옵션 구성(optionalFeatureIds)과 구매 가능 용량 "
-                    + "추가구매 상품 구성(capacityAddOnIds)도 여기서 통째로 교체할 수 있다."
+            description = "PLATFORM_OPS 이상만 호출할 수 있다. 단위 상품 구성(unitProducts)도 여기서 통째로 교체할 수 있다."
     )
     @PutMapping("/billing-plans/{id}")
     public ApiResponse<BillingPlanDto.Response.BillingPlanSummary> updatePlan(
@@ -122,169 +119,89 @@ public class PlatformAdminBillingCatalogController {
         return ApiResponse.success(billingPlanService.findPlanPeriodHistory(id), traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "선택옵션 등록", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
-    @PostMapping("/optional-features")
-    public ApiResponse<OptionalFeatureDto.Response.OptionalFeatureSummary> createOptionalFeature(
+    // === 단위 상품(UnitProduct) — 옛 선택옵션/용량 추가구매 상품 API를 통합했다
+    // (signstage-docs business/billing-catalog-unit-product-model-redesign-review.md, 2026-09-10).
+
+    @Operation(summary = "단위 상품 등록", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
+    @PostMapping("/unit-products")
+    public ApiResponse<UnitProductDto.Response.UnitProductSummary> createUnitProduct(
             @AuthenticationPrincipal CurrentUser currentUser,
-            @Valid @RequestBody OptionalFeatureDto.Request.CreateOptionalFeature request
+            @Valid @RequestBody UnitProductDto.Request.CreateUnitProduct request
     ) {
-        OptionalFeatureDto.Response.OptionalFeatureSummary response =
-                optionalFeatureService.createOptionalFeature(currentUser.platformRole(), currentUser.userId(), request);
+        UnitProductDto.Response.UnitProductSummary response =
+                unitProductService.createUnitProduct(currentUser.platformRole(), currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "선택옵션 수정", description = "PLATFORM_OPS 이상만 호출할 수 있다. code는 생성 후 불변이라 여기서 바꿀 수 없다.")
-    @PutMapping("/optional-features/{id}")
-    public ApiResponse<OptionalFeatureDto.Response.OptionalFeatureSummary> updateOptionalFeature(
+    @Operation(summary = "단위 상품 수정", description = "PLATFORM_OPS 이상만 호출할 수 있다. type은 생성 후 불변이라 여기서 바꿀 수 없다.")
+    @PutMapping("/unit-products/{id}")
+    public ApiResponse<UnitProductDto.Response.UnitProductSummary> updateUnitProduct(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long id,
-            @Valid @RequestBody OptionalFeatureDto.Request.UpdateOptionalFeature request
+            @Valid @RequestBody UnitProductDto.Request.UpdateUnitProduct request
     ) {
-        OptionalFeatureDto.Response.OptionalFeatureSummary response =
-                optionalFeatureService.updateOptionalFeature(id, currentUser.platformRole(), currentUser.userId(), request);
+        UnitProductDto.Response.UnitProductSummary response =
+                unitProductService.updateUnitProduct(id, currentUser.platformRole(), currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "선택옵션 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 이름/배타그룹/분류가 바뀔 때마다 1건씩 쌓인다.")
-    @GetMapping("/optional-features/{id}/history")
-    public ApiResponse<List<OptionalFeatureDto.Response.OptionalFeatureHistorySummary>> findOptionalFeatureHistory(
+    @Operation(summary = "단위 상품 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 이름/분류/배타그룹이 바뀔 때마다 1건씩 쌓인다.")
+    @GetMapping("/unit-products/{id}/history")
+    public ApiResponse<List<UnitProductDto.Response.UnitProductHistorySummary>> findUnitProductHistory(
             @PathVariable Long id
     ) {
-        return ApiResponse.success(optionalFeatureService.findFeatureHistory(id), traceIdProvider.getTraceId());
+        return ApiResponse.success(unitProductService.findUnitProductHistory(id), traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "선택옵션 판매가격 기간 추가", description = "PLATFORM_OPS 이상만 호출할 수 있다. 기간이 다른 기간과 겹치면 거부된다.")
-    @PostMapping("/optional-features/{id}/periods")
-    public ApiResponse<OptionalFeatureDto.Response.OptionalFeaturePeriodSummary> createOptionalFeaturePeriod(
+    @Operation(summary = "단위 상품 판매가격 기간 추가", description = "PLATFORM_OPS 이상만 호출할 수 있다. 기간이 다른 기간과 겹치면 거부된다.")
+    @PostMapping("/unit-products/{id}/periods")
+    public ApiResponse<UnitProductDto.Response.UnitProductPeriodSummary> createUnitProductPeriod(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long id,
-            @Valid @RequestBody OptionalFeatureDto.Request.CreatePeriod request
+            @Valid @RequestBody UnitProductDto.Request.CreatePeriod request
     ) {
-        OptionalFeatureDto.Response.OptionalFeaturePeriodSummary response =
-                optionalFeatureService.createPeriod(id, currentUser.platformRole(), currentUser.userId(), request);
+        UnitProductDto.Response.UnitProductPeriodSummary response =
+                unitProductService.createPeriod(id, currentUser.platformRole(), currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "선택옵션 판매가격 기간 수정", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
-    @PutMapping("/optional-features/{id}/periods/{periodId}")
-    public ApiResponse<OptionalFeatureDto.Response.OptionalFeaturePeriodSummary> updateOptionalFeaturePeriod(
+    @Operation(summary = "단위 상품 판매가격 기간 수정", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
+    @PutMapping("/unit-products/{id}/periods/{periodId}")
+    public ApiResponse<UnitProductDto.Response.UnitProductPeriodSummary> updateUnitProductPeriod(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long id,
             @PathVariable Long periodId,
-            @Valid @RequestBody OptionalFeatureDto.Request.UpdatePeriod request
+            @Valid @RequestBody UnitProductDto.Request.UpdatePeriod request
     ) {
-        OptionalFeatureDto.Response.OptionalFeaturePeriodSummary response =
-                optionalFeatureService.updatePeriod(id, periodId, currentUser.platformRole(), currentUser.userId(), request);
+        UnitProductDto.Response.UnitProductPeriodSummary response =
+                unitProductService.updatePeriod(id, periodId, currentUser.platformRole(), currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "선택옵션 판매가격 기간 삭제", description = "PLATFORM_OPS 이상만 호출할 수 있다. 마지막 남은 기간은 지울 수 없다.")
-    @DeleteMapping("/optional-features/{id}/periods/{periodId}")
-    public ApiResponse<Void> removeOptionalFeaturePeriod(
+    @Operation(summary = "단위 상품 판매가격 기간 삭제", description = "PLATFORM_OPS 이상만 호출할 수 있다. 마지막 남은 기간은 지울 수 없다.")
+    @DeleteMapping("/unit-products/{id}/periods/{periodId}")
+    public ApiResponse<Void> removeUnitProductPeriod(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long id,
             @PathVariable Long periodId
     ) {
-        optionalFeatureService.removePeriod(id, periodId, currentUser.platformRole(), currentUser.userId());
+        unitProductService.removePeriod(id, periodId, currentUser.platformRole(), currentUser.userId());
         return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "선택옵션 판매가격 기간 목록 조회", description = "오래된 순 — 과거/현재/예정 기간을 전부 보여준다.")
-    @GetMapping("/optional-features/{id}/periods")
-    public ApiResponse<List<OptionalFeatureDto.Response.OptionalFeaturePeriodSummary>> findOptionalFeaturePeriods(
+    @Operation(summary = "단위 상품 판매가격 기간 목록 조회", description = "오래된 순 — 과거/현재/예정 기간을 전부 보여준다.")
+    @GetMapping("/unit-products/{id}/periods")
+    public ApiResponse<List<UnitProductDto.Response.UnitProductPeriodSummary>> findUnitProductPeriods(
             @PathVariable Long id
     ) {
-        return ApiResponse.success(optionalFeatureService.findFeaturePeriods(id), traceIdProvider.getTraceId());
+        return ApiResponse.success(unitProductService.findUnitProductPeriods(id), traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "선택옵션 판매가격 기간 변경 이력 조회", description = "최신순 — 기간 생성/수정/삭제 이벤트를 전부 보여준다.")
-    @GetMapping("/optional-features/{id}/periods/history")
-    public ApiResponse<List<OptionalFeatureDto.Response.OptionalFeaturePeriodHistorySummary>> findOptionalFeaturePeriodHistory(
+    @Operation(summary = "단위 상품 판매가격 기간 변경 이력 조회", description = "최신순 — 기간 생성/수정/삭제 이벤트를 전부 보여준다.")
+    @GetMapping("/unit-products/{id}/periods/history")
+    public ApiResponse<List<UnitProductDto.Response.UnitProductPeriodHistorySummary>> findUnitProductPeriodHistory(
             @PathVariable Long id
     ) {
-        return ApiResponse.success(optionalFeatureService.findFeaturePeriodHistory(id), traceIdProvider.getTraceId());
-    }
-
-    @Operation(summary = "용량 추가구매 상품 등록", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
-    @PostMapping("/capacity-addons")
-    public ApiResponse<CapacityAddOnDto.Response.CapacityAddOnSummary> createCapacityAddOn(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @Valid @RequestBody CapacityAddOnDto.Request.CreateCapacityAddOn request
-    ) {
-        CapacityAddOnDto.Response.CapacityAddOnSummary response =
-                capacityAddOnService.createCapacityAddOn(currentUser.platformRole(), currentUser.userId(), request);
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
-    }
-
-    @Operation(summary = "용량 추가구매 상품 수정", description = "PLATFORM_OPS 이상만 호출할 수 있다. capacityType은 생성 후 불변이라 여기서 바꿀 수 없다.")
-    @PutMapping("/capacity-addons/{id}")
-    public ApiResponse<CapacityAddOnDto.Response.CapacityAddOnSummary> updateCapacityAddOn(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long id,
-            @Valid @RequestBody CapacityAddOnDto.Request.UpdateCapacityAddOn request
-    ) {
-        CapacityAddOnDto.Response.CapacityAddOnSummary response =
-                capacityAddOnService.updateCapacityAddOn(id, currentUser.platformRole(), currentUser.userId(), request);
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
-    }
-
-    @Operation(summary = "용량 추가구매 상품 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 단위수량이 바뀔 때마다 1건씩 쌓인다.")
-    @GetMapping("/capacity-addons/{id}/history")
-    public ApiResponse<List<CapacityAddOnDto.Response.CapacityAddOnHistorySummary>> findCapacityAddOnHistory(
-            @PathVariable Long id
-    ) {
-        return ApiResponse.success(capacityAddOnService.findAddOnHistory(id), traceIdProvider.getTraceId());
-    }
-
-    @Operation(summary = "용량 추가구매 상품 판매가격 기간 추가", description = "PLATFORM_OPS 이상만 호출할 수 있다. 기간이 다른 기간과 겹치면 거부된다.")
-    @PostMapping("/capacity-addons/{id}/periods")
-    public ApiResponse<CapacityAddOnDto.Response.CapacityAddOnPeriodSummary> createCapacityAddOnPeriod(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long id,
-            @Valid @RequestBody CapacityAddOnDto.Request.CreatePeriod request
-    ) {
-        CapacityAddOnDto.Response.CapacityAddOnPeriodSummary response =
-                capacityAddOnService.createPeriod(id, currentUser.platformRole(), currentUser.userId(), request);
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
-    }
-
-    @Operation(summary = "용량 추가구매 상품 판매가격 기간 수정", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
-    @PutMapping("/capacity-addons/{id}/periods/{periodId}")
-    public ApiResponse<CapacityAddOnDto.Response.CapacityAddOnPeriodSummary> updateCapacityAddOnPeriod(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long id,
-            @PathVariable Long periodId,
-            @Valid @RequestBody CapacityAddOnDto.Request.UpdatePeriod request
-    ) {
-        CapacityAddOnDto.Response.CapacityAddOnPeriodSummary response =
-                capacityAddOnService.updatePeriod(id, periodId, currentUser.platformRole(), currentUser.userId(), request);
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
-    }
-
-    @Operation(summary = "용량 추가구매 상품 판매가격 기간 삭제", description = "PLATFORM_OPS 이상만 호출할 수 있다. 마지막 남은 기간은 지울 수 없다.")
-    @DeleteMapping("/capacity-addons/{id}/periods/{periodId}")
-    public ApiResponse<Void> removeCapacityAddOnPeriod(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long id,
-            @PathVariable Long periodId
-    ) {
-        capacityAddOnService.removePeriod(id, periodId, currentUser.platformRole(), currentUser.userId());
-        return ApiResponse.success(null, traceIdProvider.getTraceId());
-    }
-
-    @Operation(summary = "용량 추가구매 상품 판매가격 기간 목록 조회", description = "오래된 순 — 과거/현재/예정 기간을 전부 보여준다.")
-    @GetMapping("/capacity-addons/{id}/periods")
-    public ApiResponse<List<CapacityAddOnDto.Response.CapacityAddOnPeriodSummary>> findCapacityAddOnPeriods(
-            @PathVariable Long id
-    ) {
-        return ApiResponse.success(capacityAddOnService.findAddOnPeriods(id), traceIdProvider.getTraceId());
-    }
-
-    @Operation(summary = "용량 추가구매 상품 판매가격 기간 변경 이력 조회", description = "최신순 — 기간 생성/수정/삭제 이벤트를 전부 보여준다.")
-    @GetMapping("/capacity-addons/{id}/periods/history")
-    public ApiResponse<List<CapacityAddOnDto.Response.CapacityAddOnPeriodHistorySummary>> findCapacityAddOnPeriodHistory(
-            @PathVariable Long id
-    ) {
-        return ApiResponse.success(capacityAddOnService.findAddOnPeriodHistory(id), traceIdProvider.getTraceId());
+        return ApiResponse.success(unitProductService.findUnitProductPeriodHistory(id), traceIdProvider.getTraceId());
     }
 }

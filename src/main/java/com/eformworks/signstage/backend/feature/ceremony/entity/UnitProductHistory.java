@@ -1,0 +1,64 @@
+package com.eformworks.signstage.backend.feature.ceremony.entity;
+
+import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
+
+/**
+ * 단위 상품(UnitProduct)의 이름/배타그룹/분류 변경 이력 — 기존 {@code OptionalFeatureHistory}/
+ * {@code CapacityAddOnHistory} 통합. append-only다. {@code type}은 원본에서 불변이지만 조인
+ * 없이 이력만으로 표시할 수 있게 그대로 스냅샷에 포함한다. 가격정보/사용여부 변경 이력은
+ * {@link UnitProductPricePeriodHistory}가 담당한다.
+ */
+@Entity
+@Table(name = "unit_product_histories")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Immutable
+public class UnitProductHistory extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "unit_product_id", nullable = false)
+    private UnitProduct unitProduct;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UnitProductType type;
+
+    @Column(nullable = false, length = 100)
+    private String name;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UnitProductCategory category;
+
+    @Column(name = "exclusivity_group", length = 50)
+    private String exclusivityGroup;
+
+    @Builder
+    private UnitProductHistory(UnitProduct unitProduct) {
+        this.unitProduct = unitProduct;
+        this.type = unitProduct.getType();
+        this.name = unitProduct.getName();
+        this.category = unitProduct.getCategory();
+        this.exclusivityGroup = unitProduct.getExclusivityGroup();
+    }
+}

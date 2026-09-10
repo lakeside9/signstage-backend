@@ -4,7 +4,7 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CapacityType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
@@ -82,7 +82,7 @@ public class TemplateService {
         ceremonyService.checkCeremonyEditable(ceremony);
         ceremonyService.checkCeremonyPlanConfirmed(ceremony);
 
-        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, CapacityType.TEMPLATES);
+        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.TEMPLATES);
         long currentCount = templateRepository.countByCeremonyId(ceremonyId);
         if (currentCount >= effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_TEMPLATE_LIMIT_EXCEEDED);
@@ -430,7 +430,7 @@ public class TemplateService {
         ceremonyService.checkCeremonyEditable(ceremony);
         ceremonyService.checkCeremonyPlanConfirmed(ceremony);
 
-        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, CapacityType.TEMPLATES);
+        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.TEMPLATES);
         long currentCount = templateRepository.countByCeremonyId(ceremonyId);
         if (currentCount >= effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_TEMPLATE_LIMIT_EXCEEDED);

@@ -21,8 +21,9 @@ import org.hibernate.annotations.Immutable;
  * 생성 시점과 {@code BillingPlanService#updatePlan} 호출 시(이름이 바뀔 때)마다 그 순간의
  * 상태를 스냅샷 한 행씩 쌓는다({@link CeremonyPlanHistory}와 같은 패턴). "누가/언제"는
  * {@link BaseEntity#getCreatedBy()}/{@link BaseEntity#getCreatedAt()}로 충분해 별도 컬럼을
- * 두지 않는다. 한도(용량) 구성은 이 엔티티의 고정 필드가 아니라
- * {@link BillingPlanHistoryCapacity}로 별도 스냅샷된다(2026-09-08, 항목 B).
+ * 두지 않는다. 단위 상품 구성(포함 수량/구매 가능 여부)은 이 엔티티의 고정 필드가 아니라
+ * {@link BillingPlanHistoryUnitProduct}로 별도 스냅샷된다(signstage-docs
+ * business/billing-catalog-unit-product-model-redesign-review.md 결정, 2026-09-10).
  *
  * <p>가격정보/사용여부 변경 이력은 이 엔티티가 아니라 {@link BillingPlanPricePeriodHistory}가
  * 담당한다(signstage-docs business/billing-catalog-price-validity-period-review.md 결정,

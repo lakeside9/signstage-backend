@@ -11,8 +11,6 @@ import org.springframework.http.HttpStatus;
 public enum CeremonyErrorCode implements ErrorCode {
 
     BILLING_PLAN_NOT_FOUND("CEREMONY_BILLING_PLAN_NOT_FOUND", HttpStatus.NOT_FOUND, "과금 플랜을 찾을 수 없습니다."),
-    OPTIONAL_FEATURE_NOT_FOUND("CEREMONY_OPTIONAL_FEATURE_NOT_FOUND", HttpStatus.NOT_FOUND, "선택옵션을 찾을 수 없습니다."),
-    CAPACITY_ADDON_NOT_FOUND("CEREMONY_CAPACITY_ADDON_NOT_FOUND", HttpStatus.NOT_FOUND, "용량 추가구매 상품을 찾을 수 없습니다."),
     CURRENCY_MISMATCH(
             "CEREMONY_CURRENCY_MISMATCH",
             HttpStatus.CONFLICT,
@@ -23,15 +21,16 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "거래일에 적용할 수 있는 세금 정책을 찾을 수 없습니다."
     ),
-    OPTIONAL_FEATURE_CODE_DUPLICATE(
-            "CEREMONY_OPTIONAL_FEATURE_CODE_DUPLICATE",
+    /**
+     * {@code UnitProduct} 통합 카탈로그(signstage-docs
+     * business/billing-catalog-unit-product-model-redesign-review.md, 2026-09-10)의 오류 코드 —
+     * 옛 {@code OPTIONAL_FEATURE_*}/{@code CAPACITY_ADDON_*} 카탈로그 코드를 대체했다.
+     */
+    UNIT_PRODUCT_NOT_FOUND("CEREMONY_UNIT_PRODUCT_NOT_FOUND", HttpStatus.NOT_FOUND, "단위 상품을 찾을 수 없습니다."),
+    UNIT_PRODUCT_EFFECT_BUNDLE_ONLY(
+            "CEREMONY_UNIT_PRODUCT_EFFECT_BUNDLE_ONLY",
             HttpStatus.CONFLICT,
-            "이미 등록된 선택옵션 코드입니다."
-    ),
-    OPTIONAL_FEATURE_EFFECT_BUNDLE_ONLY(
-            "CEREMONY_OPTIONAL_FEATURE_EFFECT_BUNDLE_ONLY",
-            HttpStatus.CONFLICT,
-            "이벤트 효과 목록은 EVENT_EFFECT_BUNDLE 종류의 선택옵션에서만 지정할 수 있습니다."
+            "이벤트 효과 목록은 EVENT_EFFECT_BUNDLE 종류의 단위 상품에서만 지정할 수 있습니다."
     ),
     CEREMONY_NOT_FOUND("CEREMONY_NOT_FOUND", HttpStatus.NOT_FOUND, "행사를 찾을 수 없습니다."),
     CEREMONY_EVENT_NOT_FOUND("CEREMONY_EVENT_NOT_FOUND", HttpStatus.NOT_FOUND, "하위 행사를 찾을 수 없습니다."),
@@ -40,40 +39,30 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "이 유형의 하위 행사 생성 한도를 초과했습니다. 플랜을 올리거나 용량을 추가구매해주세요."
     ),
-    OPTIONAL_FEATURE_NOT_PURCHASED(
-            "CEREMONY_OPTIONAL_FEATURE_NOT_PURCHASED",
+    UNIT_PRODUCT_NOT_PURCHASED(
+            "CEREMONY_UNIT_PRODUCT_NOT_PURCHASED",
             HttpStatus.CONFLICT,
-            "구매하지 않은 선택옵션은 하위 행사에 적용할 수 없습니다."
+            "구매하지 않은 단위 상품은 하위 행사에 적용할 수 없습니다."
     ),
-    OPTIONAL_FEATURE_ALREADY_PURCHASED(
-            "CEREMONY_OPTIONAL_FEATURE_ALREADY_PURCHASED",
+    UNIT_PRODUCT_ALREADY_PURCHASED(
+            "CEREMONY_UNIT_PRODUCT_ALREADY_PURCHASED",
             HttpStatus.CONFLICT,
-            "이미 구매를 요청했거나 승인된 선택옵션입니다."
+            "이미 구매를 요청했거나 승인된 단위 상품입니다."
     ),
-    OPTIONAL_FEATURE_GROUP_CONFLICT(
-            "CEREMONY_OPTIONAL_FEATURE_GROUP_CONFLICT",
+    UNIT_PRODUCT_GROUP_CONFLICT(
+            "CEREMONY_UNIT_PRODUCT_GROUP_CONFLICT",
             HttpStatus.CONFLICT,
-            "같은 배타 그룹의 선택옵션은 하나만 적용할 수 있습니다."
+            "같은 배타 그룹의 단위 상품은 하나만 적용할 수 있습니다."
     ),
-    CAPACITY_PURCHASE_NOT_FOUND(
-            "CEREMONY_CAPACITY_PURCHASE_NOT_FOUND",
+    UNIT_PRODUCT_PURCHASE_NOT_FOUND(
+            "CEREMONY_UNIT_PRODUCT_PURCHASE_NOT_FOUND",
             HttpStatus.NOT_FOUND,
-            "용량 추가구매 요청을 찾을 수 없습니다."
+            "단위 상품 추가구매 요청을 찾을 수 없습니다."
     ),
-    CAPACITY_PURCHASE_NOT_PENDING(
-            "CEREMONY_CAPACITY_PURCHASE_NOT_PENDING",
+    UNIT_PRODUCT_PURCHASE_NOT_PENDING(
+            "CEREMONY_UNIT_PRODUCT_PURCHASE_NOT_PENDING",
             HttpStatus.CONFLICT,
-            "이미 처리된 용량 추가구매 요청입니다."
-    ),
-    OPTIONAL_FEATURE_PURCHASE_NOT_FOUND(
-            "CEREMONY_OPTIONAL_FEATURE_PURCHASE_NOT_FOUND",
-            HttpStatus.NOT_FOUND,
-            "선택옵션 추가구매 요청을 찾을 수 없습니다."
-    ),
-    OPTIONAL_FEATURE_PURCHASE_NOT_PENDING(
-            "CEREMONY_OPTIONAL_FEATURE_PURCHASE_NOT_PENDING",
-            HttpStatus.CONFLICT,
-            "이미 처리된 선택옵션 추가구매 요청입니다."
+            "이미 처리된 단위 상품 추가구매 요청입니다."
     ),
     SIGNER_NOT_FOUND("CEREMONY_SIGNER_NOT_FOUND", HttpStatus.NOT_FOUND, "서명자를 찾을 수 없습니다."),
     CEREMONY_SIGNER_LIMIT_EXCEEDED(
@@ -236,20 +225,15 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "사용 중지된 플랜은 선택할 수 없습니다."
     ),
-    OPTIONAL_FEATURE_INACTIVE(
-            "CEREMONY_OPTIONAL_FEATURE_INACTIVE",
+    UNIT_PRODUCT_INACTIVE(
+            "CEREMONY_UNIT_PRODUCT_INACTIVE",
             HttpStatus.CONFLICT,
-            "사용 중지된 선택옵션은 구매할 수 없습니다."
+            "사용 중지된 단위 상품은 구매할 수 없습니다."
     ),
-    CAPACITY_ADDON_INACTIVE(
-            "CEREMONY_CAPACITY_ADDON_INACTIVE",
+    UNIT_PRODUCT_NOT_AVAILABLE_FOR_PLAN(
+            "CEREMONY_UNIT_PRODUCT_NOT_AVAILABLE_FOR_PLAN",
             HttpStatus.CONFLICT,
-            "사용 중지된 용량 추가구매 상품은 구매할 수 없습니다."
-    ),
-    CAPACITY_ADDON_NOT_AVAILABLE_FOR_PLAN(
-            "CEREMONY_CAPACITY_ADDON_NOT_AVAILABLE_FOR_PLAN",
-            HttpStatus.CONFLICT,
-            "이 행사의 플랜에서는 구매할 수 없는 용량 추가구매 상품입니다."
+            "이 행사의 플랜에서는 구매할 수 없는 단위 상품입니다."
     ),
     SIGNER_EXCEL_INVALID_FORMAT(
             "CEREMONY_SIGNER_EXCEL_INVALID_FORMAT",
