@@ -10,6 +10,9 @@ import com.eformworks.signstage.backend.feature.identity.entity.LoginHistoryStat
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.entity.UserHistory;
 import com.eformworks.signstage.backend.feature.identity.entity.UserStatus;
+import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
+import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
+import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -36,6 +39,7 @@ public class IdentityService {
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
     private final LoginAttemptRecorder loginAttemptRecorder;
+    private final MemberRepository memberRepository;
 
     public IdentityDto.Response.Login login(IdentityDto.Request.Login request, String ipAddress, String userAgent) {
         User user = userRepository.findByLoginId(request.getLoginId()).orElse(null);
@@ -91,8 +95,13 @@ public class IdentityService {
         // 일반 사용자(조직 소속 여부와 무관): platformRole이 없으므로 관리자 콘솔 토큰이 아닌
         // 일반 액세스 토큰을 발급한다. feature.organization의 API들은 이미 JWT 클레임이 아니라
         // organization_members를 직접 조회해 권한을 판단하므로, 이 토큰만으로 그대로 호출할 수 있다.
+        // isDemoViewer만 예외로 로그인 응답에 함께 싣는다 — 데모 조직(Organization.isDemo)
+        // 소속 VIEWER면 프런트가 UserLayout이 아니라 DemoLayout으로 보내야 하기 때문이다
+        // (signstage-docs business/demo-account-exhibition-signer-preview-review.md 4.1/4.2절).
         String accessToken = jwtProvider.createUserAccessToken(user);
-        return IdentityDto.Response.Login.success(accessToken, null);
+        boolean isDemoViewer = memberRepository.findAllByUserIdAndStatus(user.getId(), MemberStatus.ACTIVE).stream()
+                .anyMatch(member -> member.getOrganization().isDemo() && member.getRole() == MemberRole.VIEWER);
+        return IdentityDto.Response.Login.success(accessToken, isDemoViewer);
     }
 
     /**

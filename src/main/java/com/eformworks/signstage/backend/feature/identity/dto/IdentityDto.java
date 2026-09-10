@@ -129,13 +129,24 @@ public final class IdentityDto {
             private final String tokenType;
             private final String accessToken;
             private final PlatformAdminInfo platformAdmin;
+            /**
+             * 데모 조직 소속 VIEWER(데모 체험 계정)인가 — signstage-docs
+             * business/demo-account-exhibition-signer-preview-review.md 4.1/4.2절 결정
+             * (2026-09-10 구현). true면 프런트가 {@code /}(UserLayout) 대신 {@code /demo}
+             * (DemoLayout)로 보낸다. 플랫폼 관리자(platformAdmin != null)는 항상 false다.
+             */
+            private final boolean isDemoViewer;
 
             public static Login passwordChangeRequired(String passwordResetToken) {
-                return new Login(true, passwordResetToken, null, null, null);
+                return new Login(true, passwordResetToken, null, null, null, false);
             }
 
             public static Login success(String accessToken, PlatformAdminInfo platformAdmin) {
-                return new Login(false, null, "Bearer", accessToken, platformAdmin);
+                return new Login(false, null, "Bearer", accessToken, platformAdmin, false);
+            }
+
+            public static Login success(String accessToken, boolean isDemoViewer) {
+                return new Login(false, null, "Bearer", accessToken, null, isDemoViewer);
             }
         }
 
