@@ -4,9 +4,11 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
+import com.eformworks.signstage.backend.feature.ceremony.dto.BillingQuoteDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
+import com.eformworks.signstage.backend.feature.ceremony.service.BillingQuoteService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -42,6 +44,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CeremonyController {
 
     private final CeremonyService ceremonyService;
+    private final BillingQuoteService billingQuoteService;
     private final TraceIdProvider traceIdProvider;
 
     @Operation(
@@ -246,6 +249,65 @@ public class CeremonyController {
     ) {
         CeremonyDto.Response.EstimatedTotal response =
                 ceremonyService.calculateEstimatedTotal(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "확정 견적 생성",
+            description = "지금 이 순간의 예상 청구 금액을 스냅샷으로 고정한다(signstage-docs "
+                    + "business/currency-tax-internationalization-review.md 9장) — 이후 카탈로그/세금 정책/할인이 바뀌어도 이 견적은 "
+                    + "바뀌지 않는다. 재견적은 새 버전을 만드는 것이고, 기존 버전은 지우거나 자동으로 무효화하지 않는다."
+    )
+    @PostMapping("/{ceremonyId}/quotes")
+    public ApiResponse<BillingQuoteDto.Response.QuoteDetail> finalizeQuote(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        BillingQuoteDto.Response.QuoteDetail response =
+                billingQuoteService.finalizeQuote(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "확정 견적 목록 조회", description = "버전 역순(최신이 먼저) — 무효화된 버전도 그대로 포함된다.")
+    @GetMapping("/{ceremonyId}/quotes")
+    public ApiResponse<List<BillingQuoteDto.Response.QuoteSummary>> findQuotes(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        List<BillingQuoteDto.Response.QuoteSummary> response =
+                billingQuoteService.findQuotes(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "확정 견적 상세 조회", description = "줄 단위 내역(품목/수량/할인/세금 배분)까지 포함한다.")
+    @GetMapping("/{ceremonyId}/quotes/{quoteId}")
+    public ApiResponse<BillingQuoteDto.Response.QuoteDetail> findQuoteDetail(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long quoteId
+    ) {
+        BillingQuoteDto.Response.QuoteDetail response =
+                billingQuoteService.findQuoteDetail(organizationId, ceremonyId, quoteId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "확정 견적 무효화",
+            description = "견적 행 자체는 지우거나 고치지 않는다 — 상태 이력에 VOID 이벤트를 추가할 뿐이다(append-only)."
+    )
+    @PostMapping("/{ceremonyId}/quotes/{quoteId}/void")
+    public ApiResponse<BillingQuoteDto.Response.QuoteSummary> voidQuote(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long quoteId,
+            @Valid @RequestBody BillingQuoteDto.Request.VoidQuote request
+    ) {
+        BillingQuoteDto.Response.QuoteSummary response =
+                billingQuoteService.voidQuote(organizationId, ceremonyId, quoteId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }
