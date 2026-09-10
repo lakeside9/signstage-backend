@@ -29,6 +29,12 @@ public final class ProjectorDto {
             private final String eventType;
             private final String eventStatus;
             private final String eventAccessKey;
+            /**
+             * 이 행사의 조직이 데모 조직(Organization.isDemo)인가 — signstage-docs
+             * business/demo-account-exhibition-signer-preview-review.md 6.1절 결정(전체 화면
+             * 워터마크 조건: {@code eventType !== 'MAIN' || isDemo}).
+             */
+            private final boolean isDemo;
 
             /** EXHIBITION 매핑이 없으면 전부 null/빈 리스트. */
             private final ExhibitionDocument exhibition;

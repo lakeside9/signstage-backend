@@ -50,6 +50,8 @@ public final class SignerPortalDto {
             /** TEST/REHEARSAL/MAIN — 서명자 포털 도구모음의 구분 뱃지에 쓴다(2026-08-27 legacy 포팅). */
             private final String eventType;
             private final String eventStatus;
+            /** {@link ProjectorDto.Response.ProjectorContext#isDemo}와 같은 용도(전체 화면 워터마크). */
+            private final boolean isDemo;
             private final Long signerId;
             private final String signerName;
             private final String signerPosition;

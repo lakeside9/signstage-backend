@@ -93,7 +93,7 @@ public class ProjectorService {
 
         return new ProjectorDto.Response.ProjectorContext(
                 event.getId(), event.getName(), event.getEventType().name(), event.getStatus().name(),
-                event.getAccessKey(), exhibition, appliedOptionalFeatureCodes
+                event.getAccessKey(), event.getCeremony().getOrganization().isDemo(), exhibition, appliedOptionalFeatureCodes
         );
     }
 

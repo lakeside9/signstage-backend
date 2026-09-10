@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.repository;
 
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
 import jakarta.persistence.LockModeType;
 import java.util.List;
@@ -19,6 +20,21 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, Lo
     List<CeremonyEvent> findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(Long ceremonyId);
 
     List<CeremonyEvent> findAllByCeremonyIdAndEventType(Long ceremonyId, CeremonyEventType eventType);
+
+    /**
+     * 데모 시나리오 목록(signstage-docs
+     * business/demo-account-exhibition-signer-preview-review.md 5.4절) — 데모 조직 소속
+     * STARTED 이벤트 전체를 최신순으로 자동 나열한다. 별도 큐레이션 플래그 없음(같은 절 결정).
+     */
+    List<CeremonyEvent> findAllByCeremony_Organization_IdAndStatusOrderByCreatedAtDesc(
+            Long organizationId, CeremonyEventStatus status
+    );
+
+    /**
+     * 체험형 데모 사이트(legacy 재사용) 관리자 화면의 "행사 선택" 후보 — 데모 조직 소속 이벤트
+     * 전체(signstage-docs business/demo-account-exhibition-signer-preview-review.md 13장).
+     */
+    List<CeremonyEvent> findAllByCeremony_Organization_DemoTrueOrderByCreatedAtDesc();
 
     long countByCeremonyIdAndEventType(Long ceremonyId, CeremonyEventType eventType);
 

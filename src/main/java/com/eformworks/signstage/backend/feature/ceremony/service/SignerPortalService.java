@@ -53,6 +53,7 @@ public class SignerPortalService {
     private final TemplateService templateService;
     private final CeremonyEventSignerStateService ceremonyEventSignerStateService;
     private final CeremonyEffectRuntimeService ceremonyEffectRuntimeService;
+    private final CeremonyEventService ceremonyEventService;
 
     public SignerPortalDto.Response.PortalContext retrievePortalContext(String eventAccessKey, String signerAccessKey) {
         PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
@@ -76,6 +77,7 @@ public class SignerPortalService {
                 context.event().getName(),
                 context.event().getEventType().name(),
                 context.event().getStatus().name(),
+                context.event().getCeremony().getOrganization().isDemo(),
                 context.signer().getId(),
                 context.signer().getName(),
                 context.signer().getPosition(),
@@ -306,6 +308,69 @@ public class SignerPortalService {
         ceremonyEventSignerStateService.markPending(context.event(), context.signer());
 
         ceremonyRealtimeNotifier.notifySignatureCleared(context.event().getId(), context.signer().getId(), field.getId());
+    }
+
+    /**
+     * 데모 전용 — {@link #clearFieldStroke}를 이 서명자에게 배정된 서명란 수만큼 반복 호출하는
+     * 것과 결과가 같다(signstage-docs
+     * business/demo-account-exhibition-signer-preview-review.md 5.2절 결정, 2026-09-10 구현).
+     * {@code DemoView}가 "서명자용 화면" 버튼을 누를 때 새 탭을 열기 직전에 한 번 호출해,
+     * 방문자마다 항상 깨끗한 상태로 시작하게 한다 — 새 서명 관련 로직이 아니라 기존
+     * {@code SIGNATURE_CLEAR}를 그대로 재사용한다.
+     */
+    @Transactional
+    public void resetAllFieldsForSigner(String eventAccessKey, String signerAccessKey) {
+        PortalContext context = resolvePortalContext(eventAccessKey, signerAccessKey);
+
+        if (context.event().getStatus() != CeremonyEventStatus.STARTED) {
+            throw new ApplicationException(CeremonyErrorCode.EVENT_NOT_IN_PROGRESS);
+        }
+
+        List<TemplateField> fields = collectRequiredFieldsForSigner(context.event(), context.signer());
+        if (fields.isEmpty()) {
+            return;
+        }
+
+        for (TemplateField field : fields) {
+            strokeDataRepository.deleteAllByCeremonyEventIdAndSignerIdAndTemplateFieldId(
+                    context.event().getId(), context.signer().getId(), field.getId()
+            );
+        }
+
+        ceremonyEventLogRepository.save(
+                CeremonyEventLog.builder()
+                        .ceremonyEvent(context.event())
+                        .actorType(ActorType.SIGNER)
+                        .actorId(context.signer().getId())
+                        .eventAction(CeremonyEventAction.SIGNATURE_CLEAR)
+                        .targetSigner(context.signer())
+                        .message("demo reset-all, fieldCount=" + fields.size())
+                        .build()
+        );
+        ceremonyEventSignerStateService.markPending(context.event(), context.signer());
+        fields.forEach(field ->
+                ceremonyRealtimeNotifier.notifySignatureCleared(context.event().getId(), context.signer().getId(), field.getId())
+        );
+    }
+
+    /**
+     * legacy 데모 사이트({@code demo-signstage-frontend}, 별도 저장소, 그대로 재사용) 호환 —
+     * {@code POST /api/ceremonies/portal/event/{eventAccessKey}/signatures/reset}(signstage-docs
+     * business/demo-account-exhibition-signer-preview-review.md 13장). 이 legacy 경로는
+     * signerAccessKey를 받지 않는다 — "다시 체험하기" 버튼 클릭 시 그 이벤트의 필수 서명자
+     * 전원을 한 번에 초기화한다. {@link #resetAllFieldsForSigner}를 필수 서명자 수만큼 반복
+     * 호출하는 것과 같다(같은 패키지의 {@link CeremonyEventService#collectFinishRequiredSignerIds}
+     * package-private 헬퍼를 그대로 재사용).
+     */
+    @Transactional
+    public void resetAllSignersForEvent(String eventAccessKey) {
+        CeremonyEvent event = ceremonyEventRepository.findByAccessKey(eventAccessKey)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.PORTAL_EVENT_NOT_FOUND));
+
+        for (Long signerId : ceremonyEventService.collectFinishRequiredSignerIds(event)) {
+            signerRepository.findById(signerId)
+                    .ifPresent(signer -> resetAllFieldsForSigner(eventAccessKey, signer.getAccessKey()));
+        }
     }
 
     private PortalContext resolvePortalContext(String eventAccessKey, String signerAccessKey) {

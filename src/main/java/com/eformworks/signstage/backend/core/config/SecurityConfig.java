@@ -56,6 +56,12 @@ public class SecurityConfig {
                         // 가진 사람만 체크섬이 일치하므로 로그인 없이 열어도 안전하다
                         // (signstage-docs business/ceremony-feature-migration-review.md §2.5).
                         .requestMatchers("/api/verification/**").permitAll()
+                        // 체험형 데모 사이트(legacy demo-signstage-frontend, 별도 저장소, 그대로
+                        // 재사용) 공개 API — slug/eventAccessKey 소지만으로 접근한다(위 portal/
+                        // projector와 같은 인가 모델, signstage-docs
+                        // business/demo-account-exhibition-signer-preview-review.md 13장).
+                        .requestMatchers("/api/demo/**").permitAll()
+                        .requestMatchers("/api/ceremonies/portal/**").permitAll()
                         // platform_role 보유자만 통과. 등급별 세부 권한(예: 회원 상태 변경은 PLATFORM_OPS 이상)은
                         // 서비스 레이어에서 CurrentUser.platformRole()로 한 번 더 검사한다
                         // (signstage-docs backend/signup-approval-implementation-plan.md 4.2절).

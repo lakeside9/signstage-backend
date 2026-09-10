@@ -137,4 +137,20 @@ public class SignerPortalController {
         signerPortalService.clearFieldStroke(eventAccessKey, signerAccessKey, templateFieldId);
         return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
+
+    @Operation(
+            summary = "서명란 전체 지우기(데모 전용)",
+            description = "이 서명자에게 배정된 서명란 전체를 한 번에 지운다 — DemoView가 서명자용 화면을 열기 "
+                    + "직전에 호출해 항상 깨끗한 상태로 시작하게 한다(signstage-docs "
+                    + "business/demo-account-exhibition-signer-preview-review.md 5.2절)."
+    )
+    @SecurityRequirements(value = {})
+    @DeleteMapping("/strokes")
+    public ApiResponse<Void> resetAllFieldsForSigner(
+            @PathVariable String eventAccessKey,
+            @PathVariable String signerAccessKey
+    ) {
+        signerPortalService.resetAllFieldsForSigner(eventAccessKey, signerAccessKey);
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
 }
