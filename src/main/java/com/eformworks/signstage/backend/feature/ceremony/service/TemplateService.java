@@ -17,6 +17,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemp
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import com.eformworks.signstage.backend.integration.storage.StorageKeyPrefix;
 import com.eformworks.signstage.backend.integration.storage.common.error.StorageException;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -91,22 +92,30 @@ public class TemplateService {
         TemplateDocumentRole role = parseDocumentRole(documentRole);
         checkPdfExtension(file.getOriginalFilename());
 
-        StoredFile storedFile;
-        try {
-            storedFile = documentStoragePort.store("templates/" + ceremonyId, file);
-        } catch (StorageException e) {
-            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
-        }
-
+        // storageKey가 자기 자신의 PK(templateId)를 담는 경로다(StorageKeyPrefix, signstage-docs
+        // business/document-storage-key-convention-review.md) — 먼저 임시값으로 저장해 ID를
+        // 발급받은 뒤(IDENTITY 전략은 save() 시점에 즉시 INSERT돼 ID가 채워진다) 그 ID로
+        // 실제 경로를 지어 파일을 저장하고, storageKey를 채워 다시 저장한다. 저장 중 실패하면
+        // @Transactional 롤백으로 이 임시 행도 함께 사라진다.
         Template template = Template.builder()
                 .ceremony(ceremony)
                 .title(title)
                 .documentRole(role)
-                .storageKey(storedFile.storageKey())
+                .storageKey("")
                 .originalFilename(file.getOriginalFilename())
-                .storedFilename(storedFile.storedFilename())
+                .storedFilename("")
                 .displayOrder((int) currentCount)
                 .build();
+        templateRepository.save(template);
+
+        StoredFile storedFile;
+        try {
+            String directory = StorageKeyPrefix.forTemplate(organizationId, ceremony.getCreatedAt(), ceremonyId, template.getId());
+            storedFile = documentStoragePort.store(directory, file);
+        } catch (StorageException e) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
+        }
+        template.attachStorage(storedFile.storageKey(), storedFile.storedFilename());
         templateRepository.save(template);
         preRenderPageImageCache(template);
 
@@ -439,25 +448,32 @@ public class TemplateService {
         Template original = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
 
         byte[] content;
-        StoredFile storedFile;
         try {
             content = documentStoragePort.loadAsResource(original.getStorageKey()).getContentAsByteArray();
-            storedFile = documentStoragePort.store(
-                    "templates/" + ceremonyId, original.getOriginalFilename(), content
-            );
         } catch (StorageException | IOException e) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
         }
 
+        // uploadTemplate과 같은 2단계 저장 — storageKey가 자기 자신의 PK(templateId)를 담는다.
         Template duplicated = Template.builder()
                 .ceremony(ceremony)
                 .title(original.getTitle() + " (복제)")
                 .documentRole(original.getDocumentRole())
-                .storageKey(storedFile.storageKey())
+                .storageKey("")
                 .originalFilename(original.getOriginalFilename())
-                .storedFilename(storedFile.storedFilename())
+                .storedFilename("")
                 .displayOrder((int) currentCount)
                 .build();
+        templateRepository.save(duplicated);
+
+        StoredFile storedFile;
+        try {
+            String directory = StorageKeyPrefix.forTemplate(organizationId, ceremony.getCreatedAt(), ceremonyId, duplicated.getId());
+            storedFile = documentStoragePort.store(directory, original.getOriginalFilename(), content);
+        } catch (StorageException e) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
+        }
+        duplicated.attachStorage(storedFile.storageKey(), storedFile.storedFilename());
         templateRepository.save(duplicated);
 
         List<TemplateField> originalFields = templateFieldRepository.findAllByTemplateId(original.getId());

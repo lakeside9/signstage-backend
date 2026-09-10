@@ -28,6 +28,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRe
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import com.eformworks.signstage.backend.feature.ceremony.support.SignatureOverlayRenderer;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import com.eformworks.signstage.backend.integration.storage.StorageKeyPrefix;
 import com.eformworks.signstage.backend.integration.storage.common.error.StorageException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -201,9 +202,11 @@ public class CeremonyResultService {
             throw new ApplicationException(CeremonyErrorCode.RESULT_GENERATION_FAILED, e);
         }
 
-        StoredFile storedFile = documentStoragePort.store(
-                "results/" + event.getId(), template.getOriginalFilename(), renderedBytes
+        Ceremony ceremony = event.getCeremony();
+        String directory = StorageKeyPrefix.forResult(
+                ceremony.getOrganization().getId(), ceremony.getCreatedAt(), ceremony.getId(), event.getId()
         );
+        StoredFile storedFile = documentStoragePort.store(directory, template.getOriginalFilename(), renderedBytes);
 
         CeremonyResult result = CeremonyResult.builder()
                 .ceremonyEvent(event)

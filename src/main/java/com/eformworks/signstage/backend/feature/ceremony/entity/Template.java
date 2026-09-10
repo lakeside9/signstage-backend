@@ -108,4 +108,16 @@ public class Template extends BaseEntity {
             this.displayOrder = displayOrder;
         }
     }
+
+    /**
+     * 저장소 키를 2단계로 확정할 때 쓴다 — {@code storageKey}가 {@code templates/{id}/...}
+     * 형태로 자기 자신의 PK를 담으므로(signstage-docs
+     * business/document-storage-key-convention-review.md), 실제 파일을 저장하려면 먼저 이
+     * 엔티티를 저장해 ID를 발급받아야 한다({@code TemplateService}가 임시값으로 한 번 저장한
+     * 뒤 이 메서드로 실제 값을 채워 다시 저장한다).
+     */
+    public void attachStorage(String storageKey, String storedFilename) {
+        this.storageKey = storageKey;
+        this.storedFilename = storedFilename;
+    }
 }
