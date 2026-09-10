@@ -9,8 +9,10 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanDisco
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanDiscountPeriodHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanHistoryUnitProduct;
+import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.SubscriptionType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductPricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
@@ -80,8 +82,18 @@ public class BillingPlanService {
         LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
         checkPeriodValid(effectiveFrom, request.getEffectiveTo());
         DiscountType discountType = parseDiscountType(request.getDiscountType());
+        BillingPlanType planType = parseSubscriptionFields(request);
 
-        BillingPlan plan = BillingPlan.builder().name(request.getName()).build();
+        BillingPlan plan = BillingPlan.builder()
+                .name(request.getName())
+                .planType(planType)
+                .subscriptionType(planType == BillingPlanType.SUBSCRIPTION
+                        ? SubscriptionType.valueOf(request.getSubscriptionType()) : null)
+                .subscriptionPeriodMonths(planType == BillingPlanType.SUBSCRIPTION
+                        ? request.getSubscriptionPeriodMonths() : null)
+                .subscriptionAllowedCount(planType == BillingPlanType.SUBSCRIPTION
+                        ? request.getSubscriptionAllowedCount() : null)
+                .build();
         billingPlanRepository.save(plan);
         saveUnitProducts(plan, lines, unitProducts);
         recordPlanHistory(plan);
@@ -336,6 +348,46 @@ public class BillingPlanService {
     }
 
     /**
+     * 구독형 플랜 조건 검증(signstage-docs
+     * business/organization-event-discount-pricing-review.md 8.7절 결정, 2026-09-10).
+     * planType 생략은 STANDARD(4개 필드 전부 null)로 취급한다. SUBSCRIPTION이면
+     * subscriptionType·subscriptionAllowedCount가 필수이고, PERIOD_AND_COUNT는
+     * subscriptionPeriodMonths가 6 또는 12여야 하며, COUNT_ONLY는 그 값을 가질 수 없다.
+     */
+    private BillingPlanType parseSubscriptionFields(BillingPlanDto.Request.CreatePlan request) {
+        if (request.getPlanType() == null || request.getPlanType().isBlank()) {
+            return BillingPlanType.STANDARD;
+        }
+        BillingPlanType planType;
+        try {
+            planType = BillingPlanType.valueOf(request.getPlanType());
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+        if (planType != BillingPlanType.SUBSCRIPTION) {
+            return planType;
+        }
+
+        SubscriptionType subscriptionType;
+        try {
+            subscriptionType = SubscriptionType.valueOf(request.getSubscriptionType());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new ApplicationException(CeremonyErrorCode.SUBSCRIPTION_PLAN_FIELDS_INVALID);
+        }
+        if (request.getSubscriptionAllowedCount() == null || request.getSubscriptionAllowedCount() <= 0) {
+            throw new ApplicationException(CeremonyErrorCode.SUBSCRIPTION_PLAN_FIELDS_INVALID);
+        }
+        boolean periodValid = subscriptionType == SubscriptionType.PERIOD_AND_COUNT
+                ? (request.getSubscriptionPeriodMonths() != null
+                        && (request.getSubscriptionPeriodMonths() == 6 || request.getSubscriptionPeriodMonths() == 12))
+                : request.getSubscriptionPeriodMonths() == null;
+        if (!periodValid) {
+            throw new ApplicationException(CeremonyErrorCode.SUBSCRIPTION_PLAN_FIELDS_INVALID);
+        }
+        return planType;
+    }
+
+    /**
      * effectiveFrom 생략(null) 시 "오늘"로 채운다 — signstage-docs
      * business/organization-discount-override-security-and-validity-period-review.md 결정
      * #5(2026-09-10) — 플랜 카탈로그는 조직/행사 스코프가 없어 플랫폼 기본 타임존(Asia/Seoul)을
@@ -401,6 +453,11 @@ public class BillingPlanService {
                 lines,
                 ceremonyRepository.countByBillingPlanId(plan.getId()),
                 plan.getCreatedAt(),
+                plan.getPlanType().name(),
+                plan.isSubscription(),
+                plan.getSubscriptionType() != null ? plan.getSubscriptionType().name() : null,
+                plan.getSubscriptionPeriodMonths(),
+                plan.getSubscriptionAllowedCount(),
                 effective.map(p -> p.getDiscount().getDiscountType().name()).orElse(null),
                 effective.map(p -> p.getDiscount().getDiscountValue()).orElse(null),
                 effective.map(BillingPlanDiscountPeriod::isActive).orElse(null),

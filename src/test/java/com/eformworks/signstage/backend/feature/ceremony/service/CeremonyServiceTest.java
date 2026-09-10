@@ -124,6 +124,8 @@ class CeremonyServiceTest {
     private TaxPolicyResolver taxPolicyResolver;
     @Mock
     private RolePermissionService rolePermissionService;
+    @Mock
+    private OrganizationSubscriptionService organizationSubscriptionService;
 
     @InjectMocks
     private CeremonyService ceremonyService;

@@ -85,6 +85,23 @@ public final class BillingPlanDto {
 
             /** 최초 기간의 종료일(무기한이면 생략). */
             private LocalDate effectiveTo;
+
+            /**
+             * 구독형 플랜 조건(signstage-docs
+             * business/organization-event-discount-pricing-review.md 8장 결정, 2026-09-10) —
+             * 4개 모두 생성 후 불변이라 {@link UpdatePlan}에는 없다. 생략하면 일반(STANDARD)
+             * 플랜으로 만든다.
+             */
+            private String planType;
+
+            /** planType이 SUBSCRIPTION일 때만 필수 — PERIOD_AND_COUNT | COUNT_ONLY. */
+            private String subscriptionType;
+
+            /** subscriptionType이 PERIOD_AND_COUNT일 때만 필수(6 또는 12) — COUNT_ONLY는 생략. */
+            private Integer subscriptionPeriodMonths;
+
+            /** planType이 SUBSCRIPTION일 때만 필수 — 이 플랜으로 만들 수 있는 Ceremony 최대 건수. */
+            private Integer subscriptionAllowedCount;
         }
 
         /**
@@ -188,6 +205,13 @@ public final class BillingPlanDto {
             /** 이 플랜을 쓰는 행사(Ceremony) 수 — 카탈로그 관리 화면의 "사용 중" 경고용. */
             private final Long usageCount;
             private final LocalDateTime createdAt;
+
+            // 구독형 플랜 조건(생성 후 불변) — STANDARD면 전부 null/false.
+            private final String planType;
+            private final boolean subscription;
+            private final String subscriptionType;
+            private final Integer subscriptionPeriodMonths;
+            private final Integer subscriptionAllowedCount;
 
             // 오늘 기준 유효한 할인 기간(없으면 전부 null/NO_ACTIVE_PERIOD).
             private final String discountType;

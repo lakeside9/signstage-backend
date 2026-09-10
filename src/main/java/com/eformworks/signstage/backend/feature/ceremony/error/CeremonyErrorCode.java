@@ -357,6 +357,52 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_CATALOG_ITEM_NOT_ON_SALE",
             HttpStatus.CONFLICT,
             "지금은 판매 기간이 아닌 상품입니다."
+    ),
+    /**
+     * 조직 구독/계약(signstage-docs business/organization-event-discount-pricing-review.md
+     * 8장 결정, 2026-09-10)의 오류 코드.
+     */
+    SUBSCRIPTION_PLAN_FIELDS_INVALID(
+            "CEREMONY_SUBSCRIPTION_PLAN_FIELDS_INVALID",
+            HttpStatus.BAD_REQUEST,
+            "구독형 플랜은 구독 유형·허용 횟수가 필수이고, 기간형(PERIOD_AND_COUNT)은 기간(6 또는 12개월)도 " +
+                    "필수이며 횟수형(COUNT_ONLY)은 기간을 가질 수 없습니다."
+    ),
+    SUBSCRIPTION_NOT_FOUND("CEREMONY_SUBSCRIPTION_NOT_FOUND", HttpStatus.NOT_FOUND, "구독 신청을 찾을 수 없습니다."),
+    SUBSCRIPTION_NOT_PENDING(
+            "CEREMONY_SUBSCRIPTION_NOT_PENDING",
+            HttpStatus.CONFLICT,
+            "이미 심사가 끝난 구독 신청입니다."
+    ),
+    SUBSCRIPTION_NOT_ACTIVE(
+            "CEREMONY_SUBSCRIPTION_NOT_ACTIVE",
+            HttpStatus.CONFLICT,
+            "사용 중인 구독만 해지를 요청할 수 있습니다."
+    ),
+    SUBSCRIPTION_NOT_CANCELLATION_REQUESTED(
+            "CEREMONY_SUBSCRIPTION_NOT_CANCELLATION_REQUESTED",
+            HttpStatus.CONFLICT,
+            "해지 요청 중인 구독이 아닙니다."
+    ),
+    SUBSCRIPTION_ALREADY_IN_PROGRESS(
+            "CEREMONY_SUBSCRIPTION_ALREADY_IN_PROGRESS",
+            HttpStatus.CONFLICT,
+            "이미 심사 중이거나 해지 심사 중인 구독 신청이 있습니다."
+    ),
+    SUBSCRIPTION_PLAN_NOT_SUBSCRIPTION_TYPE(
+            "CEREMONY_SUBSCRIPTION_PLAN_NOT_SUBSCRIPTION_TYPE",
+            HttpStatus.CONFLICT,
+            "구독형(SUBSCRIPTION) 플랜만 구독 신청할 수 있습니다."
+    ),
+    SUBSCRIPTION_REQUIRED(
+            "CEREMONY_SUBSCRIPTION_REQUIRED",
+            HttpStatus.CONFLICT,
+            "이 구독형 플랜을 사용하려면 먼저 구독 신청이 승인되어야 합니다."
+    ),
+    SUBSCRIPTION_EXHAUSTED(
+            "CEREMONY_SUBSCRIPTION_EXHAUSTED",
+            HttpStatus.CONFLICT,
+            "구독으로 만들 수 있는 행사 건수를 모두 사용했습니다."
     );
 
     private final String code;

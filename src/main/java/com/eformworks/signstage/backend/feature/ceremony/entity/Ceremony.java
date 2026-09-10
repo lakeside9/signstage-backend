@@ -66,6 +66,18 @@ public class Ceremony extends BaseEntity {
     @JoinColumn(name = "billing_plan_id")
     private BillingPlan billingPlan;
 
+    /**
+     * 이 행사가 소진시킨 구독 — {@code billingPlan}이 구독형일 때만, 플랜 확정
+     * ({@link #confirmPlan()}) 시점에 딱 한 번 채워지고 이후 절대 바뀌지 않는다(구독형이 아닌
+     * 플랜이면 항상 null). signstage-docs
+     * business/organization-event-discount-pricing-review.md 8장 결정(2026-09-10) — "이 행사가
+     * 어느 구독 건을 썼는지"를 append-only로 고정해, 구독이 나중에 해지/대체돼도 이미 만든
+     * 행사는 그대로 유지된다(8.4-2 결정).
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_subscription_id")
+    private OrganizationSubscription subscription;
+
     @Column(name = "currency_code", nullable = false, length = 3)
     private String currencyCode;
 
@@ -195,6 +207,15 @@ public class Ceremony extends BaseEntity {
      */
     public void confirmPlan() {
         this.status = CeremonyStatus.IN_PROGRESS;
+    }
+
+    /**
+     * 구독형 플랜 확정 시 {@code OrganizationSubscriptionService}가 호출한다 — 한 번 채워지면
+     * 다시 바꾸지 않는다({@link #changePlan}으로 플랜을 바꿀 수 있는 것은 DRAFT뿐이고, 그때는
+     * 아직 이 메서드가 호출되지 않은 상태다).
+     */
+    public void linkSubscription(OrganizationSubscription subscription) {
+        this.subscription = subscription;
     }
 
     public CurrencyPolicy currencyPolicy() {

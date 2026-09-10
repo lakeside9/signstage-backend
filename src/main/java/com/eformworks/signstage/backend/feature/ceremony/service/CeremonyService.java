@@ -101,6 +101,7 @@ public class CeremonyService {
     private final BillingPlanRepository billingPlanRepository;
     private final BillingPlanDiscountPeriodRepository billingPlanDiscountPeriodRepository;
     private final UnitProductRepository unitProductRepository;
+    private final OrganizationSubscriptionService organizationSubscriptionService;
     private final UnitProductPricePeriodRepository unitProductPricePeriodRepository;
     private final UserRepository userRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
@@ -292,6 +293,7 @@ public class CeremonyService {
         checkCeremonyPlanChangeable(ceremony);
 
         ceremony.confirmPlan();
+        organizationSubscriptionService.consumeForCeremonyConfirmation(ceremony);
 
         return toSummary(ceremony);
     }
