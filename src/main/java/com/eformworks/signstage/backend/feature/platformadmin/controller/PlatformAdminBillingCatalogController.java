@@ -65,6 +65,20 @@ public class PlatformAdminBillingCatalogController {
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
+    @Operation(
+            summary = "과금 플랜 삭제",
+            description = "PLATFORM_OPS 이상만 호출할 수 있다. 행사(현재/이력)·조직 구독·조직×플랜 할인 오버라이드(현재/이력) "
+                    + "어디에도 사용된 적이 없는 플랜만 삭제할 수 있다."
+    )
+    @DeleteMapping("/billing-plans/{id}")
+    public ApiResponse<Void> deletePlan(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id
+    ) {
+        billingPlanService.deletePlan(id, currentUser.platformRole(), currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
     @Operation(summary = "과금 플랜 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 이름/한도 구성이 바뀔 때마다 1건씩 쌓인다.")
     @GetMapping("/billing-plans/{id}/history")
     public ApiResponse<List<BillingPlanDto.Response.BillingPlanHistorySummary>> findPlanHistory(@PathVariable Long id) {
@@ -143,6 +157,20 @@ public class PlatformAdminBillingCatalogController {
         UnitProductDto.Response.UnitProductSummary response =
                 unitProductService.updateUnitProduct(id, currentUser.platformRole(), currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "단위 상품 삭제",
+            description = "PLATFORM_OPS 이상만 호출할 수 있다. 플랜 구성(현재/이력)·행사 플랜 스냅샷·추가구매·행사 적용·"
+                    + "이벤트 효과 묶음 매핑 어디에도 사용된 적이 없는 상품만 삭제할 수 있다."
+    )
+    @DeleteMapping("/unit-products/{id}")
+    public ApiResponse<Void> deleteUnitProduct(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long id
+    ) {
+        unitProductService.deleteUnitProduct(id, currentUser.platformRole(), currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 
     @Operation(summary = "단위 상품 변경 이력 조회", description = "최신순. 생성 시점 1건 + 이후 이름/분류/배타그룹이 바뀔 때마다 1건씩 쌓인다.")

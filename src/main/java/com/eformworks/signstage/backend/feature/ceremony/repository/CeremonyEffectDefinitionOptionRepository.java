@@ -17,6 +17,9 @@ public interface CeremonyEffectDefinitionOptionRepository extends JpaRepository<
 
     void deleteAllByUnitProductId(Long unitProductId);
 
+    /** 단위 상품 삭제 가능 여부(사용 이력 없음) 판정에 쓴다 — 현재 어떤 이벤트 효과 묶음에 속해 있는지. */
+    boolean existsByUnitProductId(Long unitProductId);
+
     /** 효과 정의 여러 건의 "속한 묶음 id" 목록을 한 번에 조회한다 — 관리자 목록 화면이 N+1 없이 표시하는 데 쓴다. */
     @Query("select o from CeremonyEffectDefinitionOption o where o.effectDefinition.id in :effectDefinitionIds")
     List<CeremonyEffectDefinitionOption> findAllByEffectDefinitionIdIn(List<Long> effectDefinitionIds);

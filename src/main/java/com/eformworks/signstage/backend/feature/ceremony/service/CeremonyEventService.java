@@ -302,7 +302,16 @@ public class CeremonyEventService {
                 : unitProductRepository.findAllByIdIn(requestedIds);
         checkExclusivityGroups(unitProducts);
 
+        // flush()가 반드시 필요하다: deleteAllByCeremonyEventId는 파생 delete 쿼리라 DELETE SQL을
+        // 즉시 내보내지 않는다(플러시 시점까지 지연). CeremonyEventOptionalFeature는 IDENTITY
+        // 채번이라 바로 다음 save()가 생성 키를 받으려고 INSERT를 즉시 실행하는데, 그 사이
+        // flush가 없으면 이번 교체에도 그대로 남는 선택옵션(같은 ceremony_event_id+
+        // unit_product_id 조합)의 INSERT가 아직 DB에 남은 옛 행과 충돌해
+        // uq_ceof_event_product 유니크 제약 위반(Duplicate entry)으로 실패한다
+        // (2026-09-10, BillingPlanService#updatePlan의 uq_bpup_plan_product 사례와 같은 패턴 —
+        // 같은 원인을 여기서도 찾아 함께 고쳤다).
         ceremonyEventOptionalFeatureRepository.deleteAllByCeremonyEventId(event.getId());
+        ceremonyEventOptionalFeatureRepository.flush();
         for (UnitProduct unitProduct : unitProducts) {
             ceremonyEventOptionalFeatureRepository.save(
                     CeremonyEventOptionalFeature.builder().ceremonyEvent(event).unitProduct(unitProduct).build()

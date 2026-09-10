@@ -5,6 +5,7 @@ import com.eformworks.signstage.backend.core.i18n.MessageTranslator;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -92,6 +93,23 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException e) {
         log.warn("Invalid internationalization or domain value: {}", e.getMessage());
         ErrorCode errorCode = CommonErrorCode.INVALID_REQUEST;
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(errorResponse(errorCode, translate(errorCode), Map.of(), List.of()));
+    }
+
+    /**
+     * DB 제약(유니크·외래키 등) 위반으로 저장이 실패했을 때 잡는다 — 이 핸들러가 없으면
+     * {@link #handleException}으로 떨어져 500 "서버 오류가 발생했습니다."로 뭉뚱그려진다
+     * (2026-09-10, {@code billing_plan_unit_products.uq_bpup_plan_product} 위반 사례로 발견).
+     * 근본 원인(어떤 제약을 왜 위반했는지)은 로그의 {@code getMostSpecificCause()}로 남기고,
+     * 클라이언트에는 어떤 제약인지 노출하지 않는 일반적인 충돌 메시지만 돌려준다.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException(DataIntegrityViolationException e) {
+        log.error("DataIntegrityViolationException: {}", e.getMostSpecificCause().getMessage(), e);
+        ErrorCode errorCode = CommonErrorCode.DATA_CONFLICT;
+
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(errorResponse(errorCode, translate(errorCode), Map.of(), List.of()));

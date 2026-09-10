@@ -39,4 +39,7 @@ public interface OrganizationBillingPlanDiscountRepository extends JpaRepository
 
     /** 조직 횡단 목록 화면(discount-management-screen-separation-review.md)의 organizationId 필터용 페이지 조회. */
     Page<OrganizationBillingPlanDiscount> findAllByOrganizationId(Long organizationId, Pageable pageable);
+
+    /** 과금 플랜 삭제 가능 여부(사용 이력 없음) 판정에 쓴다 — 지금 살아있는 조직×플랜 할인 오버라이드가 있는지. */
+    boolean existsByBillingPlanId(Long billingPlanId);
 }

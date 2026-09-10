@@ -15,4 +15,11 @@ public interface CeremonyPlanHistoryRepository extends AppendOnlyRepository<Cere
      * 안 바뀐다. {@code CeremonyService#calculateEffectiveCapacity}가 라이브 조회 대신 이걸 쓴다.
      */
     Optional<CeremonyPlanHistory> findFirstByCeremonyIdOrderByCreatedAtDesc(Long ceremonyId);
+
+    /**
+     * 과금 플랜 삭제 가능 여부(사용 이력 없음) 판정에 쓴다 — 지금 플랜 구성과 무관하게 과거
+     * 어느 행사든 이 플랜을 스냅샷한 적이 있는지({@link CeremonyRepository#existsByBillingPlanId}는
+     * "지금 쓰는 행사"만 본다, 이건 그와 별개로 "한 번이라도 쓴 적"까지 본다).
+     */
+    boolean existsByBillingPlanId(Long billingPlanId);
 }

@@ -189,7 +189,7 @@ class CeremonyServiceTest {
 
         UnitProduct signers = unitProduct(901L, UnitProductType.SIGNERS);
         BillingPlanUnitProduct line = BillingPlanUnitProduct.builder()
-                .billingPlan(plan).unitProduct(signers).includedQuantity(1).purchasable(false).build();
+                .billingPlan(plan).unitProduct(signers).includedQuantity(1).build();
 
         given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))

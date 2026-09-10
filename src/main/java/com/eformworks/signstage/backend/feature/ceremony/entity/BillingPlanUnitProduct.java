@@ -22,13 +22,15 @@ import lombok.NoArgsConstructor;
  * (구매 가능 큐레이션) 3개를 하나로 합쳤다(signstage-docs
  * business/billing-catalog-unit-product-model-redesign-review.md 결정, 2026-09-10, 3.3절).
  *
- * <p>{@code includedQuantity}(기본 포함 수량, 0 이상)와 {@code purchasable}(추가구매 후보로 고를
- * 수 있는지) 두 컬럼으로 옛 3개 조인의 의미를 전부 표현한다 — 옛 {@code BillingPlanOptionalFeature}
- * (무료 포함)는 {@code includedQuantity=1}인 행으로, 옛 {@code BillingPlanCapacity}(한도 5종)는
- * {@code includedQuantity=N}인 행으로, 옛 {@code BillingPlanCapacityAddOn}(구매 가능 큐레이션)은
- * {@code purchasable=true}(포함 여부와 무관한 별도 플래그)로 표현된다. 두 값은 독립적이다 — 예를
- * 들어 서명자를 100명 기본 포함하면서 동시에 추가구매도 허용하려면 {@code includedQuantity=100,
- * purchasable=true}인 행 하나면 된다.
+ * <p><b>{@code purchasable} 컬럼 폐지(2026-09-10, 사용자 지시)</b> — 행이 존재하면(포함 수량이
+ * 0이든 N이든) 그 자체로 이 플랜의 행사가 이 단위 상품을 추가구매할 수 있다는 뜻이다. "기본
+ * 포함 없이 추가구매만 허용"(옛 {@code BillingPlanCapacityAddOn}의 목적)은
+ * {@code includedQuantity=0}인 행으로 표현한다 — 예전엔 이걸 별도 {@code purchasable=true}
+ * 플래그로 표현했지만, 실사용 데이터를 확인해보니 항상 "포함 수량이 0이고 purchasable만 true"거나
+ * "포함 수량이 N이고 purchasable은 false" 둘 중 하나였다(두 값을 동시에 true로 쓰는 조합이 없었다)
+ * — 즉 별도 플래그 없이 행의 존재 여부(+수량)만으로 이미 표현 가능했던 정보였다. {@link UnitProductType#isToggle()}인
+ * 타입({@code EVENT_EFFECT_BUNDLE})은 {@code includedQuantity}가 0 또는 1로만 의미가 있다 —
+ * {@code BillingPlanService#resolveUnitProducts}가 검증한다.
  *
  * <p>플랜 소계 계산({@code CeremonyService#calculateEstimatedTotal})은 이 구성 전체를 순회하며
  * {@code unitProduct.effectivePrice(오늘) × includedQuantity}를 더한다 — 단위 상품 자체는 할인이
@@ -59,24 +61,22 @@ public class BillingPlanUnitProduct extends BaseEntity {
     @JoinColumn(name = "unit_product_id", nullable = false)
     private UnitProduct unitProduct;
 
-    /** 기본 포함 수량 — 0 이상. 0이면 "기본 미포함, 추가구매로만 확보"(태블릿류 지금 동작과 동일). */
+    /**
+     * 기본 포함 수량 — 0 이상. 0이면 "기본 미포함, 추가구매로만 확보"(태블릿류 지금 동작과 동일).
+     * 행이 존재하는 것 자체가 "이 플랜의 행사가 추가구매할 수 있다"는 뜻이라, 0이어도 삭제하지
+     * 않고 남겨둔다.
+     */
     @Column(name = "included_quantity", nullable = false)
     private Integer includedQuantity;
-
-    /** 이 플랜을 쓰는 행사가 이 단위 상품을 추가구매 후보로 고를 수 있는지(안 A 큐레이션). */
-    @Column(nullable = false)
-    private boolean purchasable;
 
     @Builder
     private BillingPlanUnitProduct(
             BillingPlan billingPlan,
             UnitProduct unitProduct,
-            Integer includedQuantity,
-            boolean purchasable
+            Integer includedQuantity
     ) {
         this.billingPlan = billingPlan;
         this.unitProduct = unitProduct;
         this.includedQuantity = includedQuantity;
-        this.purchasable = purchasable;
     }
 }

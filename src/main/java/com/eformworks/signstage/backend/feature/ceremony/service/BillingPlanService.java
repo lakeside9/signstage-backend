@@ -22,7 +22,11 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanH
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanUnitProductRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationBillingPlanDiscountHistoryRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationBillingPlanDiscountRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationSubscriptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductPricePeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
@@ -64,6 +68,10 @@ public class BillingPlanService {
     private final UnitProductRepository unitProductRepository;
     private final UnitProductPricePeriodRepository unitProductPricePeriodRepository;
     private final CeremonyRepository ceremonyRepository;
+    private final CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
+    private final OrganizationSubscriptionRepository organizationSubscriptionRepository;
+    private final OrganizationBillingPlanDiscountRepository organizationBillingPlanDiscountRepository;
+    private final OrganizationBillingPlanDiscountHistoryRepository organizationBillingPlanDiscountHistoryRepository;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     private final RolePermissionService rolePermissionService;
 
@@ -142,13 +150,73 @@ public class BillingPlanService {
 
         // 단위 상품 구성 통째로 교체 — 이미 확정/진행 중인 Ceremony는 CeremonyPlanHistoryUnitProduct
         // 스냅샷으로 보호되어 이 변경에 영향받지 않는다.
+        //
+        // flush()가 반드시 필요하다: deleteAllByBillingPlanId는 파생 delete 쿼리라 대상을 조회해
+        // EntityManager.remove()만 등록할 뿐 DELETE SQL을 즉시 내보내지 않는다(플러시 시점까지
+        // 지연). 그런데 BillingPlanUnitProduct는 IDENTITY 채번이라 바로 다음 saveUnitProducts의
+        // save()가 생성 키를 받으려고 INSERT를 즉시 실행한다 — 그 사이 flush가 없으면 이번
+        // 수정에서도 그대로 남는 단위 상품(같은 billing_plan_id+unit_product_id 조합, 예를 들어
+        // "수정하되 일부 상품은 그대로 유지")의 INSERT가 아직 DB에 남아있는 옛 행과 충돌해
+        // `uq_bpup_plan_product` 유니크 제약 위반(Duplicate entry '{planId}-{unitProductId}')으로
+        // 실패한다(2026-09-10, 실제 발생 사례로 발견 — 수정 시 가장 흔한 경로라 재현이 쉬웠다).
         billingPlanUnitProductRepository.deleteAllByBillingPlanId(planId);
+        billingPlanUnitProductRepository.flush();
         saveUnitProducts(plan, lines, unitProducts);
         recordPlanHistory(plan);
 
         platformAdminAuditLogRecorder.record(adminUserId, PlatformAdminAction.UPDATE_BILLING_PLAN, null, null, detail);
 
         return toSummary(plan);
+    }
+
+    /**
+     * 사용한 적이 없는 플랜만 삭제한다(signstage-docs
+     * business/billing-catalog-unit-product-model-redesign-review.md 11장, 2026-09-10 —
+     * 단위 상품 삭제와 같은 조건). 행사(현재/이력)·조직 구독·조직×플랜 할인 오버라이드(현재/이력)
+     * 어디에도 없으면 이 플랜 자신의 구성·할인 기간·편집 이력까지 함께 지운다 — DB에
+     * {@code ON DELETE CASCADE}가 없어 자식부터 순서대로 지운다({@link UnitProductService#deleteUnitProduct}와
+     * 같은 패턴).
+     */
+    @Transactional
+    public void deletePlan(Long planId, String actingPlatformRole, Long adminUserId) {
+        checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
+        BillingPlan plan = billingPlanRepository.findById(planId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
+        checkNeverUsed(planId);
+
+        billingPlanHistoryUnitProductRepository.deleteAllByBillingPlanHistory_BillingPlanId(planId);
+        billingPlanHistoryRepository.deleteAllByBillingPlanId(planId);
+        billingPlanDiscountPeriodHistoryRepository.deleteAllByBillingPlanId(planId);
+        billingPlanDiscountPeriodRepository.deleteAllByBillingPlanId(planId);
+        billingPlanUnitProductRepository.deleteAllByBillingPlanId(planId);
+        billingPlanRepository.delete(plan);
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.DELETE_BILLING_PLAN, null, null,
+                "planId=" + planId + ", name=" + plan.getName()
+        );
+    }
+
+    private void checkNeverUsed(Long planId) {
+        if (hasAnyUsage(planId)) {
+            throw new ApplicationException(CeremonyErrorCode.BILLING_PLAN_IN_USE);
+        }
+    }
+
+    /**
+     * 이 플랜을 "다른 누군가"(행사·조직)가 참조한 적이 있는지 — 플랜 자신의 구성/할인 기간/편집
+     * 이력({@code BillingPlanUnitProduct}/{@code BillingPlanHistory*}/{@code BillingPlanDiscountPeriod*})은
+     * 여기 포함하지 않는다(삭제 시 함께 지워질 뿐인 플랜 자신의 데이터라 "사용"이 아니다).
+     * {@code OrganizationSubscription}은 하드 삭제되지 않고 상태만 바뀌므로 그 존재 자체로
+     * 과거 구독까지 커버되고, {@code OrganizationBillingPlanDiscount}는 하드 삭제될 수 있어
+     * 살아있는 오버라이드뿐 아니라 그 이력까지 함께 봐야 한다.
+     */
+    private boolean hasAnyUsage(Long planId) {
+        return ceremonyRepository.existsByBillingPlanId(planId)
+                || ceremonyPlanHistoryRepository.existsByBillingPlanId(planId)
+                || organizationSubscriptionRepository.existsByBillingPlanId(planId)
+                || organizationBillingPlanDiscountRepository.existsByBillingPlanId(planId)
+                || organizationBillingPlanDiscountHistoryRepository.existsByBillingPlanId(planId);
     }
 
     /** 새 할인 기간을 추가한다. */
@@ -310,13 +378,15 @@ public class BillingPlanService {
                             .billingPlan(plan)
                             .unitProduct(unitProducts.get(line.getUnitProductId()))
                             .includedQuantity(line.getIncludedQuantity())
-                            .purchasable(Boolean.TRUE.equals(line.getPurchasable()))
                             .build()
             );
         }
     }
 
-    /** 요청 줄들을 검증하고(id 존재, 수량 0 이상, 중복 없음) {@code UnitProduct} 맵으로 정규화한다. */
+    /**
+     * 요청 줄들을 검증하고(id 존재, 수량 0 이상, 토글형 상한, 중복 없음) {@code UnitProduct} 맵으로
+     * 정규화한다.
+     */
     private Map<Long, UnitProduct> resolveUnitProducts(List<BillingPlanDto.Request.PlanUnitProductLine> lines) {
         if (lines.isEmpty()) {
             return Map.of();
@@ -336,6 +406,15 @@ public class BillingPlanService {
         }
         Map<Long, UnitProduct> byId = new HashMap<>();
         found.forEach(unitProduct -> byId.put(unitProduct.getId(), unitProduct));
+
+        // 토글형(EVENT_EFFECT_BUNDLE) 수량은 0 또는 1만 허용한다 — 행사 추가구매 쪽
+        // (CeremonyService#purchaseUnitProducts)이 이미 같은 규칙을 강제하는 것과 동일하게,
+        // 플랜의 기본 포함 수량에도 적용한다(UnitProductType#isToggle 참고).
+        for (BillingPlanDto.Request.PlanUnitProductLine line : lines) {
+            if (byId.get(line.getUnitProductId()).getType().isToggle() && line.getIncludedQuantity() > 1) {
+                throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+            }
+        }
         return byId;
     }
 
@@ -463,7 +542,8 @@ public class BillingPlanService {
                 effective.map(BillingPlanDiscountPeriod::isActive).orElse(null),
                 effective.map(BillingPlanDiscountPeriod::getEffectiveFrom).orElse(null),
                 effective.map(BillingPlanDiscountPeriod::getEffectiveTo).orElse(null),
-                effective.map(p -> computeStatus(p.isActive(), p.getEffectiveFrom(), p.getEffectiveTo())).orElse("NO_ACTIVE_PERIOD")
+                effective.map(p -> computeStatus(p.isActive(), p.getEffectiveFrom(), p.getEffectiveTo())).orElse("NO_ACTIVE_PERIOD"),
+                !hasAnyUsage(plan.getId())
         );
     }
 
@@ -477,7 +557,6 @@ public class BillingPlanService {
                 unitProduct.getName(),
                 unitProduct.getCategory().name(),
                 source.getIncludedQuantity(),
-                source.isPurchasable(),
                 effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null)
         );
@@ -494,7 +573,6 @@ public class BillingPlanService {
                                     unitProduct.getName(),
                                     unitProduct.getCategory().name(),
                                     snapshot.getIncludedQuantity(),
-                                    snapshot.isPurchasable(),
                                     null,
                                     null
                             );

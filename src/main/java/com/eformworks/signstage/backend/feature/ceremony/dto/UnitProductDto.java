@@ -200,6 +200,14 @@ public final class UnitProductDto {
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;
             private final String periodStatus;
+            /**
+             * 삭제 가능 여부 — 플랜 구성(현재/이력 포함)·행사 플랜 스냅샷·추가구매·행사 적용·
+             * 이벤트 효과 묶음 매핑 어디에도 한 번도 등장한 적이 없어야 true다
+             * (signstage-docs business/billing-catalog-unit-product-model-redesign-review.md
+             * 결정, 2026-09-10 삭제 기능 추가). {@code usageCount}보다 훨씬 넓은 범위를 본다 —
+             * usageCount는 승인된 구매만 세지만, 이건 어떤 흔적이라도 있으면 false다.
+             */
+            private final boolean canDelete;
         }
 
         /** 단위 상품 이름/분류/배타그룹 변경 이력 한 행(가격/사용여부는 판매가격 기간 이력 참고). */

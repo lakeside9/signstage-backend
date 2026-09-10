@@ -33,4 +33,7 @@ public interface CeremonyUnitProductPurchaseLineRepository extends JpaRepository
 
     /** 카탈로그 관리 화면의 "사용 중" 경고용 — 이 단위 상품을 승인받아 쓰는 구매 줄 수. */
     long countByUnitProduct_IdAndPurchase_Status(Long unitProductId, PurchaseStatus status);
+
+    /** 단위 상품 삭제 가능 여부(사용 이력 없음) 판정에 쓴다 — 상태와 무관하게 구매된 적이 있는지. */
+    boolean existsByUnitProduct_Id(Long unitProductId);
 }
