@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
@@ -22,6 +23,7 @@ import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -67,6 +69,7 @@ class TemplateServiceTest {
         // given
         Ceremony ceremony = Ceremony.builder().title("행사").build();
         ReflectionTestUtils.setField(ceremony, "id", CEREMONY_ID);
+        ReflectionTestUtils.setField(ceremony, "createdAt", LocalDateTime.of(2026, 9, 10, 12, 0));
 
         Template original = Template.builder()
                 .ceremony(ceremony)
@@ -109,18 +112,30 @@ class TemplateServiceTest {
         given(resource.getContentAsByteArray()).willReturn(fileContent);
         given(documentStoragePort.loadAsResource(original.getStorageKey())).willReturn(resource);
         given(documentStoragePort.store(anyString(), anyString(), any(byte[].class)))
-                .willReturn(new StoredFile("templates/10/duplicated.pdf", "stored-duplicated.pdf"));
+                .willReturn(new StoredFile("1/2026/09/ceremonies/10/templates/201/duplicated.pdf", "stored-duplicated.pdf"));
 
         given(templateFieldRepository.findAllByTemplateId(TEMPLATE_ID)).willReturn(List.of(originalField));
+
+        // 2단계 저장(placeholder → 실제 storageKey) — 실제 IDENTITY 생성 전략처럼 첫 save()가
+        // id를 채워준다고 흉내낸다(StorageKeyPrefix.forTemplate이 templateId를 필요로 한다).
+        given(templateRepository.save(org.mockito.ArgumentMatchers.any(Template.class))).willAnswer(invocation -> {
+            Template t = invocation.getArgument(0);
+            if (t.getId() == null) {
+                ReflectionTestUtils.setField(t, "id", 201L);
+            }
+            return t;
+        });
 
         // when
         templateService.duplicateTemplate(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID);
 
         // then
+        // 2단계 저장이라 save()가 두 번 불린다 — 1차(placeholder로 id 발급) → 2차(실제 storageKey 반영).
         ArgumentCaptor<Template> templateCaptor = ArgumentCaptor.forClass(Template.class);
-        verify(templateRepository).save(templateCaptor.capture());
+        verify(templateRepository, times(2)).save(templateCaptor.capture());
         Template duplicated = templateCaptor.getValue();
         assertThat(duplicated.getTitle()).isEqualTo("원본 문서 (복제)");
+        assertThat(duplicated.getStorageKey()).isEqualTo("1/2026/09/ceremonies/10/templates/201/duplicated.pdf");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<TemplateField>> fieldsCaptor = ArgumentCaptor.forClass(List.class);
