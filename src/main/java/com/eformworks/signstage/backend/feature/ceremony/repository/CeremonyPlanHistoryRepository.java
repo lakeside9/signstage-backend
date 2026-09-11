@@ -4,6 +4,9 @@ import com.eformworks.signstage.backend.core.jpa.AppendOnlyRepository;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface CeremonyPlanHistoryRepository extends AppendOnlyRepository<CeremonyPlanHistory, Long> {
 
@@ -22,4 +25,16 @@ public interface CeremonyPlanHistoryRepository extends AppendOnlyRepository<Cere
      * "지금 쓰는 행사"만 본다, 이건 그와 별개로 "한 번이라도 쓴 적"까지 본다).
      */
     boolean existsByBillingPlanId(Long billingPlanId);
+
+    /**
+     * 플랜이 확정되지 않은(DRAFT) 행사 삭제({@code CeremonyService#deleteCeremony}) 시 이
+     * 행사 자신의 플랜 선택 이력을 함께 지운다 — {@code AppendOnlyRepository}는 delete를
+     * 노출하지 않지만 커스텀 쿼리는 예외다({@code UnitProductHistoryRepository.deleteAllByUnitProductId}
+     * 와 같은 패턴). 호출 전
+     * {@code CeremonyPlanHistoryUnitProductRepository.deleteAllByCeremonyPlanHistory_CeremonyId}
+     * 로 자식 스냅샷부터 지워야 한다(FK 순서).
+     */
+    @Modifying
+    @Query("delete from CeremonyPlanHistory h where h.ceremony.id = :ceremonyId")
+    void deleteAllByCeremonyId(@Param("ceremonyId") Long ceremonyId);
 }

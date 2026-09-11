@@ -18,5 +18,20 @@ public enum UnitProductCategory {
     /** 인력 — 사람이 직접 지원(현장 상주 또는 원격 응대)하는 서비스(예: 현장지원·온라인지원). */
     PERSONNEL,
     /** 애플리케이션 — 전시(프로젝터) 화면·서명 화면의 소프트웨어 동작 설정(예: 이벤트 효과 묶음). */
-    APPLICATION
+    APPLICATION;
+
+    /**
+     * true면 "시스템 사용료"(플랫폼이 파트너로부터 정해진 비용을 받는 축), false면 "실물·인력
+     * 대금"(파트너가 실고객으로부터 재량껏 받는 축, 플랫폼은 관여하지 않음) — signstage-docs
+     * business/platform-partner-customer-billing-model-reference.md 7장 결정(2026-09-11).
+     * 이 판정의 단일 소스다 — 매출 갈래 리포팅({@code BillingQuoteLine.category})과 파트너→실고객
+     * 고객 견적서({@code CustomerQuoteService})가 둘 다 이 메서드만 참조한다. {@code switch}
+     * 식을 완전열거로 작성해, 새 카테고리가 추가되면 이 메서드도 반드시 손대야 컴파일된다.
+     */
+    public boolean isSystemUsageFee() {
+        return switch (this) {
+            case ESSENTIAL, APPLICATION -> true;
+            case EQUIPMENT, PERSONNEL -> false;
+        };
+    }
 }

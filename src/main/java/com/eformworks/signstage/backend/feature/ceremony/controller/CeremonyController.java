@@ -6,10 +6,12 @@ import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.BillingQuoteDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
+import com.eformworks.signstage.backend.feature.ceremony.dto.CustomerQuoteDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.service.BillingQuoteService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyService;
+import com.eformworks.signstage.backend.feature.ceremony.service.CustomerQuoteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,12 +33,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 행사 마스터(Ceremony). OWNER/ADMIN은 조직의 모든 행사를, OPERATOR는 본인이 배정된 행사만
- * 다룰 수 있다(user-organization-design.md 4.2절). signstage-docs
- * business/ceremony-billing-options-review.md 4.10절 — 생성 시 플랜 선택이 필수다.
+ * 다룰 수 있다(user-organization-design.md 4.2절).
  *
- * <p>생성된 Ceremony는 DRAFT로 시작한다 — 확정 전엔 플랜을 자유롭게 바꿀 수 있고
+ * <p>생성된 Ceremony는 DRAFT로 시작한다 — 확정 전엔 플랜을 자유롭게 고르거나 바꿀 수 있고
  * (서명자/문서/하위 행사는 등록할 수 없다), "플랜 확정"으로 IN_PROGRESS로 넘어가면 그때부터
- * 반대가 된다(signstage-docs business/ceremony-plan-confirmation-review.md).
+ * 반대가 된다(signstage-docs business/ceremony-plan-confirmation-review.md). 생성 시 플랜
+ * 선택은 더 이상 필수가 아니다(2026-09-10, signstage-docs
+ * business/ceremony-registration-flow-and-billing-tab-separation-review.md — 옛
+ * {@code ceremony-billing-options-review.md} 4.10절 "생성 시 필수" 결정을 뒤집었다) — 생략하면
+ * 플랜 없이 DRAFT로 만들어지고, 확정하려면 그 전에 플랜을 선택해야 한다.
  */
 @Tag(name = "Ceremony", description = "행사 마스터 API")
 @RestController
@@ -45,12 +51,15 @@ public class CeremonyController {
 
     private final CeremonyService ceremonyService;
     private final BillingQuoteService billingQuoteService;
+    private final CustomerQuoteService customerQuoteService;
     private final TraceIdProvider traceIdProvider;
 
     @Operation(
             summary = "행사 생성",
-            description = "billingPlanId는 필수다. 생성자는 자동으로 배정된다. 생성 직후엔 DRAFT 상태라 "
-                    + "플랜을 바꿀 수 있고(/plan), 확정(/plan/confirm)해야 서명자/문서/하위 행사를 등록할 수 있다."
+            description = "billingPlanId는 생략할 수 있다 — 생략하면 플랜 없이 DRAFT로 만들어지고 나중에 /plan으로 "
+                    + "선택하면 된다. 생성자는 자동으로 배정된다. 생성 직후엔 DRAFT 상태라 플랜을 자유롭게 "
+                    + "고르거나 바꿀 수 있고, 확정(/plan/confirm)해야 서명자/문서/하위 행사를 등록할 수 있다(확정하려면 "
+                    + "플랜이 먼저 선택돼 있어야 한다)."
     )
     @PostMapping
     public ApiResponse<CeremonyDto.Response.CeremonySummary> createCeremony(
@@ -107,6 +116,21 @@ public class CeremonyController {
         CeremonyDto.Response.CeremonySummary response =
                 ceremonyService.updateCeremony(organizationId, ceremonyId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "행사 삭제",
+            description = "플랜이 확정되지 않은(DRAFT) 행사만 삭제할 수 있다. 대기중·승인된 추가구매나 확정 견적이 "
+                    + "있으면(DRAFT여도 만들 수 있다) 거부한다."
+    )
+    @DeleteMapping("/{ceremonyId}")
+    public ApiResponse<Void> deleteCeremony(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        ceremonyService.deleteCeremony(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 
     @Operation(
@@ -308,6 +332,104 @@ public class CeremonyController {
     ) {
         BillingQuoteDto.Response.QuoteSummary response =
                 billingQuoteService.voidQuote(organizationId, ceremonyId, quoteId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "이 행사에 적용되는 마진 조회",
+            description = "행사별 override가 있으면 그 값(source=CEREMONY_OVERRIDE), 없으면 조직 기본값"
+                    + "(source=ORGANIZATION_DEFAULT), 둘 다 없으면 source=NONE(고객 견적서 생성 불가). 호출자가 OWNER여야 한다."
+    )
+    @GetMapping("/{ceremonyId}/customer-margin")
+    public ApiResponse<CustomerQuoteDto.Response.EffectiveMargin> retrieveEffectiveMargin(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        CustomerQuoteDto.Response.EffectiveMargin response =
+                customerQuoteService.retrieveEffectiveMargin(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "이 행사만의 마진 override 설정", description = "조직 기본값을 이 행사에서만 덮어쓴다. 호출자가 OWNER여야 한다.")
+    @PutMapping("/{ceremonyId}/customer-margin")
+    public ApiResponse<CustomerQuoteDto.Response.EffectiveMargin> updateCeremonyMarginOverride(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @Valid @RequestBody CustomerQuoteDto.Request.UpdateMargin request
+    ) {
+        CustomerQuoteDto.Response.EffectiveMargin response =
+                customerQuoteService.updateCeremonyMarginOverride(organizationId, ceremonyId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "이 행사만의 마진 override 해제", description = "해제하면 다시 조직 기본값을 따른다. 호출자가 OWNER여야 한다.")
+    @DeleteMapping("/{ceremonyId}/customer-margin")
+    public ApiResponse<Void> clearCeremonyMarginOverride(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        customerQuoteService.clearCeremonyMarginOverride(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "고객 견적서 작성에 필요한 장비/인력 단가 입력 목록 조회",
+            description = "이 행사에서 승인된 장비/인력(태블릿·현장지원 등) 단위 상품별 수량·참고 원가 — 고객 견적서를 생성하려면 "
+                    + "이 목록에 나온 unitProductId 전부에 고객 단가를 채워 보내야 한다. 호출자가 OWNER여야 한다."
+    )
+    @GetMapping("/{ceremonyId}/customer-quotes/pricing-inputs")
+    public ApiResponse<List<CustomerQuoteDto.Response.PricingInput>> retrievePricingInputs(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        List<CustomerQuoteDto.Response.PricingInput> response =
+                customerQuoteService.retrievePricingInputs(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "고객 견적서 생성",
+            description = "지금 유효한 마진(행사별 override 또는 조직 기본값)으로 시스템 사용료를 계산하고, 장비/인력은 요청에 담긴 "
+                    + "고객 단가를 그대로 스냅샷한다(세전 금액). 마진이 설정돼 있지 않으면 실패한다. 호출자가 OWNER여야 한다."
+    )
+    @PostMapping("/{ceremonyId}/customer-quotes")
+    public ApiResponse<CustomerQuoteDto.Response.QuoteDetail> generateCustomerQuote(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @Valid @RequestBody CustomerQuoteDto.Request.GenerateQuote request
+    ) {
+        CustomerQuoteDto.Response.QuoteDetail response =
+                customerQuoteService.generateCustomerQuote(organizationId, ceremonyId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "고객 견적서 목록 조회", description = "버전 역순(최신이 먼저). 호출자가 OWNER여야 한다.")
+    @GetMapping("/{ceremonyId}/customer-quotes")
+    public ApiResponse<List<CustomerQuoteDto.Response.QuoteSummary>> findCustomerQuotes(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        List<CustomerQuoteDto.Response.QuoteSummary> response =
+                customerQuoteService.findCustomerQuotes(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "고객 견적서 상세 조회", description = "줄 단위 내역 포함. 호출자가 OWNER여야 한다.")
+    @GetMapping("/{ceremonyId}/customer-quotes/{quoteId}")
+    public ApiResponse<CustomerQuoteDto.Response.QuoteDetail> findCustomerQuoteDetail(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long quoteId
+    ) {
+        CustomerQuoteDto.Response.QuoteDetail response =
+                customerQuoteService.findCustomerQuoteDetail(organizationId, ceremonyId, quoteId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }

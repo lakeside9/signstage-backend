@@ -30,8 +30,13 @@ public final class CeremonyDto {
         @AllArgsConstructor
         public static class CreateCeremony {
 
-            /** 필수 — signstage-docs business/ceremony-billing-options-review.md 4.10절 결정. */
-            @NotNull
+            /**
+             * 생략 가능(2026-09-10, 사용자 요청 — signstage-docs
+             * business/ceremony-registration-flow-and-billing-tab-separation-review.md 정정,
+             * {@code ceremony-billing-options-review.md} 4.10절 "생성 시 필수" 결정을 뒤집었다).
+             * 생략하면 플랜 없이 DRAFT로 생성되고, 이미 있는 {@code changePlan}을 최초 선택으로
+             * 그대로 재사용한다.
+             */
             private Long billingPlanId;
 
             @NotBlank

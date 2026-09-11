@@ -36,4 +36,11 @@ public interface CeremonyUnitProductPurchaseLineRepository extends JpaRepository
 
     /** 단위 상품 삭제 가능 여부(사용 이력 없음) 판정에 쓴다 — 상태와 무관하게 구매된 적이 있는지. */
     boolean existsByUnitProduct_Id(Long unitProductId);
+
+    /**
+     * 플랜이 확정되지 않은(DRAFT) 행사 삭제 시 이 행사의 추가구매 요청 줄을 함께 지운다 —
+     * {@code CeremonyUnitProductPurchaseRepository.deleteAllByCeremonyId}보다 먼저 호출해야
+     * 한다(FK 순서).
+     */
+    void deleteAllByPurchase_CeremonyId(Long ceremonyId);
 }

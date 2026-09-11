@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.core.money;
 
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountInfo;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.MarginInfo;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
@@ -43,6 +44,22 @@ public class MoneyCalculator {
      */
     public BigDecimal applyDiscount(BigDecimal amount, DiscountInfo discount, CurrencyPolicy policy) {
         return applyDiscount(amount, discount.getDiscountType(), discount.getDiscountValue(), policy);
+    }
+
+    /**
+     * {@link com.eformworks.signstage.backend.feature.ceremony.entity.MarginInfo} 값 객체를
+     * 받아 원가 위에 마진을 더한 금액을 계산한다 — {@link #applyDiscount}의 부호 반대 버전
+     * (뺄셈 대신 덧셈)이다. signstage-docs business/partner-customer-quote-design-review.md
+     * 5장 결정(2026-09-11), {@code CustomerQuoteService}가 사용한다.
+     */
+    public BigDecimal applyMargin(BigDecimal amount, MarginInfo margin, CurrencyPolicy policy) {
+        requireAmount(amount);
+        BigDecimal marginValue = margin.getMarginValue();
+        requireAmount(marginValue);
+        BigDecimal marginAmount = margin.getMarginType() == DiscountType.PERCENT
+                ? amount.multiply(marginValue, INTERMEDIATE_CONTEXT).divide(ONE_HUNDRED, INTERMEDIATE_CONTEXT)
+                : marginValue;
+        return normalize(amount.add(marginAmount), policy);
     }
 
     /** 세금 별도(EXCLUSIVE) 금액의 라인 세액. */

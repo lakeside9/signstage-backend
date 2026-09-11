@@ -21,12 +21,14 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TaxPolicy;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductCategory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductPricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanDiscountPeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanUnitProductRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingQuoteRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
@@ -96,6 +98,7 @@ public class CeremonyService {
     private final CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
     private final CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
     private final CeremonyPlanHistoryUnitProductRepository ceremonyPlanHistoryUnitProductRepository;
+    private final BillingQuoteRepository billingQuoteRepository;
     private final BillingPlanUnitProductRepository billingPlanUnitProductRepository;
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
@@ -111,6 +114,13 @@ public class CeremonyService {
     private final TaxPolicyResolver taxPolicyResolver;
     private final RolePermissionService rolePermissionService;
 
+    /**
+     * {@code billingPlanId}는 생략할 수 있다(2026-09-10, 사용자 요청 — signstage-docs
+     * business/ceremony-registration-flow-and-billing-tab-separation-review.md) — 제목만
+     * 먼저 등록하고 플랜은 나중에 {@link #changePlan}으로(첫 선택이든 교체든 그 메서드가 똑같이
+     * 처리한다) 고를 수 있다. 생략하면 플랜 관련 검증·{@link CeremonyPlanHistory} 스냅샷을
+     * 전부 건너뛰고 {@code billingPlan = null}인 DRAFT 행사만 만든다.
+     */
     @Transactional
     public CeremonyDto.Response.CeremonySummary createCeremony(
             Long organizationId,
@@ -121,13 +131,17 @@ public class CeremonyService {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCanCreateCeremony(actingMember);
 
-        BillingPlan plan = billingPlanRepository.findById(request.getBillingPlanId())
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
+        BillingPlan plan = null;
+        BillingPlanDiscountPeriod planPeriod = null;
         // Ceremony.timeZoneId는 organization.getDefaultTimeZoneId()를 그대로 물려받는다 — 아직
         // Ceremony가 없으니 organization에서 같은 값을 미리 계산해 쓴다.
         LocalDate asOfDate = LocalDate.now(ZoneId.of(organization.getDefaultTimeZoneId()));
-        BillingPlanDiscountPeriod planPeriod = resolveSellablePlanPeriod(plan, asOfDate);
-        checkCurrencyMatches(organization.getBillingCurrencyCode(), resolvePlanCurrency(plan, asOfDate));
+        if (request.getBillingPlanId() != null) {
+            plan = billingPlanRepository.findById(request.getBillingPlanId())
+                    .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.BILLING_PLAN_NOT_FOUND));
+            planPeriod = resolveSellablePlanPeriod(plan, asOfDate);
+            checkCurrencyMatches(organization.getBillingCurrencyCode(), resolvePlanCurrency(plan, asOfDate));
+        }
 
         Ceremony ceremony = Ceremony.builder()
                 .organization(organization)
@@ -135,7 +149,9 @@ public class CeremonyService {
                 .title(request.getTitle())
                 .build();
         ceremonyRepository.save(ceremony);
-        recordPlanHistory(ceremony, plan, planPeriod, asOfDate);
+        if (plan != null) {
+            recordPlanHistory(ceremony, plan, planPeriod, asOfDate);
+        }
 
         // 생성자는 역할과 무관하게 자동으로 배정된다(4.7절) — 나중에 OPERATOR로 강등돼도
         // 본인이 만든 행사 접근권을 그대로 유지하는 부수 효과가 있다.
@@ -251,6 +267,48 @@ public class CeremonyService {
     }
 
     /**
+     * 플랜이 확정되지 않은(DRAFT) 행사만 삭제할 수 있다(signstage-docs
+     * business/billing-catalog-unit-product-model-redesign-review.md 11장, 2026-09-10 사용자
+     * 요청). DRAFT는 플랜 확정 전 상태라 서명자/문서/하위 행사 등록 자체가 막혀 있어
+     * ({@code checkCeremonyPlanConfirmed}, {@link SignerService}/{@link TemplateService}/
+     * {@link CeremonyEventService}가 등록 시점에 강제) 항상 비어 있다. 다만 단위 상품
+     * 추가구매(안 A, {@link #purchaseUnitProducts})와 확정 견적({@code BillingQuoteService
+     * #finalizeQuote})은 DRAFT 상태에서도 만들 수 있어서, 대기중·승인된 추가구매나 한 번이라도
+     * 만들어진 확정 견적이 있으면 거부한다 — 반려(REJECTED)된 추가구매만 있으면 막지 않는다
+     * (이미 종결된 이력일 뿐이라 재요청 허용 판정과 같은 기준).
+     *
+     * <p>통과하면 이 행사 자신의 플랜 선택 이력(+ 그 안의 단위 상품 스냅샷)·추가구매 요청(+ 그
+     * 줄)·담당자 배정까지 함께 지운다 — DB에 {@code ON DELETE CASCADE}가 없어 자식부터 순서대로
+     * 지운다({@code UnitProductService#deleteUnitProduct}와 같은 패턴).
+     */
+    @Transactional
+    public void deleteCeremony(Long organizationId, Long ceremonyId, Long currentUserId) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        checkCeremonyDeletable(ceremony);
+
+        ceremonyPlanHistoryUnitProductRepository.deleteAllByCeremonyPlanHistory_CeremonyId(ceremonyId);
+        ceremonyPlanHistoryRepository.deleteAllByCeremonyId(ceremonyId);
+        ceremonyUnitProductPurchaseLineRepository.deleteAllByPurchase_CeremonyId(ceremonyId);
+        ceremonyUnitProductPurchaseRepository.deleteAllByCeremonyId(ceremonyId);
+        ceremonyAssignmentRepository.deleteAllByCeremonyId(ceremonyId);
+        ceremonyRepository.delete(ceremony);
+    }
+
+    private void checkCeremonyDeletable(Ceremony ceremony) {
+        if (ceremony.getStatus() != CeremonyStatus.DRAFT) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_NOT_DELETABLE);
+        }
+        boolean hasActivePurchase = ceremonyUnitProductPurchaseRepository.existsByCeremonyIdAndStatusIn(
+                ceremony.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
+        );
+        if (hasActivePurchase || billingQuoteRepository.existsByCeremonyId(ceremony.getId())) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_NOT_DELETABLE);
+        }
+    }
+
+    /**
      * DRAFT 상태에서만 플랜을 바꿀 수 있다 — 확정 후(IN_PROGRESS/COMPLETED) 시도하면 거부한다.
      * 호출할 때마다 {@link CeremonyPlanHistory}에 이력을 한 행 남긴다(3.2/3.4절).
      */
@@ -280,7 +338,10 @@ public class CeremonyService {
 
     /**
      * "플랜 확정" — DRAFT → IN_PROGRESS로 단방향 전이한다. 이후 플랜은 고정되고, 서명자/문서/
-     * 하위 행사 등록이 열린다(3.1절). 확정을 취소하는 API는 두지 않는다(4.4절).
+     * 하위 행사 등록이 열린다(3.1절). 확정을 취소하는 API는 두지 않는다(4.4절). 플랜을 아직
+     * 한 번도 선택하지 않았으면(2026-09-10, 생성 시 플랜 선택을 미룰 수 있게 되면서 가능해짐 —
+     * signstage-docs business/ceremony-registration-flow-and-billing-tab-separation-review.md)
+     * 확정할 대상 자체가 없으므로 거부한다.
      */
     @Transactional
     public CeremonyDto.Response.CeremonySummary confirmPlan(
@@ -292,6 +353,9 @@ public class CeremonyService {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         checkCeremonyPlanChangeable(ceremony);
+        if (ceremony.getBillingPlan() == null) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
+        }
 
         ceremony.confirmPlan();
         organizationSubscriptionService.consumeForCeremonyConfirmation(ceremony);
@@ -334,6 +398,15 @@ public class CeremonyService {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         checkCeremonyEditable(ceremony);
+        // 플랜을 아직 한 번도 선택하지 않은 신규 행사(2026-09-10부터 DRAFT로 만들 수 있게 됨)는
+        // 여기서 막는다 — 안 A 큐레이션이 "플랜 없음"을 배포 전 레거시 행사(영원히 plan_id
+        // NULL, status IN_PROGRESS/COMPLETED — 아래에서 그대로 무제한 허용)의 예외로 취급해서,
+        // status로 구분하지 않으면 "아직 안 골랐을 뿐"인 DRAFT 행사도 카탈로그 전체를 제한 없이
+        // 구매할 수 있는 구멍이 생긴다(signstage-docs
+        // business/ceremony-registration-flow-and-billing-tab-separation-review.md 4장).
+        if (ceremony.getBillingPlan() == null && ceremony.getStatus() == CeremonyStatus.DRAFT) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
+        }
 
         List<Long> requestedIds = request.getLines().stream()
                 .map(CeremonyDto.Request.PurchaseUnitProductLine::getUnitProductId)
@@ -909,6 +982,24 @@ public class CeremonyService {
     }
 
     /**
+     * 플랜 스냅샷을 쓸지 라이브 값을 쓸지 정한다 — {@link #buildQuoteCalculation}/
+     * {@link #calculateEffectiveCapacity}/{@link #retrieveApplicableUnitProductIds}/
+     * {@link #retrievePurchasableUnitProductIds} 4곳이 전부 이 메서드로 스냅샷 조회를 감싼다.
+     * DRAFT 상태에선 항상 {@code Optional.empty()}를 돌려줘 각 메서드의 기존 "스냅샷 없음"
+     * fallback(라이브 조회)을 그대로 타게 한다 — 스냅샷은 "확정 이후엔 카탈로그가 바뀌어도
+     * 안 바뀐다"를 보장하기 위한 것이라, 아직 아무것도 확정되지 않은 DRAFT에는 애초에 그 보장이
+     * 필요 없다(2026-09-10, 실사용 중 발견 — DRAFT 행사가 쓰는 플랜에 관리자가 단위 상품을
+     * 추가해도(예: 태블릿 0개 포함) 행사 쪽에 남은 옛 스냅샷 때문에 추가구매 후보 목록에
+     * 반영되지 않던 버그. DRAFT에서 플랜을 자유롭게 바꿀 수 있다는 것과 같은 원칙이다).
+     */
+    private Optional<CeremonyPlanHistory> findLatestPlanHistoryForSnapshot(Ceremony ceremony) {
+        if (ceremony.getStatus() == CeremonyStatus.DRAFT) {
+            return Optional.empty();
+        }
+        return ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
+    }
+
+    /**
      * {@link #calculateEstimatedTotal}(예상 청구 금액)과 {@code BillingQuoteService}(확정 견적,
      * signstage-docs business/currency-tax-internationalization-review.md 9장)이 공유하는
      * 계산 본체다 — 같은 계산이 두 곳에서 갈라지면 "예상"과 "확정"이 서로 다른 숫자를 보여주는
@@ -925,8 +1016,7 @@ public class CeremonyService {
         List<QuoteLineDraft> planLines = new ArrayList<>();
         BillingPlan plan = ceremony.getBillingPlan();
         if (plan != null) {
-            Optional<CeremonyPlanHistory> snapshot =
-                    ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
+            Optional<CeremonyPlanHistory> snapshot = findLatestPlanHistoryForSnapshot(ceremony);
             if (snapshot.isPresent()) {
                 for (CeremonyPlanHistoryUnitProduct line : ceremonyPlanHistoryUnitProductRepository
                         .findAllByCeremonyPlanHistoryId(snapshot.get().getId())) {
@@ -936,6 +1026,7 @@ public class CeremonyService {
                     BigDecimal listAmount = line.getSnapshotSalePrice().multiply(BigDecimal.valueOf(line.getIncludedQuantity()));
                     planLines.add(new QuoteLineDraft(
                             "PLAN_UNIT_PRODUCT", line.getUnitProduct().getId(), line.getUnitProduct().getName(),
+                            line.getUnitProduct().getCategory(),
                             line.getIncludedQuantity(), line.getSnapshotSalePrice(), listAmount, BigDecimal.ZERO,
                             line.getSnapshotTaxCode()
                     ));
@@ -952,6 +1043,7 @@ public class CeremonyService {
                                         .multiply(BigDecimal.valueOf(source.getIncludedQuantity()));
                                 planLines.add(new QuoteLineDraft(
                                         "PLAN_UNIT_PRODUCT", source.getUnitProduct().getId(), source.getUnitProduct().getName(),
+                                        source.getUnitProduct().getCategory(),
                                         source.getIncludedQuantity(), period.getPriceInfo().getSalePrice(), listAmount,
                                         BigDecimal.ZERO, period.getPriceInfo().getTaxCode()
                                 ));
@@ -984,6 +1076,7 @@ public class CeremonyService {
                     BigDecimal listAmount = line.getPurchasedSalePrice().multiply(BigDecimal.valueOf(line.getQuantity()));
                     return new QuoteLineDraft(
                             "UNIT_PRODUCT_PURCHASE", line.getUnitProduct().getId(), line.getPurchasedName(),
+                            line.getUnitProduct().getCategory(),
                             line.getQuantity(), line.getPurchasedSalePrice(), listAmount, BigDecimal.ZERO,
                             line.getPurchasedTaxCode()
                     );
@@ -1029,7 +1122,7 @@ public class CeremonyService {
                 runningTotal = runningTotal.add(share);
             }
             allocated.add(new QuoteLineDraft(
-                    line.lineType(), line.itemId(), line.itemName(), line.quantity(), line.unitListAmount(),
+                    line.lineType(), line.itemId(), line.itemName(), line.category(), line.quantity(), line.unitListAmount(),
                     line.listAmount(), line.listAmount().subtract(share), line.taxCode()
             ));
         }
@@ -1071,7 +1164,7 @@ public class CeremonyService {
             BigDecimal taxAmount = moneyCalculator.calculateExclusiveTax(lineNet, taxPolicy.getRatePercent(), currencyPolicy);
             BigDecimal grossAmount = moneyCalculator.normalize(lineNet.add(taxAmount), currencyPolicy);
             result.add(new QuoteLineDetail(
-                    line.lineType(), line.itemId(), line.itemName(), line.quantity(), line.unitListAmount(),
+                    line.lineType(), line.itemId(), line.itemName(), line.category(), line.quantity(), line.unitListAmount(),
                     line.listAmount(), line.itemDiscountAmount(), ceremonyDiscount, lineNet,
                     line.taxCode(), taxPolicy.getCategory().name(), taxPolicy.getRatePercent(), taxPolicy.getPriceInclusion(),
                     taxAmount, grossAmount
@@ -1097,6 +1190,7 @@ public class CeremonyService {
             String lineType,
             Long itemId,
             String itemName,
+            UnitProductCategory category,
             int quantity,
             BigDecimal unitListAmount,
             BigDecimal listAmount,
@@ -1113,6 +1207,7 @@ public class CeremonyService {
             String lineType,
             Long itemId,
             String itemName,
+            UnitProductCategory category,
             int quantity,
             BigDecimal unitListAmount,
             BigDecimal listAmount,
@@ -1137,8 +1232,9 @@ public class CeremonyService {
      *
      * <p>플랜 기본값은 라이브 {@code BillingPlanUnitProduct}가 아니라 {@link CeremonyPlanHistory}의
      * 최신 스냅샷을 쓴다 — 카탈로그 관리자가 나중에 플랜 값을 고쳐도 이미 확정/진행 중인 행사는
-     * 영향받지 않아야 한다. 이 기능(플랜 확정) 배포 전에 만들어져 이력이 없는 행사만 예외로
-     * 라이브 값에 fallback한다.
+     * 영향받지 않아야 한다. 이력이 없는 경우(이 기능 배포 전 기존 행사)와 아직 DRAFT인 행사
+     * (아무것도 확정 안 됐으니 이 보장 자체가 필요 없다)는 라이브 값에 fallback한다
+     * ({@link #findLatestPlanHistoryForSnapshot}).
      */
     int calculateEffectiveCapacity(Ceremony ceremony, UnitProductType type) {
         BillingPlan plan = ceremony.getBillingPlan();
@@ -1146,7 +1242,7 @@ public class CeremonyService {
             return Integer.MAX_VALUE;
         }
 
-        int baseValue = ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId())
+        int baseValue = findLatestPlanHistoryForSnapshot(ceremony)
                 .map(snapshot -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(snapshot.getId()).stream()
                         .filter(line -> line.getUnitProduct().getType() == type)
                         .mapToInt(CeremonyPlanHistoryUnitProduct::getIncludedQuantity)
@@ -1176,7 +1272,8 @@ public class CeremonyService {
      * <p>"플랜 기본 포함" 쪽은 라이브 {@code BillingPlanUnitProduct} 대신 이 Ceremony의 최신
      * {@link CeremonyPlanHistory} 스냅샷({@link CeremonyPlanHistoryUnitProduct})을 우선 쓴다 —
      * 카탈로그 관리자가 나중에 플랜의 구성을 바꿔도 영향받지 않아야 한다. 이력이 없는 경우(이
-     * 스냅샷 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
+     * 스냅샷 기능 배포 전 기존 행사)와 아직 DRAFT인 행사는 라이브 값으로 대체한다
+     * ({@link #findLatestPlanHistoryForSnapshot}).
      */
     List<Long> retrieveApplicableUnitProductIds(Ceremony ceremony) {
         List<Long> purchased = ceremonyUnitProductPurchaseLineRepository
@@ -1189,8 +1286,7 @@ public class CeremonyService {
             return purchased;
         }
 
-        Optional<CeremonyPlanHistory> snapshot =
-                ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
+        Optional<CeremonyPlanHistory> snapshot = findLatestPlanHistoryForSnapshot(ceremony);
         List<Long> includedInPlan = snapshot
                 .map(history -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(history.getId()).stream()
                         .filter(line -> line.getIncludedQuantity() > 0)
@@ -1212,13 +1308,15 @@ public class CeremonyService {
      * 플래그는 2026-09-10에 폐지했다({@code BillingPlanUnitProduct} javadoc 참고). 라이브
      * {@code BillingPlanUnitProduct} 대신 이 Ceremony의 최신 {@link CeremonyPlanHistory} 스냅샷을
      * 우선 쓴다 — 카탈로그 관리자가 나중에 플랜의 단위 상품 구성을 바꿔도 영향받지 않아야 한다.
-     * 이력이 없는 경우만 라이브 값으로 대체한다. 호출부가
+     * 이력이 없는 경우와 아직 DRAFT인 행사는 라이브 값으로 대체한다
+     * ({@link #findLatestPlanHistoryForSnapshot}) — 2026-09-10, 실사용 중 발견한 버그 수정:
+     * DRAFT 행사가 쓰는 플랜에 관리자가 단위 상품을 나중에 추가해도(예: 태블릿을 0개 포함으로
+     * 추가) 옛 스냅샷 때문에 추가구매 후보 목록에 반영되지 않던 문제. 호출부가
      * {@code ceremony.getBillingPlan() != null}을 먼저 확인해야 한다 — 플랜 없는 행사는 제한
      * 자체가 없다.
      */
     List<Long> retrievePurchasableUnitProductIds(Ceremony ceremony) {
-        Optional<CeremonyPlanHistory> snapshot =
-                ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(ceremony.getId());
+        Optional<CeremonyPlanHistory> snapshot = findLatestPlanHistoryForSnapshot(ceremony);
         return snapshot
                 .map(history -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(history.getId()).stream()
                         .map(line -> line.getUnitProduct().getId())

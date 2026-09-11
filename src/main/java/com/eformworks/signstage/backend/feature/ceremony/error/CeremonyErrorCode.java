@@ -225,6 +225,16 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "플랜이 확정되지 않은 행사에는 등록할 수 없습니다. 먼저 플랜을 확정해주세요."
     ),
+    CEREMONY_PLAN_NOT_SELECTED(
+            "CEREMONY_PLAN_NOT_SELECTED",
+            HttpStatus.CONFLICT,
+            "행사에 과금 플랜을 먼저 선택해주세요."
+    ),
+    CEREMONY_NOT_DELETABLE(
+            "CEREMONY_NOT_DELETABLE",
+            HttpStatus.CONFLICT,
+            "플랜이 확정됐거나 추가구매 요청·확정 견적이 있는 행사는 삭제할 수 없습니다."
+    ),
     BILLING_PLAN_INACTIVE(
             "CEREMONY_BILLING_PLAN_INACTIVE",
             HttpStatus.CONFLICT,
@@ -428,6 +438,42 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_QUOTE_EMPTY",
             HttpStatus.CONFLICT,
             "플랜이 없거나 청구할 항목이 없는 행사는 견적을 확정할 수 없습니다."
+    ),
+
+    /**
+     * 파트너→실고객 고객 견적서(signstage-docs
+     * business/partner-customer-quote-design-review.md, 2026-09-11 구현)의 오류 코드.
+     */
+    MARGIN_VALUE_INVALID(
+            "CEREMONY_MARGIN_VALUE_INVALID",
+            HttpStatus.BAD_REQUEST,
+            "마진 값이 올바르지 않습니다. 0 이상이어야 합니다."
+    ),
+    MARGIN_NOT_SET(
+            "CEREMONY_MARGIN_NOT_SET",
+            HttpStatus.CONFLICT,
+            "마진이 설정되지 않았습니다. 조직 기본 마진 또는 행사별 마진을 먼저 설정해주세요."
+    ),
+    CUSTOMER_MARGIN_OVERRIDE_NOT_SET(
+            "CEREMONY_CUSTOMER_MARGIN_OVERRIDE_NOT_SET",
+            HttpStatus.NOT_FOUND,
+            "이 행사에 설정된 마진 override가 없습니다."
+    ),
+    CUSTOMER_QUOTE_NOT_FOUND("CEREMONY_CUSTOMER_QUOTE_NOT_FOUND", HttpStatus.NOT_FOUND, "고객 견적서를 찾을 수 없습니다."),
+    CUSTOMER_QUOTE_EMPTY(
+            "CEREMONY_CUSTOMER_QUOTE_EMPTY",
+            HttpStatus.CONFLICT,
+            "청구할 항목이 없는 행사는 고객 견적서를 만들 수 없습니다."
+    ),
+    CUSTOMER_QUOTE_PRICE_REQUIRED(
+            "CEREMONY_CUSTOMER_QUOTE_PRICE_REQUIRED",
+            HttpStatus.BAD_REQUEST,
+            "실고객에게 청구할 장비/인력 단가를 전부 입력해주세요."
+    ),
+    CUSTOMER_QUOTE_PRICE_INVALID(
+            "CEREMONY_CUSTOMER_QUOTE_PRICE_INVALID",
+            HttpStatus.BAD_REQUEST,
+            "실고객 청구 단가가 올바르지 않습니다. 0 이상이어야 합니다."
     );
 
     private final String code;

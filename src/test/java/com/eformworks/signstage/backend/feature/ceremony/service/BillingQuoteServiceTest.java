@@ -15,6 +15,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.BillingQuoteLine
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingQuoteStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingQuoteStatusEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductCategory;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingQuoteLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingQuoteRepository;
@@ -73,7 +74,7 @@ class BillingQuoteServiceTest {
 
     private CeremonyService.QuoteLineDetail line() {
         return new CeremonyService.QuoteLineDetail(
-                "PLAN_UNIT_PRODUCT", 901L, "서명자", 1,
+                "PLAN_UNIT_PRODUCT", 901L, "서명자", UnitProductCategory.ESSENTIAL, 1,
                 new BigDecimal("10000"), new BigDecimal("10000"), BigDecimal.ZERO,
                 BigDecimal.ZERO, new BigDecimal("10000"),
                 "KR_VAT_STANDARD", "STANDARD", new BigDecimal("10.0000"), "EXCLUSIVE",
