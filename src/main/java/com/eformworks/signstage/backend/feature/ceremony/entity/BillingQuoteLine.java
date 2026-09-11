@@ -3,6 +3,8 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -53,6 +55,18 @@ public class BillingQuoteLine {
 
     @Column(name = "item_name", nullable = false, length = 100)
     private String itemName;
+
+    /**
+     * 구매/확정 시점의 {@code UnitProduct.category} 스냅샷 — signstage-docs
+     * business/platform-partner-customer-billing-model-reference.md 4.3절 결정(2026-09-11).
+     * {@code itemId}로 살아있는 카탈로그를 다시 조인하지 않아도 "시스템 사용료
+     * ({@link UnitProductCategory#isSystemUsageFee()}) vs 실물·인력 대금" 매출 갈래를 이
+     * 스냅샷만으로 집계할 수 있다 — 이후 관리자가 카탈로그를 재분류해도 이미 확정된 줄의
+     * 분류는 바뀌지 않는다(이 프로젝트 전반의 스냅샷 원칙과 동일).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UnitProductCategory category;
 
     @Column(nullable = false)
     private Integer quantity;
@@ -106,6 +120,7 @@ public class BillingQuoteLine {
             String lineType,
             Long itemId,
             String itemName,
+            UnitProductCategory category,
             Integer quantity,
             BigDecimal unitListAmount,
             BigDecimal listAmount,
@@ -123,6 +138,7 @@ public class BillingQuoteLine {
         this.lineType = lineType;
         this.itemId = itemId;
         this.itemName = itemName;
+        this.category = category;
         this.quantity = quantity;
         this.unitListAmount = unitListAmount;
         this.listAmount = listAmount;

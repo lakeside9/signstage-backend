@@ -20,6 +20,8 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanDisco
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryUnitProduct;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
@@ -30,9 +32,11 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductCategory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductPricePeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanDiscountPeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanUnitProductRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.BillingQuoteRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
@@ -99,6 +103,8 @@ class CeremonyServiceTest {
     private CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
     @Mock
     private CeremonyPlanHistoryUnitProductRepository ceremonyPlanHistoryUnitProductRepository;
+    @Mock
+    private BillingQuoteRepository billingQuoteRepository;
     @Mock
     private BillingPlanUnitProductRepository billingPlanUnitProductRepository;
     @Mock
@@ -194,7 +200,8 @@ class CeremonyServiceTest {
         given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(member));
-        given(ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(Optional.empty());
+        // ceremony가 DRAFT라 findLatestPlanHistoryForSnapshot이 스냅샷 조회 자체를 건너뛰고
+        // 항상 라이브 값으로 폴백한다(2026-09-10) — ceremonyPlanHistoryRepository는 안 불린다.
         given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of(line));
         given(unitProductPricePeriodRepository.findEffective(eq(901L), any(LocalDate.class)))
                 .willReturn(Optional.of(unitProductPeriod(signers, new BigDecimal("10000"), new BigDecimal("10005"))));
@@ -261,6 +268,10 @@ class CeremonyServiceTest {
         // given
         Organization organization = organization();
         Ceremony ceremony = ceremony(organization, 10L);
+        // 이 테스트가 의도하는 건 배포 전 레거시(plan 없음, IN_PROGRESS) 행사의 "안 A 큐레이션
+        // 미적용" 동작이다 — DRAFT+플랜 없음(신규, 2026-09-10부터 가능)은 별도로 막힌다
+        // (purchaseUnitProducts_rejectsWhenDraftWithoutPlanSelected 참고).
+        ceremony.confirmPlan();
         Member member = Member.builder().role(MemberRole.OWNER).build();
 
         UnitProduct signers = unitProduct(201L, UnitProductType.SIGNERS);
@@ -301,6 +312,9 @@ class CeremonyServiceTest {
     void purchaseUnitProducts_effectBundleQuantityOverOne_rejected() {
         Organization organization = organization();
         Ceremony ceremony = ceremony(organization, 10L);
+        // 이 테스트가 의도하는 건 배포 전 레거시(plan 없음, IN_PROGRESS) 행사의 동작이다 —
+        // purchaseUnitProducts_multipleLines_savesOneHeaderWithLines와 같은 이유.
+        ceremony.confirmPlan();
         Member member = Member.builder().role(MemberRole.OWNER).build();
 
         UnitProduct bundle = unitProduct(301L, UnitProductType.EVENT_EFFECT_BUNDLE);
@@ -334,7 +348,8 @@ class CeremonyServiceTest {
         Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
         ReflectionTestUtils.setField(ceremony, "id", 10L);
 
-        given(ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(Optional.empty());
+        // ceremony가 DRAFT라 findLatestPlanHistoryForSnapshot이 스냅샷 조회 자체를 건너뛰고
+        // 항상 라이브 값으로 폴백한다(2026-09-10) — ceremonyPlanHistoryRepository는 안 불린다.
         given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of());
         given(ceremonyUnitProductPurchaseLineRepository
                 .findAllByPurchase_CeremonyIdAndUnitProduct_TypeAndPurchase_Status(10L, UnitProductType.TABLETS, PurchaseStatus.APPROVED))
@@ -439,5 +454,215 @@ class CeremonyServiceTest {
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+    }
+
+    /**
+     * {@link CeremonyService#deleteCeremony}의 "플랜이 확정되지 않은(DRAFT) 행사만 삭제 가능"
+     * 규칙 단위 테스트 — signstage-docs
+     * business/billing-catalog-unit-product-model-redesign-review.md 11장, 2026-09-10 사용자
+     * 요청.
+     */
+    private static final Long CEREMONY_ID = 10L;
+
+    private void stubOwnerMember(Ceremony ceremony) {
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        given(ceremonyRepository.findById(CEREMONY_ID)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+    }
+
+    @Test
+    @DisplayName("삭제 — DRAFT이고 대기중/승인된 추가구매·확정 견적이 없으면 자신의 이력·추가구매·배정을 함께 지운다")
+    void deleteCeremony_deletesWhenDraftAndNoActivity() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, CEREMONY_ID);
+        stubOwnerMember(ceremony);
+        given(ceremonyUnitProductPurchaseRepository.existsByCeremonyIdAndStatusIn(
+                CEREMONY_ID, List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
+        )).willReturn(false);
+        given(billingQuoteRepository.existsByCeremonyId(CEREMONY_ID)).willReturn(false);
+
+        ceremonyService.deleteCeremony(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID);
+
+        verify(ceremonyPlanHistoryUnitProductRepository).deleteAllByCeremonyPlanHistory_CeremonyId(CEREMONY_ID);
+        verify(ceremonyPlanHistoryRepository).deleteAllByCeremonyId(CEREMONY_ID);
+        verify(ceremonyUnitProductPurchaseLineRepository).deleteAllByPurchase_CeremonyId(CEREMONY_ID);
+        verify(ceremonyUnitProductPurchaseRepository).deleteAllByCeremonyId(CEREMONY_ID);
+        verify(ceremonyAssignmentRepository).deleteAllByCeremonyId(CEREMONY_ID);
+        verify(ceremonyRepository).delete(ceremony);
+    }
+
+    @Test
+    @DisplayName("삭제 — 플랜이 확정된(IN_PROGRESS) 행사는 거부하고 아무것도 지우지 않는다")
+    void deleteCeremony_rejectsWhenPlanConfirmed() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, CEREMONY_ID);
+        ceremony.confirmPlan();
+        stubOwnerMember(ceremony);
+
+        assertThatThrownBy(() -> ceremonyService.deleteCeremony(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CEREMONY_NOT_DELETABLE);
+
+        verify(ceremonyRepository, never()).delete(any(Ceremony.class));
+    }
+
+    @Test
+    @DisplayName("삭제 — DRAFT이어도 대기중/승인된 추가구매가 있으면 거부한다")
+    void deleteCeremony_rejectsWhenActivePurchaseExists() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, CEREMONY_ID);
+        stubOwnerMember(ceremony);
+        given(ceremonyUnitProductPurchaseRepository.existsByCeremonyIdAndStatusIn(
+                CEREMONY_ID, List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
+        )).willReturn(true);
+
+        assertThatThrownBy(() -> ceremonyService.deleteCeremony(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CEREMONY_NOT_DELETABLE);
+
+        verify(ceremonyRepository, never()).delete(any(Ceremony.class));
+    }
+
+    @Test
+    @DisplayName("삭제 — DRAFT이어도 확정 견적이 있으면(무효화됐더라도) 거부한다")
+    void deleteCeremony_rejectsWhenQuoteExists() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, CEREMONY_ID);
+        stubOwnerMember(ceremony);
+        given(ceremonyUnitProductPurchaseRepository.existsByCeremonyIdAndStatusIn(
+                CEREMONY_ID, List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
+        )).willReturn(false);
+        given(billingQuoteRepository.existsByCeremonyId(CEREMONY_ID)).willReturn(true);
+
+        assertThatThrownBy(() -> ceremonyService.deleteCeremony(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CEREMONY_NOT_DELETABLE);
+
+        verify(ceremonyRepository, never()).delete(any(Ceremony.class));
+    }
+
+    /**
+     * 행사 등록 시 플랜 선택을 나중으로 미루는 흐름(2026-09-10, 사용자 요청) 단위 테스트 —
+     * signstage-docs business/ceremony-registration-flow-and-billing-tab-separation-review.md.
+     */
+    @Test
+    @DisplayName("생성 — billingPlanId를 생략하면 플랜 없이 DRAFT로 만들고 플랜 이력을 남기지 않는다")
+    void createCeremony_withoutBillingPlanId_createsDraftWithoutPlanHistory() {
+        Organization organization = organization();
+        given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(organization));
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        User creator = User.builder().loginId("u1").name("사용자").build();
+        given(userRepository.findById(CURRENT_USER_ID)).willReturn(Optional.of(creator));
+
+        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(null, "행사");
+
+        CeremonyDto.Response.CeremonySummary result = ceremonyService.createCeremony(ORGANIZATION_ID, CURRENT_USER_ID, request);
+
+        assertThat(result.getBillingPlanId()).isNull();
+        assertThat(result.getStatus()).isEqualTo("DRAFT");
+        verify(ceremonyPlanHistoryRepository, never()).save(any());
+        verify(billingPlanRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("확정 — 플랜을 한 번도 선택하지 않았으면 거부한다")
+    void confirmPlan_rejectsWhenNoPlanSelected() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, CEREMONY_ID);
+        stubOwnerMember(ceremony);
+
+        assertThatThrownBy(() -> ceremonyService.confirmPlan(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
+    }
+
+    @Test
+    @DisplayName("추가구매 — 플랜을 선택한 적 없는 신규 DRAFT 행사는 거부한다(안 A 큐레이션 구멍 방지)")
+    void purchaseUnitProducts_rejectsWhenDraftWithoutPlanSelected() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, CEREMONY_ID);
+        stubOwnerMember(ceremony);
+
+        CeremonyDto.Request.PurchaseUnitProducts request = new CeremonyDto.Request.PurchaseUnitProducts(List.of());
+
+        assertThatThrownBy(() -> ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
+    }
+
+    @Test
+    @DisplayName("추가구매 — 배포 전 레거시 행사(plan 없음, IN_PROGRESS)는 예전처럼 막지 않는다")
+    void purchaseUnitProducts_allowsWhenLegacyCeremonyWithoutPlan() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, CEREMONY_ID);
+        ceremony.confirmPlan(); // DRAFT -> IN_PROGRESS 전이만 흉내낸다(레거시는 배포 시 이미 IN_PROGRESS로 채워졌다).
+        stubOwnerMember(ceremony);
+
+        CeremonyDto.Request.PurchaseUnitProducts request = new CeremonyDto.Request.PurchaseUnitProducts(List.of());
+
+        // 플랜 미선택 가드에는 안 걸린다 — lines가 비어 있어 그 이후 로직은 그냥 빈 구매로 끝난다.
+        ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request);
+    }
+
+    /**
+     * {@code findLatestPlanHistoryForSnapshot}(DRAFT는 스냅샷을 쓰지 않는다) 회귀 방지 —
+     * 2026-09-10, 실사용 중 발견: DRAFT 행사가 쓰는 플랜에 관리자가 단위 상품을 나중에 추가해도
+     * (예: 태블릿을 0개 포함으로 추가) 행사 쪽에 남은 옛 스냅샷 때문에 추가구매 후보 목록에
+     * 반영되지 않던 버그.
+     */
+    @Test
+    @DisplayName("추가구매 후보 목록 — DRAFT 행사는 스냅샷이 있어도 무시하고 항상 라이브 플랜 구성을 쓴다")
+    void retrievePurchasableUnitProductIds_draftIgnoresSnapshotAndUsesLive() {
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder().name("플랜").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+
+        UnitProduct tablets = unitProduct(901L, UnitProductType.TABLETS);
+        BillingPlanUnitProduct liveLine = BillingPlanUnitProduct.builder()
+                .billingPlan(plan).unitProduct(tablets).includedQuantity(0).build();
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of(liveLine));
+
+        List<Long> result = ceremonyService.retrievePurchasableUnitProductIds(ceremony);
+
+        assertThat(result).containsExactly(901L);
+        // DRAFT라 스냅샷 저장소 자체를 건드리지 않아야 한다 — 실수로 다시 조회하게 되돌아가면
+        // (버그 재발) 이 검증이 실패한다.
+        verify(ceremonyPlanHistoryRepository, never()).findFirstByCeremonyIdOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    @DisplayName("추가구매 후보 목록 — 확정된(IN_PROGRESS) 행사는 스냅샷이 있으면 그 스냅샷을 쓴다")
+    void retrievePurchasableUnitProductIds_confirmedUsesSnapshot() {
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder().name("플랜").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+        ceremony.confirmPlan();
+
+        CeremonyPlanHistory history = mock(CeremonyPlanHistory.class);
+        given(history.getId()).willReturn(555L);
+        given(ceremonyPlanHistoryRepository.findFirstByCeremonyIdOrderByCreatedAtDesc(10L)).willReturn(Optional.of(history));
+
+        UnitProduct signers = unitProduct(902L, UnitProductType.SIGNERS);
+        CeremonyPlanHistoryUnitProduct snapshotLine = mock(CeremonyPlanHistoryUnitProduct.class);
+        given(snapshotLine.getUnitProduct()).willReturn(signers);
+        given(ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(555L)).willReturn(List.of(snapshotLine));
+
+        List<Long> result = ceremonyService.retrievePurchasableUnitProductIds(ceremony);
+
+        assertThat(result).containsExactly(902L);
+        // 스냅샷이 있으니 라이브 플랜 구성 조회는 아예 안 타야 한다.
+        verify(billingPlanUnitProductRepository, never()).findAllByBillingPlanId(any());
     }
 }

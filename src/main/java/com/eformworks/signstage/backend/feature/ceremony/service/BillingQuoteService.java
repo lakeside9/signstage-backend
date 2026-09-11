@@ -82,6 +82,7 @@ public class BillingQuoteService {
                     .lineType(line.lineType())
                     .itemId(line.itemId())
                     .itemName(line.itemName())
+                    .category(line.category())
                     .quantity(line.quantity())
                     .unitListAmount(line.unitListAmount())
                     .listAmount(line.listAmount())
@@ -191,6 +192,7 @@ public class BillingQuoteService {
                         line.getLineType(),
                         line.getItemId(),
                         line.getItemName(),
+                        line.getCategory().name(),
                         line.getQuantity(),
                         line.getUnitListAmount(),
                         line.getListAmount(),

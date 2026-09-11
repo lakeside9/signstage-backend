@@ -80,6 +80,8 @@ public final class BillingQuoteDto {
             private final String lineType;
             private final Long itemId;
             private final String itemName;
+            /** ESSENTIAL/APPLICATION(시스템 사용료) 또는 EQUIPMENT/PERSONNEL(실물·인력 대금) — 매출 갈래 리포팅용 스냅샷. */
+            private final String category;
             private final Integer quantity;
             private final BigDecimal unitListAmount;
             private final BigDecimal listAmount;
