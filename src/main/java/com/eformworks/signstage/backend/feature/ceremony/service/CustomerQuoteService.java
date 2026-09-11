@@ -153,6 +153,15 @@ public class CustomerQuoteService {
 
     // ==================== 고객 견적서 ====================
 
+    /**
+     * 플랜이 확정(DRAFT → IN_PROGRESS)된 행사에서만 정산서를 만들 수 있다(2026-09-11 사용자
+     * 요청 — 단위 상품 추가구매와 같은 기준, {@link CeremonyService#checkCeremonyPlanConfirmed}).
+     * DRAFT 상태에서는 플랜 스냅샷이 아직 없어(2.4절, {@code findLatestPlanHistoryForSnapshot}이
+     * 라이브 카탈로그 값으로 대체) {@link CeremonyService#buildQuoteCalculation}이 계산하는
+     * 시스템 사용료 원가가 카탈로그 관리자의 변경에 따라 계속 바뀔 수 있는 잠정치다 — 그
+     * 위에서 실고객에게 청구할 정산서를 만들면, 정산서 생성 이후 원가가 바뀌어도 그 정산서
+     * 자체는 스냅샷이라 조용히 어긋난 기준으로 남는다.
+     */
     @Transactional
     public CustomerQuoteDto.Response.QuoteDetail generateCustomerQuote(
             Long organizationId, Long ceremonyId, Long currentUserId, CustomerQuoteDto.Request.GenerateQuote request
@@ -160,6 +169,7 @@ public class CustomerQuoteService {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
+        ceremonyService.checkCeremonyPlanConfirmed(ceremony);
         CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
 
         MarginInfo margin = ceremonyMarginOverrideRepository.findByCeremonyId(ceremony.getId())
