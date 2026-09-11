@@ -267,6 +267,75 @@ class CeremonyServiceTest {
         assertThat(history.getPlanDiscountValue()).isEqualByComparingTo("30");
     }
 
+    /**
+     * 2026-09-11 사용자 요청 — signstage-docs
+     * business/ceremony-plan-price-snapshot-consistency-review.md 3.1절(방어). 플랜에
+     * 포함된 단위 상품 중 그 날짜에 유효한 가격 기간이 없으면(카탈로그 관리자가 가격 기간
+     * 사이에 공백을 남긴 경우) 예전엔 조용히 0원으로 스냅샷됐지만, 이제 추가구매 경로와
+     * 같은 기준으로 예외를 던져 플랜 선택 자체를 막는다.
+     */
+    @Test
+    @DisplayName("플랜에 포함된 단위 상품 중 가격 공백(그 날짜에 유효한 기간 없음)이 있으면 플랜 선택 자체를 거부한다")
+    void createCeremony_withUnitProductPriceGap_rejected() {
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder().name("스탠다드").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+
+        UnitProduct signers = unitProduct(201L, UnitProductType.SIGNERS);
+        BillingPlanUnitProduct line = BillingPlanUnitProduct.builder()
+                .billingPlan(plan).unitProduct(signers).includedQuantity(1).build();
+
+        given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(organization));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(billingPlanRepository.findById(101L)).willReturn(Optional.of(plan));
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of(line));
+        given(billingPlanDiscountPeriodRepository.findEffective(eq(101L), any(LocalDate.class)))
+                .willReturn(Optional.of(planDiscountPeriod(plan, DiscountType.FIXED_AMOUNT, BigDecimal.ZERO)));
+        // 공백 — 이 단위 상품엔 오늘 유효한 가격 기간이 없다.
+        given(unitProductPricePeriodRepository.findEffective(eq(201L), any(LocalDate.class))).willReturn(Optional.empty());
+        given(organizationDiscountService.resolveBillingPlanDiscount(eq(organization), eq(101L), any(), any(), any(LocalDate.class)))
+                .willReturn(new OrganizationDiscountService.EffectiveDiscount(DiscountType.FIXED_AMOUNT, BigDecimal.ZERO));
+
+        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1");
+
+        // 실제로는 @Transactional이라 ceremonyRepository.save 자체는 먼저 불리고 예외로 롤백된다 —
+        // 여기서는 순수하게 "예외가 나는가"만 확인한다.
+        assertThatThrownBy(() -> ceremonyService.createCeremony(ORGANIZATION_ID, CURRENT_USER_ID, request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_INACTIVE);
+    }
+
+    /**
+     * 2026-09-11 사용자 요청 — signstage-docs
+     * business/ceremony-plan-price-snapshot-consistency-review.md 3.2절. "플랜 확정"이
+     * 상태만 바꾸던 것에서, 확정 직전 오늘 날짜로 스냅샷을 한 번 더 찍도록 바뀌었다 —
+     * 확정 버튼을 누르는 순간 보이던 값과 실제로 고정되는 값을 일치시킨다.
+     */
+    @Test
+    @DisplayName("플랜 확정은 상태 전이 전에 오늘 날짜로 플랜 이력을 한 번 더 스냅샷한다")
+    void confirmPlan_recordsFreshPlanHistorySnapshot() {
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder().name("스탠다드").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", CEREMONY_ID);
+        stubOwnerMember(ceremony);
+
+        // 이 플랜은 포함 단위 상품이 없다고 가정한다 — createCeremony_withPlanDiscountOverride_snapshotsOverride와 같은 이유.
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of());
+        given(billingPlanDiscountPeriodRepository.findEffective(eq(101L), any(LocalDate.class)))
+                .willReturn(Optional.of(planDiscountPeriod(plan, DiscountType.FIXED_AMOUNT, new BigDecimal("10000"))));
+        given(organizationDiscountService.resolveBillingPlanDiscount(eq(organization), eq(101L), any(), any(), any(LocalDate.class)))
+                .willReturn(new OrganizationDiscountService.EffectiveDiscount(DiscountType.FIXED_AMOUNT, new BigDecimal("10000")));
+
+        ceremonyService.confirmPlan(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID);
+
+        verify(ceremonyPlanHistoryRepository, org.mockito.Mockito.times(1)).save(any(CeremonyPlanHistory.class));
+    }
+
     @Test
     @DisplayName("단위 상품 추가구매(구매하기)는 장바구니에 담긴 여러 줄을 한 번에 하나의 요청 헤더 아래 저장한다")
     void purchaseUnitProducts_multipleLines_savesOneHeaderWithLines() {
@@ -454,7 +523,7 @@ class CeremonyServiceTest {
         Page<Ceremony> page = new PageImpl<>(List.of(ceremony), pageable, 1);
 
         given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(organization));
-        given(ceremonyRepository.search(ORGANIZATION_ID, null, null, null, null, pageable)).willReturn(page);
+        given(ceremonyRepository.search(ORGANIZATION_ID, null, null, null, null, null, pageable)).willReturn(page);
 
         // when
         Page<CeremonyDto.Response.CeremonySummary> result =

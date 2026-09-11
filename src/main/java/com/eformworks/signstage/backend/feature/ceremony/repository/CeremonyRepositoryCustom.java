@@ -19,9 +19,12 @@ public interface CeremonyRepositoryCustom {
      * 목록(signstage-docs business/discount-management-screen-separation-review.md)이 쓴다.
      * {@code hasFinalDiscount}가 null이 아니면 행사 건별 재량 할인(finalDiscount)이 설정돼(값이
      * 0이 아닌) 있는지 여부로 좁힌다 — 같은 문서 6장 결정 #1(목록 기본 필터).
+     * {@code billingPlanId}가 null이 아니면 이 과금 플랜을 쓰는 행사로만 좁힌다 — 조직 횡단
+     * 조회다(signstage-docs business/ceremony-plan-price-snapshot-consistency-review.md
+     * 3.5절, 2026-09-11) — 카탈로그 관리자가 "이 플랜을 쓰는 행사" 목록을 보는 데 쓴다.
      */
     Page<Ceremony> search(
             Long organizationId, String title, CeremonyStatus status, Long assignedUserId,
-            Boolean hasFinalDiscount, Pageable pageable
+            Boolean hasFinalDiscount, Long billingPlanId, Pageable pageable
     );
 }

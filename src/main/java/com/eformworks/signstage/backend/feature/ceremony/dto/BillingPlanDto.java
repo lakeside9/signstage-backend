@@ -245,6 +245,25 @@ public final class BillingPlanDto {
             private final LocalDateTime createdAt;
         }
 
+        /**
+         * "이 플랜을 쓰는 행사" 조직 횡단 목록 한 행(signstage-docs
+         * business/ceremony-plan-price-snapshot-consistency-review.md 3.5절, 2026-09-11) —
+         * 플랜 상세의 "사용 건수" 옆 링크가 연다. 조직명을 같이 보여줘야 해서
+         * {@code CeremonyDto.Response.CeremonySummary}가 아니라 전용 DTO를 쓴다(행사 건별
+         * 재량 할인 조직 횡단 목록과 같은 패턴).
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class CeremonyUsingPlanSummary {
+
+            private final Long ceremonyId;
+            private final Long organizationId;
+            private final String organizationName;
+            private final String ceremonyTitle;
+            private final String status;
+            private final LocalDateTime createdAt;
+        }
+
         /** 할인 기간 목록/상세 화면 한 행. */
         @Getter
         @AllArgsConstructor

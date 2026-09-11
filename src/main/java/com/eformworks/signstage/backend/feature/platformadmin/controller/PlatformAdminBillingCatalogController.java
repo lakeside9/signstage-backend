@@ -3,16 +3,21 @@ package com.eformworks.signstage.backend.feature.platformadmin.controller;
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
+import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.BillingPlanDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.BillingPlanService;
+import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyService;
 import com.eformworks.signstage.backend.feature.ceremony.service.UnitProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,6 +43,7 @@ public class PlatformAdminBillingCatalogController {
 
     private final BillingPlanService billingPlanService;
     private final UnitProductService unitProductService;
+    private final CeremonyService ceremonyService;
     private final TraceIdProvider traceIdProvider;
 
     @Operation(summary = "과금 플랜 등록", description = "PLATFORM_OPS 이상만 호출할 수 있다.")
@@ -84,6 +90,22 @@ public class PlatformAdminBillingCatalogController {
     @GetMapping("/billing-plans/{id}/history")
     public ApiResponse<List<BillingPlanDto.Response.BillingPlanHistorySummary>> findPlanHistory(@PathVariable Long id) {
         return ApiResponse.success(billingPlanService.findPlanHistory(id), traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "이 플랜을 쓰는 행사 조직 횡단 목록 조회",
+            description = "조직 멤버십과 무관하게 이 플랜을 쓰는 행사 전체를 본다. 카탈로그 관리 화면(항상 \"오늘\" 가격만 "
+                    + "보여준다)만으로는 특정 행사가 실제로 어떤 값에 고정돼 있는지 알 수 없다는 문제의 발견성을 개선한다 "
+                    + "(signstage-docs business/ceremony-plan-price-snapshot-consistency-review.md 3.5절). 조회 전용이라 "
+                    + "등급 검사 없다."
+    )
+    @GetMapping("/billing-plans/{id}/ceremonies")
+    public ApiResponse<PageResponse<BillingPlanDto.Response.CeremonyUsingPlanSummary>> findCeremoniesByPlan(
+            @PathVariable Long id,
+            @PageableDefault(size = 20) Pageable pageable
+    ) {
+        Page<BillingPlanDto.Response.CeremonyUsingPlanSummary> response = ceremonyService.findCeremoniesByBillingPlan(id, pageable);
+        return ApiResponse.success(PageResponse.from(response), traceIdProvider.getTraceId());
     }
 
     @Operation(summary = "과금 플랜 판매가격 기간 추가", description = "PLATFORM_OPS 이상만 호출할 수 있다. 기간이 다른 기간과 겹치면 거부된다.")

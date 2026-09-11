@@ -26,7 +26,7 @@ public class CeremonyRepositoryImpl implements CeremonyRepositoryCustom {
     @Override
     public Page<Ceremony> search(
             Long organizationId, String title, CeremonyStatus status, Long assignedUserId,
-            Boolean hasFinalDiscount, Pageable pageable
+            Boolean hasFinalDiscount, Long billingPlanId, Pageable pageable
     ) {
         // ceremony_assignments에 (ceremony_id, user_id) 유니크 제약이 있어(uq_ca_ceremony_user),
         // assignedUserId로 좁혀도 한 Ceremony당 조인 결과가 많아야 1행이다 — distinct 불필요.
@@ -35,6 +35,7 @@ public class CeremonyRepositoryImpl implements CeremonyRepositoryCustom {
                 titleContains(title),
                 statusEq(status),
                 hasFinalDiscountEq(hasFinalDiscount),
+                billingPlanIdEq(billingPlanId),
         };
 
         List<Ceremony> content = joinAssignmentIfNeeded(queryFactory.selectFrom(CEREMONY), assignedUserId)
@@ -73,6 +74,10 @@ public class CeremonyRepositoryImpl implements CeremonyRepositoryCustom {
 
     private BooleanExpression statusEq(CeremonyStatus status) {
         return status == null ? null : CEREMONY.status.eq(status);
+    }
+
+    private BooleanExpression billingPlanIdEq(Long billingPlanId) {
+        return billingPlanId == null ? null : CEREMONY.billingPlan.id.eq(billingPlanId);
     }
 
     private BooleanExpression hasFinalDiscountEq(Boolean hasFinalDiscount) {

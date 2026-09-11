@@ -5,6 +5,7 @@ import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
+import com.eformworks.signstage.backend.feature.ceremony.dto.BillingPlanDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
@@ -179,7 +180,7 @@ public class CeremonyService {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         Long assignedUserId = actingMember.getRole() == MemberRole.OPERATOR ? currentUserId : null;
 
-        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, assignedUserId, null, pageable);
+        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, assignedUserId, null, null, pageable);
         return ceremonies.map(this::toSummary);
     }
 
@@ -198,7 +199,7 @@ public class CeremonyService {
             Pageable pageable
     ) {
         findOrganizationOrThrow(organizationId);
-        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, null, null, pageable);
+        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, null, null, null, pageable);
         return ceremonies.map(this::toSummary);
     }
 
@@ -221,7 +222,7 @@ public class CeremonyService {
     public Page<PlatformAdminCeremonyDiscountDto.Response.CeremonyDiscountSummary> findCeremonyDiscountsAcrossOrganizations(
             Long organizationId, CeremonyStatus status, Boolean hasFinalDiscount, Pageable pageable
     ) {
-        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, null, status, null, hasFinalDiscount, pageable);
+        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, null, status, null, hasFinalDiscount, null, pageable);
         return ceremonies.map(ceremony -> new PlatformAdminCeremonyDiscountDto.Response.CeremonyDiscountSummary(
                 ceremony.getId(),
                 ceremony.getOrganization().getId(),
@@ -230,6 +231,26 @@ public class CeremonyService {
                 ceremony.getStatus().name(),
                 ceremony.getFinalDiscount().getDiscountType().name(),
                 ceremony.getFinalDiscount().getDiscountValue(),
+                ceremony.getCreatedAt()
+        ));
+    }
+
+    /**
+     * "이 플랜을 쓰는 행사" 조직 횡단 목록(signstage-docs
+     * business/ceremony-plan-price-snapshot-consistency-review.md 3.5절, 2026-09-11) —
+     * {@link #findCeremonyDiscountsAcrossOrganizations}와 같은 패턴이다. 카탈로그 관리자
+     * 화면(항상 "오늘" 가격만 보여준다)만으로는 특정 행사가 실제로 어떤 값에 고정돼 있는지
+     * 알 수 없다는 문제의 발견성 개선용 — 각 행에서 해당 행사의 "행사 이력" 화면(플랜 선택
+     * 이력)으로 이어간다.
+     */
+    public Page<BillingPlanDto.Response.CeremonyUsingPlanSummary> findCeremoniesByBillingPlan(Long billingPlanId, Pageable pageable) {
+        Page<Ceremony> ceremonies = ceremonyRepository.search(null, null, null, null, null, billingPlanId, pageable);
+        return ceremonies.map(ceremony -> new BillingPlanDto.Response.CeremonyUsingPlanSummary(
+                ceremony.getId(),
+                ceremony.getOrganization().getId(),
+                ceremony.getOrganization().getName(),
+                ceremony.getTitle(),
+                ceremony.getStatus().name(),
                 ceremony.getCreatedAt()
         ));
     }
@@ -370,6 +391,13 @@ public class CeremonyService {
      * 한 번도 선택하지 않았으면(2026-09-10, 생성 시 플랜 선택을 미룰 수 있게 되면서 가능해짐 —
      * signstage-docs business/ceremony-registration-flow-and-billing-tab-separation-review.md)
      * 확정할 대상 자체가 없으므로 거부한다.
+     *
+     * <p>확정 직전에 오늘 날짜로 스냅샷을 한 번 더 찍는다(2026-09-11 사용자 요청 —
+     * signstage-docs business/ceremony-plan-price-snapshot-consistency-review.md 3.2절).
+     * DRAFT 동안 "플랫폼 이용료"는 매번 라이브로 재계산되는데, 정작 실제로 고정되는 값은
+     * 마지막 플랜 선택/변경 시점의 스냅샷이라 그 사이 카탈로그 가격이 바뀌면 확정 직전 화면
+     * 숫자와 실제 청구 숫자가 달라질 수 있었다 — 확정할 때마다 재스냅샷해서 "확정 버튼을
+     * 누르는 순간 보이던 값 = 실제로 고정되는 값"을 보장한다.
      */
     @Transactional
     public CeremonyDto.Response.CeremonySummary confirmPlan(
@@ -384,6 +412,11 @@ public class CeremonyService {
         if (ceremony.getBillingPlan() == null) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
         }
+
+        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
+        BillingPlanDiscountPeriod planPeriod = resolveSellablePlanPeriod(ceremony.getBillingPlan(), asOfDate);
+        checkCurrencyMatches(ceremony.getCurrencyCode(), resolvePlanCurrency(ceremony.getBillingPlan(), asOfDate));
+        recordPlanHistory(ceremony, ceremony.getBillingPlan(), planPeriod, asOfDate);
 
         ceremony.confirmPlan();
         organizationSubscriptionService.consumeForCeremonyConfirmation(ceremony);
@@ -1026,11 +1059,19 @@ public class CeremonyService {
     }
 
     /**
-     * Ceremony 생성 시(최초 플랜 선택)와 {@link #changePlan}에서 매 변경마다 호출한다(3.4절).
-     * 그 순간 플랜이 포함하던 단위 상품 구성(포함 수량 × 그 순간 단가)을
+     * Ceremony 생성 시(최초 플랜 선택)·{@link #changePlan}·{@link #confirmPlan}에서 매번
+     * 호출한다(3.4절). 그 순간 플랜이 포함하던 단위 상품 구성(포함 수량 × 그 순간 단가)을
      * {@link CeremonyPlanHistoryUnitProduct}로 함께 스냅샷한다 — 카탈로그 관리자가 나중에
      * 플랜의 구성/가격을 바꿔도 이 Ceremony는 영향받지 않아야 한다(signstage-docs
      * business/billing-catalog-unit-product-model-redesign-review.md 5장).
+     *
+     * <p>포함된 단위 상품 중 그 날짜에 유효한 가격 기간이 하나도 없으면(카탈로그 관리자가
+     * 가격 기간 사이에 공백을 남긴 경우) 예외를 던져 플랜 선택/변경/확정 자체를 막는다
+     * (2026-09-11 사용자 요청 — signstage-docs
+     * business/ceremony-plan-price-snapshot-consistency-review.md 3.1절). 추가구매 경로
+     * ({@link #resolveSellableUnitProductPeriod})와 같은 기준이다 — 예전엔 이 경로만 조용히
+     * 0원으로 스냅샷해서, 관리자가 실수로 가격 공백을 남기면 그 날짜에 플랜을 선택한
+     * 파트너가 에러 없이 무료로 한도를 받는 위험이 있었다.
      */
     private void recordPlanHistory(Ceremony ceremony, BillingPlan plan, BillingPlanDiscountPeriod planPeriod, LocalDate asOfDate) {
         // 조직×플랜 할인 오버라이드가 있으면 카탈로그 값 대신 이 값을 스냅샷한다
@@ -1055,15 +1096,16 @@ public class CeremonyService {
         );
         billingPlanUnitProductRepository.findAllByBillingPlanId(plan.getId()).forEach(source -> {
             UnitProduct unitProduct = source.getUnitProduct();
-            Optional<UnitProductPricePeriod> effective = unitProductPricePeriodRepository.findEffective(unitProduct.getId(), asOfDate);
+            UnitProductPricePeriod effective = unitProductPricePeriodRepository.findEffective(unitProduct.getId(), asOfDate)
+                    .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_INACTIVE));
             ceremonyPlanHistoryUnitProductRepository.save(
                     CeremonyPlanHistoryUnitProduct.builder()
                             .ceremonyPlanHistory(history)
                             .unitProduct(unitProduct)
                             .includedQuantity(source.getIncludedQuantity())
-                            .currencyCode(effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null))
-                            .snapshotSalePrice(effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(BigDecimal.ZERO))
-                            .snapshotTaxCode(effective.map(p -> p.getPriceInfo().getTaxCode()).orElse("KR_VAT_STANDARD"))
+                            .currencyCode(effective.getPriceInfo().getCurrencyCode())
+                            .snapshotSalePrice(effective.getPriceInfo().getSalePrice())
+                            .snapshotTaxCode(effective.getPriceInfo().getTaxCode())
                             .build()
             );
         });
