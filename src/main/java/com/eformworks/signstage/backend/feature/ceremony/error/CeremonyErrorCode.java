@@ -54,6 +54,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "이미 구매를 요청했거나 승인된 단위 상품입니다."
     ),
+    UNIT_PRODUCT_TOGGLE_QUANTITY_INVALID(
+            "CEREMONY_UNIT_PRODUCT_TOGGLE_QUANTITY_INVALID",
+            HttpStatus.CONFLICT,
+            "이 단위 상품은 수량이 아니라 행사당 1회만 담을 수 있습니다."
+    ),
     UNIT_PRODUCT_GROUP_CONFLICT(
             "CEREMONY_UNIT_PRODUCT_GROUP_CONFLICT",
             HttpStatus.CONFLICT,

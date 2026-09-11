@@ -105,6 +105,7 @@ public class UnitProductService {
         UnitProduct unitProduct = UnitProduct.builder()
                 .type(type)
                 .name(request.getName())
+                .description(request.getDescription())
                 .category(parseCategory(request.getCategory()))
                 .exclusivityGroup(request.getExclusivityGroup())
                 .build();
@@ -152,7 +153,7 @@ public class UnitProductService {
         String detail = "unitProductId=" + unitProductId
                 + ", name: " + unitProduct.getName() + " -> " + request.getName();
 
-        unitProduct.updateInfo(request.getName(), parseCategory(request.getCategory()), request.getExclusivityGroup());
+        unitProduct.updateInfo(request.getName(), request.getDescription(), parseCategory(request.getCategory()), request.getExclusivityGroup());
         recordProductHistory(unitProduct);
 
         // null이면(생략) 기존 구성을 그대로 두고, 값이 오면(빈 배열 포함) 통째로 교체한다
@@ -530,6 +531,7 @@ public class UnitProductService {
                 unitProduct.getId(),
                 unitProduct.getType().name(),
                 unitProduct.getName(),
+                unitProduct.getDescription(),
                 unitProduct.getCategory().name(),
                 unitProduct.getExclusivityGroup(),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
@@ -555,6 +557,7 @@ public class UnitProductService {
                 history.getId(),
                 history.getType().name(),
                 history.getName(),
+                history.getDescription(),
                 history.getCategory().name(),
                 history.getExclusivityGroup(),
                 history.getCreatedBy(),

@@ -47,6 +47,9 @@ public final class UnitProductDto {
             @NotBlank
             private String name;
 
+            /** 이 상품이 무엇인지 설명하는 자유 텍스트. 생략하면(null) 설명 없음(2026-09-11 사용자 요청). */
+            private String description;
+
             /** 상위 분류(ESSENTIAL/EQUIPMENT/PERSONNEL/APPLICATION). */
             @NotBlank
             private String category;
@@ -101,6 +104,9 @@ public final class UnitProductDto {
 
             @NotBlank
             private String name;
+
+            /** 이 상품이 무엇인지 설명하는 자유 텍스트. null이면 설명 없음(2026-09-11 사용자 요청). */
+            private String description;
 
             @NotBlank
             private String category;
@@ -185,6 +191,7 @@ public final class UnitProductDto {
             private final Long id;
             private final String type;
             private final String name;
+            private final String description;
             private final String category;
             private final String exclusivityGroup;
             private final String currencyCode;
@@ -212,7 +219,7 @@ public final class UnitProductDto {
             private final boolean canDelete;
         }
 
-        /** 단위 상품 이름/분류/배타그룹 변경 이력 한 행(가격/사용여부는 판매가격 기간 이력 참고). */
+        /** 단위 상품 이름/설명/분류/배타그룹 변경 이력 한 행(가격/사용여부는 판매가격 기간 이력 참고). */
         @Getter
         @AllArgsConstructor
         public static class UnitProductHistorySummary {
@@ -220,6 +227,7 @@ public final class UnitProductDto {
             private final Long id;
             private final String type;
             private final String name;
+            private final String description;
             private final String category;
             private final String exclusivityGroup;
             private final Long createdBy;

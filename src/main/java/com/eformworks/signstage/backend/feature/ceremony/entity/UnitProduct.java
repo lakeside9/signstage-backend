@@ -48,6 +48,14 @@ public class UnitProduct extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
+    /**
+     * 설명 — 이 상품이 무엇인지(특히 이벤트 효과 묶음처럼 이름만으로는 무엇이 포함되는지
+     * 알기 어려운 종류) 관리자가 적어두는 자유 텍스트. nullable(2026-09-11 사용자 요청) —
+     * 모든 상품이 설명을 필요로 하지는 않는다.
+     */
+    @Column(length = 500)
+    private String description;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UnitProductCategory category;
@@ -72,9 +80,10 @@ public class UnitProduct extends BaseEntity {
     private Integer displayOrder = 0;
 
     @Builder
-    private UnitProduct(UnitProductType type, String name, UnitProductCategory category, String exclusivityGroup) {
+    private UnitProduct(UnitProductType type, String name, String description, UnitProductCategory category, String exclusivityGroup) {
         this.type = type;
         this.name = name;
+        this.description = description;
         this.category = category;
         this.exclusivityGroup = exclusivityGroup;
     }
@@ -84,8 +93,9 @@ public class UnitProduct extends BaseEntity {
      * 생성 후 불변이고 여기서 바꾸지 않는다(바꾸려면 새 상품을 만든다). 가격/사용여부는 여기서
      * 다루지 않는다 — {@link UnitProductPricePeriod} 기간 단위 CRUD로 관리한다.
      */
-    public void updateInfo(String name, UnitProductCategory category, String exclusivityGroup) {
+    public void updateInfo(String name, String description, UnitProductCategory category, String exclusivityGroup) {
         this.name = name;
+        this.description = description;
         this.category = category;
         this.exclusivityGroup = exclusivityGroup;
     }

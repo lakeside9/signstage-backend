@@ -491,17 +491,21 @@ public class CeremonyService {
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
         checkPurchasable(ceremony, unitProduct);
 
-        ceremonyUnitProductCartLineRepository.findByCeremonyIdAndUnitProductId(ceremonyId, unitProduct.getId())
-                .ifPresentOrElse(
-                        existing -> existing.addQuantity(request.getQuantity()),
-                        () -> ceremonyUnitProductCartLineRepository.save(
-                                CeremonyUnitProductCartLine.builder()
-                                        .ceremony(ceremony)
-                                        .unitProduct(unitProduct)
-                                        .quantity(request.getQuantity())
-                                        .build()
-                        )
-                );
+        Optional<CeremonyUnitProductCartLine> existingLine =
+                ceremonyUnitProductCartLineRepository.findByCeremonyIdAndUnitProductId(ceremonyId, unitProduct.getId());
+        int resultingQuantity = existingLine.map(CeremonyUnitProductCartLine::getQuantity).orElse(0) + request.getQuantity();
+        checkToggleQuantity(ceremony, unitProduct, resultingQuantity);
+
+        existingLine.ifPresentOrElse(
+                existing -> existing.addQuantity(request.getQuantity()),
+                () -> ceremonyUnitProductCartLineRepository.save(
+                        CeremonyUnitProductCartLine.builder()
+                                .ceremony(ceremony)
+                                .unitProduct(unitProduct)
+                                .quantity(request.getQuantity())
+                                .build()
+                )
+        );
 
         return retrieveCart(organizationId, ceremonyId, currentUserId);
     }
@@ -519,6 +523,7 @@ public class CeremonyService {
         CeremonyUnitProductCartLine line = ceremonyUnitProductCartLineRepository
                 .findByCeremonyIdAndUnitProductId(ceremonyId, unitProductId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CART_LINE_NOT_FOUND));
+        checkToggleQuantity(ceremony, line.getUnitProduct(), request.getQuantity());
         line.changeQuantity(request.getQuantity());
 
         return retrieveCart(organizationId, ceremonyId, currentUserId);
@@ -592,18 +597,10 @@ public class CeremonyService {
             UnitProductPricePeriod period = resolveSellableUnitProductPeriod(unitProduct, asOfDate);
             checkCurrencyMatches(ceremony.getCurrencyCode(), period.getPriceInfo().getCurrencyCode());
 
-            if (unitProduct.getType().isToggle()) {
-                if (cartLine.getQuantity() > 1) {
-                    throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
-                }
-                boolean alreadyRequested = ceremonyUnitProductPurchaseLineRepository
-                        .existsByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(
-                                ceremonyId, unitProduct.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
-                        );
-                if (alreadyRequested) {
-                    throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_ALREADY_PURCHASED);
-                }
-            }
+            // 담을 때/수량 수정 때 이미 검사하지만(addToCart/updateCartLine), 그 사이 다른 요청으로
+            // 이미 구매됐을 수 있어 구매 확정 시점에 다시 한번 확인한다(checkPurchasable 재검증과
+            // 같은 이유).
+            checkToggleQuantity(ceremony, unitProduct, cartLine.getQuantity());
 
             lines.add(ceremonyUnitProductPurchaseLineRepository.save(
                     CeremonyUnitProductPurchaseLine.builder()
@@ -639,6 +636,33 @@ public class CeremonyService {
         Set<Long> purchasableIds = new HashSet<>(retrievePurchasableUnitProductIds(ceremony));
         if (!purchasableIds.contains(unitProduct.getId())) {
             throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_AVAILABLE_FOR_PLAN);
+        }
+    }
+
+    /**
+     * 토글형({@link UnitProductType#isToggle()}, 지금은 EVENT_EFFECT_BUNDLE만) 단위 상품은
+     * 수량으로 여러 개를 담는 게 아니라 행사당 1회만 "가졌다/안 가졌다"로 다룬다(2026-09-11
+     * 사용자 지적 — "이벤트 효과 묶음의 경우 행사에 한번 구매하면 됩니다. 수량으로 추가할
+     * 내용이 아닙니다"). {@code purchaseUnitProducts}(구매 확정)만 이 검사를 하던 것을
+     * {@code addToCart}/{@code updateCartLine}(장바구니 담기/수량 수정)까지 넓혔다 — 전에는
+     * 장바구니 단계에선 수량 2 이상으로 담아도 막지 않다가 마지막 구매 확정 시점에야
+     * 거부돼서, 사용자가 장바구니를 다 채운 뒤에야 실패를 알게 됐다.
+     *
+     * @param resultingQuantity 이 검사 뒤에 실제로 반영될 수량(추가/수정 전이 아니라 후 값)
+     */
+    private void checkToggleQuantity(Ceremony ceremony, UnitProduct unitProduct, int resultingQuantity) {
+        if (!unitProduct.getType().isToggle()) {
+            return;
+        }
+        if (resultingQuantity > 1) {
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_TOGGLE_QUANTITY_INVALID);
+        }
+        boolean alreadyRequested = ceremonyUnitProductPurchaseLineRepository
+                .existsByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(
+                        ceremony.getId(), unitProduct.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
+                );
+        if (alreadyRequested) {
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_ALREADY_PURCHASED);
         }
     }
 
@@ -711,6 +735,7 @@ public class CeremonyService {
                             unitProduct.getId(),
                             unitProduct.getType().name(),
                             line != null ? line.getPurchasedName() : unitProduct.getName(),
+                            unitProduct.getDescription(),
                             unitProduct.getCategory().name(),
                             unitProduct.getExclusivityGroup(),
                             line != null ? line.getCurrencyCode() : effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
@@ -1592,6 +1617,7 @@ public class CeremonyService {
                 unitProduct.getId(),
                 unitProduct.getType().name(),
                 unitProduct.getName(),
+                unitProduct.getDescription(),
                 unitProduct.getCategory().name(),
                 unitProduct.getExclusivityGroup(),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),

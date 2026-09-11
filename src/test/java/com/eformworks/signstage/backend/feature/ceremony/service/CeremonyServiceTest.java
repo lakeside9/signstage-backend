@@ -406,7 +406,7 @@ class CeremonyServiceTest {
         assertThatThrownBy(() -> ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, 10L, CURRENT_USER_ID))
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
-                .isEqualTo(CommonErrorCode.INVALID_REQUEST);
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_TOGGLE_QUANTITY_INVALID);
         verify(ceremonyUnitProductPurchaseLineRepository, never()).save(any());
         verify(ceremonyUnitProductCartLineRepository, never()).deleteAllByCeremonyId(any());
     }
@@ -471,6 +471,81 @@ class CeremonyServiceTest {
 
         assertThat(existing.getQuantity()).isEqualTo(7);
         verify(ceremonyUnitProductCartLineRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("장바구니 담기 — 이벤트 효과 묶음(토글형)을 수량 2 이상으로 담으려 하면 거부된다")
+    void addToCart_eventEffectBundleQuantityOverOne_rejected() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        ceremony.confirmPlan();
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        UnitProduct bundle = UnitProduct.builder()
+                .type(UnitProductType.EVENT_EFFECT_BUNDLE).name("3종 묶음").category(UnitProductCategory.APPLICATION).build();
+        ReflectionTestUtils.setField(bundle, "id", 301L);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(unitProductRepository.findById(301L)).willReturn(Optional.of(bundle));
+
+        assertThatThrownBy(() -> ceremonyService.addToCart(ORGANIZATION_ID, 10L, CURRENT_USER_ID, new CeremonyDto.Request.AddToCart(301L, 2)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_TOGGLE_QUANTITY_INVALID);
+        verify(ceremonyUnitProductCartLineRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("장바구니 담기 — 이미 PENDING/APPROVED로 구매된 이벤트 효과 묶음은 다시 담을 수 없다")
+    void addToCart_eventEffectBundleAlreadyPurchased_rejected() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        ceremony.confirmPlan();
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        UnitProduct bundle = UnitProduct.builder()
+                .type(UnitProductType.EVENT_EFFECT_BUNDLE).name("3종 묶음").category(UnitProductCategory.APPLICATION).build();
+        ReflectionTestUtils.setField(bundle, "id", 301L);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(unitProductRepository.findById(301L)).willReturn(Optional.of(bundle));
+        given(ceremonyUnitProductPurchaseLineRepository
+                .existsByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(10L, 301L, List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)))
+                .willReturn(true);
+
+        assertThatThrownBy(() -> ceremonyService.addToCart(ORGANIZATION_ID, 10L, CURRENT_USER_ID, new CeremonyDto.Request.AddToCart(301L, 1)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_ALREADY_PURCHASED);
+        verify(ceremonyUnitProductCartLineRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("장바구니 수량 수정 — 이벤트 효과 묶음(토글형)을 2 이상으로 고치려 하면 거부된다")
+    void updateCartLine_eventEffectBundleQuantityOverOne_rejected() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        UnitProduct bundle = UnitProduct.builder()
+                .type(UnitProductType.EVENT_EFFECT_BUNDLE).name("3종 묶음").category(UnitProductCategory.APPLICATION).build();
+        ReflectionTestUtils.setField(bundle, "id", 301L);
+        CeremonyUnitProductCartLine existing = cartLine(ceremony, bundle, 1);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(ceremonyUnitProductCartLineRepository.findByCeremonyIdAndUnitProductId(10L, 301L))
+                .willReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> ceremonyService.updateCartLine(
+                ORGANIZATION_ID, 10L, CURRENT_USER_ID, 301L, new CeremonyDto.Request.UpdateCartLine(2)
+        ))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_TOGGLE_QUANTITY_INVALID);
+        assertThat(existing.getQuantity()).isEqualTo(1);
     }
 
     @Test

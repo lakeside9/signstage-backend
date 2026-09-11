@@ -215,7 +215,7 @@ class UnitProductServiceTest {
                 .willReturn(java.util.List.of(definition1, definition2));
 
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
-                "EVENT_EFFECT_BUNDLE", "3종 묶음", "APPLICATION", null, "KRW",
+                "EVENT_EFFECT_BUNDLE", "3종 묶음", null, "APPLICATION", null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
                 null, null, java.util.List.of(10L, 20L)
         );
@@ -229,7 +229,7 @@ class UnitProductServiceTest {
     @DisplayName("생성 — EVENT_EFFECT_BUNDLE이 아닌데 effectDefinitionIds가 있으면 거부한다")
     void createUnitProduct_rejectsEffectDefinitionIdsForNonBundleType() {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
-                "SIGNERS", "서명자", "ESSENTIAL", null, "KRW",
+                "SIGNERS", "서명자", null, "ESSENTIAL", null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
                 null, null, java.util.List.of(10L)
         );
@@ -249,7 +249,7 @@ class UnitProductServiceTest {
                 .willReturn(java.util.List.of());
 
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
-                "EVENT_EFFECT_BUNDLE", "3종 묶음", "APPLICATION", null, "KRW",
+                "EVENT_EFFECT_BUNDLE", "3종 묶음", null, "APPLICATION", null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
                 null, null, java.util.List.of(10L)
         );
@@ -261,6 +261,35 @@ class UnitProductServiceTest {
     }
 
     @Test
+    @DisplayName("생성 — 설명을 함께 저장한다")
+    void createUnitProduct_savesDescription() {
+        UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
+                "SIGNERS", "서명자", "행사장 서명자 한도를 늘립니다.", "ESSENTIAL", null, "KRW",
+                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
+                null, null, null
+        );
+
+        UnitProductDto.Response.UnitProductSummary result = unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request);
+
+        assertThat(result.getDescription()).isEqualTo("행사장 서명자 한도를 늘립니다.");
+    }
+
+    @Test
+    @DisplayName("수정 — 설명을 갱신한다")
+    void updateUnitProduct_updatesDescription() {
+        UnitProduct product = unitProduct();
+        given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(product));
+
+        UnitProductDto.Request.UpdateUnitProduct request =
+                new UnitProductDto.Request.UpdateUnitProduct("서명자", "새 설명", "ESSENTIAL", null, null);
+
+        UnitProductDto.Response.UnitProductSummary result =
+                unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
+
+        assertThat(result.getDescription()).isEqualTo("새 설명");
+    }
+
+    @Test
     @DisplayName("수정 — effectDefinitionIds를 생략하면(null) 기존 구성을 건드리지 않는다")
     void updateUnitProduct_keepsExistingWhenEffectDefinitionIdsOmitted() {
         UnitProduct bundle = UnitProduct.builder()
@@ -269,7 +298,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(bundle));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", "APPLICATION", null, null);
+                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null);
 
         unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
 
@@ -288,7 +317,7 @@ class UnitProductServiceTest {
                 .willReturn(java.util.List.of(effectDefinition(10L)));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", "APPLICATION", null, java.util.List.of(10L));
+                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, java.util.List.of(10L));
 
         unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
 
@@ -307,7 +336,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(bundle));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", "APPLICATION", null, java.util.List.of());
+                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, java.util.List.of());
 
         unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
 
