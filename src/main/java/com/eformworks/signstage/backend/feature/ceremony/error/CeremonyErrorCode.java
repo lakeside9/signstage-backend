@@ -483,7 +483,7 @@ public enum CeremonyErrorCode implements ErrorCode {
     CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL(
             "CEREMONY_CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL",
             HttpStatus.BAD_REQUEST,
-            "장비/인력(태블릿·현장지원 등) 카탈로그에 있는 상품만 고객 정산 줄로 담을 수 있습니다."
+            "장비/인력(태블릿·현장지원 등) 카탈로그에 있는 상품만 고객 견적 줄로 담을 수 있습니다."
     );
 
     private final String code;

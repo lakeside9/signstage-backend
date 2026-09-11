@@ -1153,7 +1153,7 @@ public class CeremonyService {
     /**
      * {@link #calculateEstimatedTotal}("플랫폼 이용료", 옛 "예상 청구 금액")과
      * {@link com.eformworks.signstage.backend.feature.ceremony.service.CustomerQuoteService
-     * #generateCustomerQuote}(고객 정산의 시스템 사용료 원가 산정)이 공유하는 계산 본체다 —
+     * #generateCustomerQuote}(고객 견적의 시스템 사용료 원가 산정)이 공유하는 계산 본체다 —
      * 같은 계산이 두 곳에서 갈라지면 서로 다른 숫자를 보여주는 사고가 나므로 소스를 하나로
      * 둔다. 옛 "확정 견적"({@code BillingQuoteService})도 이 메서드를 썼지만, 자가-체크아웃
      * 도입으로 그 기능 자체가 완전히 제거됐다(signstage-docs

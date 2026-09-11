@@ -40,7 +40,7 @@ public final class CustomerQuoteDto {
         }
 
         /**
-         * 장비/인력(EQUIPMENT/PERSONNEL) 고객 정산 줄 하나 — 파트너가 카탈로그에서 직접 고른
+         * 장비/인력(EQUIPMENT/PERSONNEL) 고객 견적 줄 하나 — 파트너가 카탈로그에서 직접 고른
          * 품목·수량·고객 단가(signstage-docs
          * business/unit-product-purchase-self-checkout-review.md 8.5절 결정, 2026-09-11).
          * 승인된 구매 기록에서 역산하던 옛 방식(파생 목록에 가격만 채워 넣는 방식)을 완전히
