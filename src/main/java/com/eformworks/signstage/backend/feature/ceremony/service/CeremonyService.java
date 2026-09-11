@@ -337,6 +337,31 @@ public class CeremonyService {
     }
 
     /**
+     * 플랜 선택을 해제한다 — 확정 전(DRAFT)에만 가능하다. 사용자 요청(2026-09-11) — 행사 수정
+     * 화면의 "플랫폼 이용료" 탭에서 플랜을 고른 뒤 확정 전에 되돌릴 방법이 없었다. 이력
+     * ({@code CeremonyPlanHistory})은 남기지 않는다 — 스냅샷은 확정 이후를 위한 것이고, DRAFT는
+     * {@link #findLatestPlanHistoryForSnapshot}이 어차피 무시하는 상태라 남길 실익이 없다.
+     */
+    @Transactional
+    public CeremonyDto.Response.CeremonySummary clearPlan(
+            Long organizationId,
+            Long ceremonyId,
+            Long currentUserId
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        checkCeremonyPlanChangeable(ceremony);
+        if (ceremony.getBillingPlan() == null) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
+        }
+
+        ceremony.changePlan(null);
+
+        return toSummary(ceremony);
+    }
+
+    /**
      * "플랜 확정" — DRAFT → IN_PROGRESS로 단방향 전이한다. 이후 플랜은 고정되고, 서명자/문서/
      * 하위 행사 등록이 열린다(3.1절). 확정을 취소하는 API는 두지 않는다(4.4절). 플랜을 아직
      * 한 번도 선택하지 않았으면(2026-09-10, 생성 시 플랜 선택을 미룰 수 있게 되면서 가능해짐 —

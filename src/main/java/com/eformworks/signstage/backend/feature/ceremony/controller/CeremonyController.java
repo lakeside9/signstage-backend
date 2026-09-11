@@ -150,6 +150,21 @@ public class CeremonyController {
     }
 
     @Operation(
+            summary = "플랜 선택 해제",
+            description = "확정되기 전(DRAFT)에만 가능하다. 선택된 플랜이 없으면 실패한다. 변경 이력은 남기지 않는다."
+    )
+    @DeleteMapping("/{ceremonyId}/plan")
+    public ApiResponse<CeremonyDto.Response.CeremonySummary> clearPlan(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        CeremonyDto.Response.CeremonySummary response =
+                ceremonyService.clearPlan(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
             summary = "플랜 확정",
             description = "DRAFT → IN_PROGRESS로 단방향 전이한다. 확정 후에는 플랜을 바꿀 수 없고, "
                     + "서명자/문서/하위 행사를 등록할 수 있다."
