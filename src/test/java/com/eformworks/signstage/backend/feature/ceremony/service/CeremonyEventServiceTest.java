@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -203,6 +204,11 @@ class CeremonyEventServiceTest {
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
         given(ceremonyService.retrieveApplicableUnitProductIds(ceremony)).willReturn(List.of(201L, 202L));
         given(unitProductRepository.findAllByIdIn(List.of(201L, 202L))).willReturn(List.of(blueHighlight, redHighlight));
+        // checkExclusivityGroups가 CeremonyService의 공유 헬퍼로 옮겨져(2026-09-11) 실제 배타
+        // 그룹 판정 로직은 그쪽 목에 있다 — 여기서는 그 목이 호출되면 실제로 그러듯 예외를
+        // 던지도록 스텁한다.
+        willThrow(new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_GROUP_CONFLICT))
+                .given(ceremonyService).checkExclusivityGroups(List.of(blueHighlight, redHighlight));
 
         CeremonyEventDto.Request.UpdateOptionalFeatures request =
                 new CeremonyEventDto.Request.UpdateOptionalFeatures(List.of(201L, 202L));

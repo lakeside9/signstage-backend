@@ -914,7 +914,7 @@ public class CeremonyService {
                 .collect(Collectors.toMap(User::getId, User::getLoginId));
     }
 
-    // ---- CeremonyEventService와 공유하는 package-private 헬퍼 ----
+    // ---- CeremonyEventService/CustomerQuoteService와 공유하는 package-private 헬퍼 ----
 
     Ceremony findCeremonyInOrganizationOrThrow(Long organizationId, Long ceremonyId) {
         Ceremony ceremony = ceremonyRepository.findById(ceremonyId)
@@ -1016,6 +1016,26 @@ public class CeremonyService {
     }
 
     /**
+     * 배타 그룹 검사 — 같은 {@link UnitProduct#getExclusivityGroup()}을 가진 단위 상품이
+     * 요청에 2개 이상 섞여 있으면 거부한다({@code UNIT_PRODUCT_GROUP_CONFLICT}). 그룹 없음
+     * (null)은 검사 대상에서 뺀다(signstage-docs business/ceremony-billing-options-review.md,
+     * 2026-08-21). 원래 {@link CeremonyEventService}의 "이벤트에 옵션 적용" 경로 전용이었는데,
+     * {@link CustomerQuoteService}의 고객 견적 장비/인력 품목 추가에는 이 검사가 아예 없어
+     * 같은 배타 그룹 상품(예: 현장지원 근/중/원거리)을 한 견적에 나란히 담을 수 있던 문제를
+     * 고치며 공유 헬퍼로 옮겼다(2026-09-11).
+     */
+    void checkExclusivityGroups(List<UnitProduct> unitProducts) {
+        Set<String> seenGroups = new HashSet<>();
+        for (UnitProduct unitProduct : unitProducts) {
+            String group = unitProduct.getExclusivityGroup();
+            if (group == null) continue;
+            if (!seenGroups.add(group)) {
+                throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_GROUP_CONFLICT);
+            }
+        }
+    }
+
+    /**
      * asOfDate 기준 유효한 할인 기간을 찾아 사용여부까지 확인한다 — 기간이 없거나(카탈로그 등록
      * 실수로 공백이 생긴 경우) 있어도 사용 중지(active=false)면 신규 선택/변경 대상에서 제외한다
      * (signstage-docs business/billing-catalog-price-validity-period-review.md 결정,
@@ -1030,8 +1050,13 @@ public class CeremonyService {
         return period;
     }
 
-    /** {@link #resolveSellablePlanPeriod}과 같은 원칙 — 단위 상품. */
-    private UnitProductPricePeriod resolveSellableUnitProductPeriod(UnitProduct unitProduct, LocalDate asOfDate) {
+    /**
+     * {@link #resolveSellablePlanPeriod}과 같은 원칙 — 단위 상품. 기간이 없거나(공백) 있어도
+     * 사용 중지(active=false)면 {@code UNIT_PRODUCT_INACTIVE}. package-private으로 열어
+     * {@link CustomerQuoteService}의 고객 견적 장비/인력 품목 추가에도 재사용한다(2026-09-11) —
+     * 그 전까지는 이 검사가 아예 없어 사용중지 단위 상품도 견적에 그대로 담겼다.
+     */
+    UnitProductPricePeriod resolveSellableUnitProductPeriod(UnitProduct unitProduct, LocalDate asOfDate) {
         UnitProductPricePeriod period = unitProductPricePeriodRepository.findEffective(unitProduct.getId(), asOfDate)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_INACTIVE));
         if (!period.isActive()) {

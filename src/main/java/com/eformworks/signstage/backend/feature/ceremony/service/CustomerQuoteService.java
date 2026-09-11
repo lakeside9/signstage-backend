@@ -29,7 +29,9 @@ import com.eformworks.signstage.backend.feature.organization.repository.MemberRe
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -208,8 +210,14 @@ public class CustomerQuoteService {
                 Long unitProductId, String itemName, Integer quantity, BigDecimal customerUnitAmount, BigDecimal customerAmount
         ) {
         }
-        List<EquipmentPersonnelLineAmount> equipmentPersonnelLineAmounts = new ArrayList<>();
-        BigDecimal equipmentPersonnelTotal = BigDecimal.ZERO;
+        // 1차: 요청 라인을 전부 검증·해석한다 — 사용중지(또는 가격 기간 공백) 단위 상품과
+        // 배타 그룹 충돌 둘 다 이 화면엔 검사가 아예 없어 그대로 담기던 문제였다(2026-09-11
+        // 발견). CeremonyEventService의 "이벤트에 옵션 적용" 경로가 쓰던 검사를
+        // CeremonyService의 공유 헬퍼로 옮겨 여기서도 재사용한다.
+        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
+        record ResolvedLine(CustomerQuoteDto.Request.EquipmentPersonnelLine request, UnitProduct unitProduct) {
+        }
+        List<ResolvedLine> resolvedLines = new ArrayList<>();
         for (CustomerQuoteDto.Request.EquipmentPersonnelLine line : requestedLines) {
             if (line.getCustomerUnitAmount().signum() < 0) {
                 throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_PRICE_INVALID);
@@ -219,6 +227,17 @@ public class CustomerQuoteService {
             if (unitProduct.getCategory().isSystemUsageFee()) {
                 throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL);
             }
+            ceremonyService.resolveSellableUnitProductPeriod(unitProduct, asOfDate);
+            resolvedLines.add(new ResolvedLine(line, unitProduct));
+        }
+        ceremonyService.checkExclusivityGroups(resolvedLines.stream().map(ResolvedLine::unitProduct).toList());
+
+        // 2차: 검증을 통과한 라인만으로 금액을 계산한다.
+        List<EquipmentPersonnelLineAmount> equipmentPersonnelLineAmounts = new ArrayList<>();
+        BigDecimal equipmentPersonnelTotal = BigDecimal.ZERO;
+        for (ResolvedLine resolvedLine : resolvedLines) {
+            CustomerQuoteDto.Request.EquipmentPersonnelLine line = resolvedLine.request();
+            UnitProduct unitProduct = resolvedLine.unitProduct();
             BigDecimal customerAmount = moneyCalculator.normalize(
                     line.getCustomerUnitAmount().multiply(BigDecimal.valueOf(line.getQuantity())), currencyPolicy
             );

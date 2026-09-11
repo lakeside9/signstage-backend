@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -848,5 +849,37 @@ class CeremonyServiceTest {
         List<Long> result = ceremonyService.retrievePurchasableUnitProductIds(ceremony);
 
         assertThat(result).containsExactly(901L);
+    }
+
+    @Test
+    @DisplayName("배타 그룹 검사 — 같은 exclusivityGroup의 단위 상품이 2개 이상이면 거부된다")
+    void checkExclusivityGroups_conflictingGroup_throws() {
+        UnitProduct near = UnitProduct.builder()
+                .type(UnitProductType.ONSITE_SUPPORT).name("근거리 현장지원")
+                .category(UnitProductCategory.PERSONNEL).exclusivityGroup("ONSITE_SUPPORT_TIER").build();
+        UnitProduct far = UnitProduct.builder()
+                .type(UnitProductType.ONSITE_SUPPORT).name("원거리 현장지원")
+                .category(UnitProductCategory.PERSONNEL).exclusivityGroup("ONSITE_SUPPORT_TIER").build();
+
+        assertThatThrownBy(() -> ceremonyService.checkExclusivityGroups(List.of(near, far)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_GROUP_CONFLICT);
+    }
+
+    @Test
+    @DisplayName("배타 그룹 검사 — 그룹이 없거나(null) 서로 다르면 통과한다")
+    void checkExclusivityGroups_noConflict_passes() {
+        UnitProduct near = UnitProduct.builder()
+                .type(UnitProductType.ONSITE_SUPPORT).name("근거리 현장지원")
+                .category(UnitProductCategory.PERSONNEL).exclusivityGroup("ONSITE_SUPPORT_TIER").build();
+        UnitProduct tablet = UnitProduct.builder()
+                .type(UnitProductType.TABLETS).name("태블릿").category(UnitProductCategory.EQUIPMENT).build();
+        UnitProduct onlineSupport = UnitProduct.builder()
+                .type(UnitProductType.ONLINE_SUPPORT).name("온라인지원")
+                .category(UnitProductCategory.PERSONNEL).exclusivityGroup("ONLINE_SUPPORT_TIER").build();
+
+        assertThatCode(() -> ceremonyService.checkExclusivityGroups(List.of(near, tablet, onlineSupport)))
+                .doesNotThrowAnyException();
     }
 }

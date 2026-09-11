@@ -300,7 +300,7 @@ public class CeremonyEventService {
         List<UnitProduct> unitProducts = requestedIds.isEmpty()
                 ? List.of()
                 : unitProductRepository.findAllByIdIn(requestedIds);
-        checkExclusivityGroups(unitProducts);
+        ceremonyService.checkExclusivityGroups(unitProducts);
 
         // flush()가 반드시 필요하다: deleteAllByCeremonyEventId는 파생 delete 쿼리라 DELETE SQL을
         // 즉시 내보내지 않는다(플러시 시점까지 지연). CeremonyEventOptionalFeature는 IDENTITY
@@ -324,24 +324,6 @@ public class CeremonyEventService {
         ceremonyEventEffectSettingService.pruneSettingsRequiringUnappliedFeatures(event.getId(), requestedIds);
 
         return requestedIds;
-    }
-
-    /**
-     * 같은 {@code exclusivityGroup}을 가진 선택옵션이 요청에 2개 이상 섞여 있으면 거부한다 —
-     * signstage-docs business/ceremony-billing-options-review.md 참고(2026-08-21 추가: 옵션이
-     * 늘어나도 코드 변경 없이 배타 관계를 카탈로그 등록만으로 구성하기 위한 필드). 그룹 없음
-     * (null)은 다른 옵션과 배타 관계가 아니므로 검사 대상에서 뺀다 — 지금 있는 두 옵션(서명
-     * 하이라이트/폭죽)은 전부 null이라 이 검사가 추가돼도 기존 동작은 그대로다.
-     */
-    private void checkExclusivityGroups(List<UnitProduct> unitProducts) {
-        Set<String> seenGroups = new HashSet<>();
-        for (UnitProduct unitProduct : unitProducts) {
-            String group = unitProduct.getExclusivityGroup();
-            if (group == null) continue;
-            if (!seenGroups.add(group)) {
-                throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_GROUP_CONFLICT);
-            }
-        }
     }
 
     /**
