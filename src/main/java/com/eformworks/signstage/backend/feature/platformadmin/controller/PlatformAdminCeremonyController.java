@@ -10,6 +10,7 @@ import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyService
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -66,6 +67,22 @@ public class PlatformAdminCeremonyController {
             @PathVariable Long ceremonyId
     ) {
         CeremonyDto.Response.CeremonySummary response = ceremonyService.findCeremonyByPlatformAdmin(organizationId, ceremonyId);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "플랜 선택 이력 조회(플랫폼 관리자)",
+            description = "조직 멤버십과 무관하게 이 행사의 플랜 선택/변경 이력을 본다(파트너 화면의 \"변경 이력\"과 같은 정보). "
+                    + "신규 \"행사 이력\" 화면(signstage-docs business/unit-product-purchase-self-checkout-review.md 8.6절 결정, "
+                    + "2026-09-11)이 구매 이력과 함께 보여준다. 조회 전용이라 등급 검사 없다."
+    )
+    @GetMapping("/{ceremonyId}/plan-history")
+    public ApiResponse<List<CeremonyDto.Response.PlanHistorySummary>> findPlanHistory(
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        List<CeremonyDto.Response.PlanHistorySummary> response =
+                ceremonyService.findPlanHistoryByPlatformAdmin(organizationId, ceremonyId);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

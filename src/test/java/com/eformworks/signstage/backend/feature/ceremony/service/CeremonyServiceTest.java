@@ -22,6 +22,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductCartLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
@@ -36,12 +37,12 @@ import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanDiscountPeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanUnitProductRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingQuoteRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductCartLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductPricePeriodRepository;
@@ -104,7 +105,7 @@ class CeremonyServiceTest {
     @Mock
     private CeremonyPlanHistoryUnitProductRepository ceremonyPlanHistoryUnitProductRepository;
     @Mock
-    private BillingQuoteRepository billingQuoteRepository;
+    private CeremonyUnitProductCartLineRepository ceremonyUnitProductCartLineRepository;
     @Mock
     private BillingPlanUnitProductRepository billingPlanUnitProductRepository;
     @Mock
@@ -164,6 +165,10 @@ class CeremonyServiceTest {
                 .type(type).name(type.name()).category(UnitProductCategory.ESSENTIAL).build();
         ReflectionTestUtils.setField(unitProduct, "id", id);
         return unitProduct;
+    }
+
+    private CeremonyUnitProductCartLine cartLine(Ceremony ceremony, UnitProduct unitProduct, int quantity) {
+        return CeremonyUnitProductCartLine.builder().ceremony(ceremony).unitProduct(unitProduct).quantity(quantity).build();
     }
 
     private UnitProductPricePeriod unitProductPeriod(UnitProduct unitProduct, BigDecimal supplyPrice, BigDecimal salePrice) {
@@ -263,7 +268,7 @@ class CeremonyServiceTest {
     }
 
     @Test
-    @DisplayName("단위 상품 추가구매는 여러 줄을 한 번에 담아 하나의 요청 헤더 아래 저장한다(장바구니형)")
+    @DisplayName("단위 상품 추가구매(구매하기)는 장바구니에 담긴 여러 줄을 한 번에 하나의 요청 헤더 아래 저장한다")
     void purchaseUnitProducts_multipleLines_savesOneHeaderWithLines() {
         // given
         Organization organization = organization();
@@ -280,8 +285,10 @@ class CeremonyServiceTest {
         given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
         given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
                 .willReturn(Optional.of(member));
-        given(unitProductRepository.findById(201L)).willReturn(Optional.of(signers));
-        given(unitProductRepository.findById(202L)).willReturn(Optional.of(tablets));
+        given(ceremonyUnitProductCartLineRepository.findAllByCeremonyIdOrderByIdAsc(10L)).willReturn(List.of(
+                cartLine(ceremony, signers, 10),
+                cartLine(ceremony, tablets, 5)
+        ));
         given(unitProductPricePeriodRepository.findEffective(eq(201L), any(LocalDate.class)))
                 .willReturn(Optional.of(unitProductPeriod(signers, new BigDecimal("8000"), new BigDecimal("10000"))));
         given(unitProductPricePeriodRepository.findEffective(eq(202L), any(LocalDate.class)))
@@ -291,24 +298,21 @@ class CeremonyServiceTest {
         given(ceremonyUnitProductPurchaseLineRepository.save(any(CeremonyUnitProductPurchaseLine.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
-        CeremonyDto.Request.PurchaseUnitProducts request = new CeremonyDto.Request.PurchaseUnitProducts(List.of(
-                new CeremonyDto.Request.PurchaseUnitProductLine(201L, 10),
-                new CeremonyDto.Request.PurchaseUnitProductLine(202L, 5)
-        ));
-
         // when
         CeremonyDto.Response.UnitProductPurchaseSummary result =
-                ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, 10L, CURRENT_USER_ID, request);
+                ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, 10L, CURRENT_USER_ID);
 
         // then — 옛 "묶음 상품"(secondaryCapacityType)이 하던 역할을 이제 한 요청의 여러 줄이 대신한다.
+        // 두 상품 모두 기본 카테고리(ESSENTIAL, 시스템 사용료)라 자가-체크아웃으로 즉시 APPROVED된다.
         assertThat(result.getLines()).hasSize(2);
-        assertThat(result.getStatus()).isEqualTo("PENDING");
+        assertThat(result.getStatus()).isEqualTo("APPROVED");
         verify(ceremonyUnitProductPurchaseRepository).save(any(CeremonyUnitProductPurchase.class));
         verify(ceremonyUnitProductPurchaseLineRepository, org.mockito.Mockito.times(2)).save(any(CeremonyUnitProductPurchaseLine.class));
+        verify(ceremonyUnitProductCartLineRepository).deleteAllByCeremonyId(10L);
     }
 
     @Test
-    @DisplayName("이벤트 효과 묶음(토글형)은 수량 2 이상을 요청하면 거부된다")
+    @DisplayName("이벤트 효과 묶음(토글형)은 장바구니에 수량 2 이상으로 담겨 있으면 구매 시점에 거부된다")
     void purchaseUnitProducts_effectBundleQuantityOverOne_rejected() {
         Organization organization = organization();
         Ceremony ceremony = ceremony(organization, 10L);
@@ -324,18 +328,79 @@ class CeremonyServiceTest {
                 .willReturn(Optional.of(member));
         given(ceremonyUnitProductPurchaseRepository.save(any(CeremonyUnitProductPurchase.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
-        given(unitProductRepository.findById(301L)).willReturn(Optional.of(bundle));
+        given(ceremonyUnitProductCartLineRepository.findAllByCeremonyIdOrderByIdAsc(10L))
+                .willReturn(List.of(cartLine(ceremony, bundle, 2)));
         given(unitProductPricePeriodRepository.findEffective(eq(301L), any(LocalDate.class)))
                 .willReturn(Optional.of(unitProductPeriod(bundle, new BigDecimal("50000"), new BigDecimal("60000"))));
 
-        CeremonyDto.Request.PurchaseUnitProducts request =
-                new CeremonyDto.Request.PurchaseUnitProducts(List.of(new CeremonyDto.Request.PurchaseUnitProductLine(301L, 2)));
-
-        assertThatThrownBy(() -> ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, 10L, CURRENT_USER_ID, request))
+        assertThatThrownBy(() -> ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, 10L, CURRENT_USER_ID))
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CommonErrorCode.INVALID_REQUEST);
         verify(ceremonyUnitProductPurchaseLineRepository, never()).save(any());
+        verify(ceremonyUnitProductCartLineRepository, never()).deleteAllByCeremonyId(any());
+    }
+
+    /**
+     * 자가-체크아웃 범위 단위 테스트 — signstage-docs
+     * business/unit-product-purchase-self-checkout-review.md 2·4장 결정(2026-09-11):
+     * 시스템 사용료(ESSENTIAL/APPLICATION)만 자가-체크아웃하고, 장비·인력(EQUIPMENT/
+     * PERSONNEL)이 섞이면(배포 전 레거시 plan 없는 행사 한정 — 플랜이 있는 행사는 애초에
+     * 이 카테고리가 구매 카탈로그에 없다) 예전처럼 PENDING으로 남긴다.
+     */
+    @Test
+    @DisplayName("장바구니에 장비/인력 카테고리가 섞여 있으면 자가-체크아웃하지 않고 PENDING으로 남긴다")
+    void purchaseUnitProducts_nonSystemUsageFeeLine_staysPending() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        ceremony.confirmPlan(); // 레거시(plan 없음, IN_PROGRESS) 흉내 — 카탈로그 필터가 적용되지 않는 유일한 경로.
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+
+        UnitProduct tablets = UnitProduct.builder()
+                .type(UnitProductType.TABLETS).name("태블릿").category(UnitProductCategory.EQUIPMENT).build();
+        ReflectionTestUtils.setField(tablets, "id", 401L);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(ceremonyUnitProductCartLineRepository.findAllByCeremonyIdOrderByIdAsc(10L))
+                .willReturn(List.of(cartLine(ceremony, tablets, 3)));
+        given(unitProductPricePeriodRepository.findEffective(eq(401L), any(LocalDate.class)))
+                .willReturn(Optional.of(unitProductPeriod(tablets, new BigDecimal("40000"), new BigDecimal("50000"))));
+        given(ceremonyUnitProductPurchaseRepository.save(any(CeremonyUnitProductPurchase.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+        given(ceremonyUnitProductPurchaseLineRepository.save(any(CeremonyUnitProductPurchaseLine.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        CeremonyDto.Response.UnitProductPurchaseSummary result =
+                ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, 10L, CURRENT_USER_ID);
+
+        assertThat(result.getStatus()).isEqualTo("PENDING");
+        verify(ceremonyUnitProductCartLineRepository).deleteAllByCeremonyId(10L);
+    }
+
+    @Test
+    @DisplayName("장바구니 담기 — 같은 상품을 두 번 담으면 새 줄이 아니라 기존 줄의 수량에 더한다")
+    void addToCart_sameItemTwice_mergesQuantity() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        ceremony.confirmPlan();
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        UnitProduct signers = unitProduct(201L, UnitProductType.SIGNERS);
+        CeremonyUnitProductCartLine existing = cartLine(ceremony, signers, 3);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(unitProductRepository.findById(201L)).willReturn(Optional.of(signers));
+        given(ceremonyUnitProductCartLineRepository.findByCeremonyIdAndUnitProductId(10L, 201L))
+                .willReturn(Optional.of(existing));
+        given(ceremonyUnitProductCartLineRepository.findAllByCeremonyIdOrderByIdAsc(10L)).willReturn(List.of(existing));
+
+        ceremonyService.addToCart(ORGANIZATION_ID, 10L, CURRENT_USER_ID, new CeremonyDto.Request.AddToCart(201L, 4));
+
+        assertThat(existing.getQuantity()).isEqualTo(7);
+        verify(ceremonyUnitProductCartLineRepository, never()).save(any());
     }
 
     @Test
@@ -472,7 +537,7 @@ class CeremonyServiceTest {
     }
 
     @Test
-    @DisplayName("삭제 — DRAFT이고 대기중/승인된 추가구매·확정 견적이 없으면 자신의 이력·추가구매·배정을 함께 지운다")
+    @DisplayName("삭제 — DRAFT이고 대기중/승인된 추가구매가 없으면 자신의 이력·추가구매·장바구니·배정을 함께 지운다")
     void deleteCeremony_deletesWhenDraftAndNoActivity() {
         Organization organization = organization();
         Ceremony ceremony = ceremony(organization, CEREMONY_ID);
@@ -480,7 +545,6 @@ class CeremonyServiceTest {
         given(ceremonyUnitProductPurchaseRepository.existsByCeremonyIdAndStatusIn(
                 CEREMONY_ID, List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
         )).willReturn(false);
-        given(billingQuoteRepository.existsByCeremonyId(CEREMONY_ID)).willReturn(false);
 
         ceremonyService.deleteCeremony(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID);
 
@@ -488,6 +552,7 @@ class CeremonyServiceTest {
         verify(ceremonyPlanHistoryRepository).deleteAllByCeremonyId(CEREMONY_ID);
         verify(ceremonyUnitProductPurchaseLineRepository).deleteAllByPurchase_CeremonyId(CEREMONY_ID);
         verify(ceremonyUnitProductPurchaseRepository).deleteAllByCeremonyId(CEREMONY_ID);
+        verify(ceremonyUnitProductCartLineRepository).deleteAllByCeremonyId(CEREMONY_ID);
         verify(ceremonyAssignmentRepository).deleteAllByCeremonyId(CEREMONY_ID);
         verify(ceremonyRepository).delete(ceremony);
     }
@@ -517,25 +582,6 @@ class CeremonyServiceTest {
         given(ceremonyUnitProductPurchaseRepository.existsByCeremonyIdAndStatusIn(
                 CEREMONY_ID, List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
         )).willReturn(true);
-
-        assertThatThrownBy(() -> ceremonyService.deleteCeremony(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID))
-                .isInstanceOf(ApplicationException.class)
-                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
-                .isEqualTo(CeremonyErrorCode.CEREMONY_NOT_DELETABLE);
-
-        verify(ceremonyRepository, never()).delete(any(Ceremony.class));
-    }
-
-    @Test
-    @DisplayName("삭제 — DRAFT이어도 확정 견적이 있으면(무효화됐더라도) 거부한다")
-    void deleteCeremony_rejectsWhenQuoteExists() {
-        Organization organization = organization();
-        Ceremony ceremony = ceremony(organization, CEREMONY_ID);
-        stubOwnerMember(ceremony);
-        given(ceremonyUnitProductPurchaseRepository.existsByCeremonyIdAndStatusIn(
-                CEREMONY_ID, List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
-        )).willReturn(false);
-        given(billingQuoteRepository.existsByCeremonyId(CEREMONY_ID)).willReturn(true);
 
         assertThatThrownBy(() -> ceremonyService.deleteCeremony(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID))
                 .isInstanceOf(ApplicationException.class)
@@ -590,26 +636,30 @@ class CeremonyServiceTest {
         Ceremony ceremony = ceremony(organization, CEREMONY_ID);
         stubOwnerMember(ceremony);
 
-        CeremonyDto.Request.PurchaseUnitProducts request = new CeremonyDto.Request.PurchaseUnitProducts(List.of());
-
-        assertThatThrownBy(() -> ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request))
+        // 플랜 미선택 가드가 장바구니 조회보다 먼저 걸려야 한다 — 장바구니 리포지토리는
+        // 아예 안 불려야 한다.
+        assertThatThrownBy(() -> ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID))
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
+        verify(ceremonyUnitProductCartLineRepository, never()).findAllByCeremonyIdOrderByIdAsc(any());
     }
 
     @Test
-    @DisplayName("추가구매 — 배포 전 레거시 행사(plan 없음, IN_PROGRESS)는 예전처럼 막지 않는다")
+    @DisplayName("추가구매 — 배포 전 레거시 행사(plan 없음, IN_PROGRESS)는 예전처럼 플랜 미선택으로 막지 않는다(장바구니가 비어 있으면 CART_EMPTY)")
     void purchaseUnitProducts_allowsWhenLegacyCeremonyWithoutPlan() {
         Organization organization = organization();
         Ceremony ceremony = ceremony(organization, CEREMONY_ID);
         ceremony.confirmPlan(); // DRAFT -> IN_PROGRESS 전이만 흉내낸다(레거시는 배포 시 이미 IN_PROGRESS로 채워졌다).
         stubOwnerMember(ceremony);
+        given(ceremonyUnitProductCartLineRepository.findAllByCeremonyIdOrderByIdAsc(CEREMONY_ID)).willReturn(List.of());
 
-        CeremonyDto.Request.PurchaseUnitProducts request = new CeremonyDto.Request.PurchaseUnitProducts(List.of());
-
-        // 플랜 미선택 가드에는 안 걸린다 — lines가 비어 있어 그 이후 로직은 그냥 빈 구매로 끝난다.
-        ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request);
+        // 플랜 미선택 가드에는 안 걸린다 — 그 대신 장바구니가 비어 있어 CART_EMPTY로 끝난다
+        // (자가-체크아웃 도입으로 "빈 구매"라는 개념 자체가 없어졌다).
+        assertThatThrownBy(() -> ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CART_EMPTY);
     }
 
     /**
@@ -664,5 +714,29 @@ class CeremonyServiceTest {
         assertThat(result).containsExactly(902L);
         // 스냅샷이 있으니 라이브 플랜 구성 조회는 아예 안 타야 한다.
         verify(billingPlanUnitProductRepository, never()).findAllByBillingPlanId(any());
+    }
+
+    @Test
+    @DisplayName("추가구매 후보 목록 — 장비/인력(EQUIPMENT/PERSONNEL)은 플랜에 포함돼 있어도 걸러낸다")
+    void retrievePurchasableUnitProductIds_excludesEquipmentAndPersonnel() {
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder().name("플랜").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+
+        UnitProduct signers = unitProduct(901L, UnitProductType.SIGNERS); // 기본 카테고리 ESSENTIAL.
+        UnitProduct tablets = UnitProduct.builder()
+                .type(UnitProductType.TABLETS).name("태블릿").category(UnitProductCategory.EQUIPMENT).build();
+        ReflectionTestUtils.setField(tablets, "id", 902L);
+        BillingPlanUnitProduct signersLine = BillingPlanUnitProduct.builder()
+                .billingPlan(plan).unitProduct(signers).includedQuantity(0).build();
+        BillingPlanUnitProduct tabletsLine = BillingPlanUnitProduct.builder()
+                .billingPlan(plan).unitProduct(tablets).includedQuantity(0).build();
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of(signersLine, tabletsLine));
+
+        List<Long> result = ceremonyService.retrievePurchasableUnitProductIds(ceremony);
+
+        assertThat(result).containsExactly(901L);
     }
 }

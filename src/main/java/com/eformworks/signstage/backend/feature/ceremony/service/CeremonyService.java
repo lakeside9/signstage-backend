@@ -15,6 +15,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyAssignme
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductCartLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
@@ -28,12 +29,12 @@ import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanDiscountPeriodRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanUnitProductRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.BillingQuoteRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductCartLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductPricePeriodRepository;
@@ -98,7 +99,7 @@ public class CeremonyService {
     private final CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
     private final CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
     private final CeremonyPlanHistoryUnitProductRepository ceremonyPlanHistoryUnitProductRepository;
-    private final BillingQuoteRepository billingQuoteRepository;
+    private final CeremonyUnitProductCartLineRepository ceremonyUnitProductCartLineRepository;
     private final BillingPlanUnitProductRepository billingPlanUnitProductRepository;
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
@@ -272,14 +273,15 @@ public class CeremonyService {
      * 요청). DRAFT는 플랜 확정 전 상태라 서명자/문서/하위 행사 등록 자체가 막혀 있어
      * ({@code checkCeremonyPlanConfirmed}, {@link SignerService}/{@link TemplateService}/
      * {@link CeremonyEventService}가 등록 시점에 강제) 항상 비어 있다. 다만 단위 상품
-     * 추가구매(안 A, {@link #purchaseUnitProducts})와 확정 견적({@code BillingQuoteService
-     * #finalizeQuote})은 DRAFT 상태에서도 만들 수 있어서, 대기중·승인된 추가구매나 한 번이라도
-     * 만들어진 확정 견적이 있으면 거부한다 — 반려(REJECTED)된 추가구매만 있으면 막지 않는다
-     * (이미 종결된 이력일 뿐이라 재요청 허용 판정과 같은 기준).
+     * 추가구매(안 A, {@link #purchaseUnitProducts})는 DRAFT 상태에서도 만들 수 있어서, 대기중·
+     * 승인된 추가구매가 있으면 거부한다 — 반려(REJECTED)된 추가구매만 있으면 막지 않는다
+     * (이미 종결된 이력일 뿐이라 재요청 허용 판정과 같은 기준). "확정 견적"({@code BillingQuote})
+     * 기능은 자가-체크아웃 도입으로 완전히 제거됐다(signstage-docs
+     * business/unit-product-purchase-self-checkout-review.md 6장 결정, 2026-09-11).
      *
      * <p>통과하면 이 행사 자신의 플랜 선택 이력(+ 그 안의 단위 상품 스냅샷)·추가구매 요청(+ 그
-     * 줄)·담당자 배정까지 함께 지운다 — DB에 {@code ON DELETE CASCADE}가 없어 자식부터 순서대로
-     * 지운다({@code UnitProductService#deleteUnitProduct}와 같은 패턴).
+     * 줄)·장바구니·담당자 배정까지 함께 지운다 — DB에 {@code ON DELETE CASCADE}가 없어 자식부터
+     * 순서대로 지운다({@code UnitProductService#deleteUnitProduct}와 같은 패턴).
      */
     @Transactional
     public void deleteCeremony(Long organizationId, Long ceremonyId, Long currentUserId) {
@@ -292,6 +294,7 @@ public class CeremonyService {
         ceremonyPlanHistoryRepository.deleteAllByCeremonyId(ceremonyId);
         ceremonyUnitProductPurchaseLineRepository.deleteAllByPurchase_CeremonyId(ceremonyId);
         ceremonyUnitProductPurchaseRepository.deleteAllByCeremonyId(ceremonyId);
+        ceremonyUnitProductCartLineRepository.deleteAllByCeremonyId(ceremonyId);
         ceremonyAssignmentRepository.deleteAllByCeremonyId(ceremonyId);
         ceremonyRepository.delete(ceremony);
     }
@@ -303,7 +306,7 @@ public class CeremonyService {
         boolean hasActivePurchase = ceremonyUnitProductPurchaseRepository.existsByCeremonyIdAndStatusIn(
                 ceremony.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
         );
-        if (hasActivePurchase || billingQuoteRepository.existsByCeremonyId(ceremony.getId())) {
+        if (hasActivePurchase) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_NOT_DELETABLE);
         }
     }
@@ -404,20 +407,124 @@ public class CeremonyService {
     }
 
     /**
-     * 단위 상품 추가구매 — 옛 {@code purchaseCapacity}/{@code purchaseOptionalFeature} 통합
+     * 플랫폼 관리자용 플랜 선택 이력 — {@link #findPlanHistory}와 달리 조직 멤버십을 요구하지
+     * 않는다(위 {@link #findCeremonyByPlatformAdmin}과 같은 이유). 관리자 화면에 파트너사의
+     * 플랜 선택 이력·구매 이력을 함께 보여주는 신규 "행사 이력" 화면이 쓴다(signstage-docs
+     * business/unit-product-purchase-self-checkout-review.md 8.6절 결정, 2026-09-11).
+     */
+    public List<CeremonyDto.Response.PlanHistorySummary> findPlanHistoryByPlatformAdmin(Long organizationId, Long ceremonyId) {
+        findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        return ceremonyPlanHistoryRepository.findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
+                .map(this::toPlanHistorySummary)
+                .toList();
+    }
+
+    // ==================== 단위 상품 추가구매 장바구니 ====================
+
+    /** 장바구니 조회 — 담은 순서대로, 항목마다 지금 카탈로그 기준 표시 정보(이름/가격 등)를 같이 돌려준다. */
+    public List<CeremonyDto.Response.CartLineSummary> retrieveCart(Long organizationId, Long ceremonyId, Long currentUserId) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+
+        return ceremonyUnitProductCartLineRepository.findAllByCeremonyIdOrderByIdAsc(ceremonyId).stream()
+                .map(line -> new CeremonyDto.Response.CartLineSummary(
+                        line.getUnitProduct().getId(), line.getQuantity(), toUnitProductSummaryForPurchase(line.getUnitProduct())
+                ))
+                .toList();
+    }
+
+    /**
+     * "추가 구매하기" — 장바구니에 담는다("구매 확정"이 아니다). 같은 항목을 다시 담으면
+     * 새 줄을 만들지 않고 수량을 더한다(signstage-docs
+     * business/unit-product-purchase-self-checkout-review.md 6장 결정, 2026-09-11).
+     */
+    @Transactional
+    public List<CeremonyDto.Response.CartLineSummary> addToCart(
+            Long organizationId, Long ceremonyId, Long currentUserId, CeremonyDto.Request.AddToCart request
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        checkCeremonyEditable(ceremony);
+        if (ceremony.getBillingPlan() == null && ceremony.getStatus() == CeremonyStatus.DRAFT) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
+        }
+
+        UnitProduct unitProduct = unitProductRepository.findById(request.getUnitProductId())
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
+        checkPurchasable(ceremony, unitProduct);
+
+        ceremonyUnitProductCartLineRepository.findByCeremonyIdAndUnitProductId(ceremonyId, unitProduct.getId())
+                .ifPresentOrElse(
+                        existing -> existing.addQuantity(request.getQuantity()),
+                        () -> ceremonyUnitProductCartLineRepository.save(
+                                CeremonyUnitProductCartLine.builder()
+                                        .ceremony(ceremony)
+                                        .unitProduct(unitProduct)
+                                        .quantity(request.getQuantity())
+                                        .build()
+                        )
+                );
+
+        return retrieveCart(organizationId, ceremonyId, currentUserId);
+    }
+
+    /** 장바구니 검토 화면에서 수량을 직접 고쳐 쓸 때. */
+    @Transactional
+    public List<CeremonyDto.Response.CartLineSummary> updateCartLine(
+            Long organizationId, Long ceremonyId, Long currentUserId, Long unitProductId, CeremonyDto.Request.UpdateCartLine request
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        checkCeremonyEditable(ceremony);
+
+        CeremonyUnitProductCartLine line = ceremonyUnitProductCartLineRepository
+                .findByCeremonyIdAndUnitProductId(ceremonyId, unitProductId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CART_LINE_NOT_FOUND));
+        line.changeQuantity(request.getQuantity());
+
+        return retrieveCart(organizationId, ceremonyId, currentUserId);
+    }
+
+    /** 장바구니에서 항목을 뺀다. */
+    @Transactional
+    public List<CeremonyDto.Response.CartLineSummary> removeCartLine(
+            Long organizationId, Long ceremonyId, Long currentUserId, Long unitProductId
+    ) {
+        Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        checkCeremonyEditable(ceremony);
+
+        CeremonyUnitProductCartLine line = ceremonyUnitProductCartLineRepository
+                .findByCeremonyIdAndUnitProductId(ceremonyId, unitProductId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CART_LINE_NOT_FOUND));
+        ceremonyUnitProductCartLineRepository.delete(line);
+
+        return retrieveCart(organizationId, ceremonyId, currentUserId);
+    }
+
+    /**
+     * "구매하기" — 장바구니에 담긴 내용을 그대로 읽어 구매를 만든다(더 이상 요청 바디로 라인을
+     * 받지 않는다). 옛 {@code purchaseCapacity}/{@code purchaseOptionalFeature} 통합
      * (signstage-docs business/billing-catalog-unit-product-model-redesign-review.md 결정,
-     * 2026-09-10, 3.4절). 한 요청에 여러 줄을 담을 수 있고(장바구니형), 요청 전체가 PENDING
-     * 하나로 생겨 승인/반려도 항상 전체 단위로 처리된다. 토글형({@code EVENT_EFFECT_BUNDLE})
-     * 단위 상품은 수량이 0/1 관례를 따라야 하고(3.6절), 이미 대기중/승인된 요청이 있으면
-     * 재구매할 수 없다 — 그 외 종류(용량 계열)는 여러 번 구매해 누적할 수 있다(옛
-     * {@code CeremonyCapacityPurchase}와 같은 동작).
+     * 2026-09-10, 3.4절)에 이어, 장바구니형 2단계 자가-체크아웃(같은 문서
+     * business/unit-product-purchase-self-checkout-review.md 4장 결정, 2026-09-11)으로
+     * 재정의됐다 — 담긴 줄이 전부 시스템 사용료(ESSENTIAL/APPLICATION,
+     * {@code UnitProductCategory#isSystemUsageFee})면 관리자 승인 없이 그 즉시 APPROVED로
+     * 반영되고({@link CeremonyUnitProductPurchase#autoApprove}), 아니면(레거시 플랜 없는 행사가
+     * 장비·인력을 담은 경우) 예전처럼 PENDING으로 남아 관리자 승인을 기다린다. 성공하면 장바구니는
+     * 비워진다. 토글형({@code EVENT_EFFECT_BUNDLE}) 단위 상품은 수량이 0/1 관례를 따라야 하고
+     * (3.6절), 이미 대기중/승인된 요청이 있으면 재구매할 수 없다 — 그 외 종류(용량 계열)는 여러
+     * 번 구매해 누적할 수 있다(옛 {@code CeremonyCapacityPurchase}와 같은 동작).
      */
     @Transactional
     public CeremonyDto.Response.UnitProductPurchaseSummary purchaseUnitProducts(
             Long organizationId,
             Long ceremonyId,
-            Long currentUserId,
-            CeremonyDto.Request.PurchaseUnitProducts request
+            Long currentUserId
     ) {
         Ceremony ceremony = findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
@@ -433,36 +540,27 @@ public class CeremonyService {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
         }
 
-        List<Long> requestedIds = request.getLines().stream()
-                .map(CeremonyDto.Request.PurchaseUnitProductLine::getUnitProductId)
-                .toList();
-        if (requestedIds.size() != requestedIds.stream().distinct().count()) {
-            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        List<CeremonyUnitProductCartLine> cartLines = ceremonyUnitProductCartLineRepository
+                .findAllByCeremonyIdOrderByIdAsc(ceremonyId);
+        if (cartLines.isEmpty()) {
+            throw new ApplicationException(CeremonyErrorCode.CART_EMPTY);
         }
 
         LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
-        Set<Long> purchasableIds = ceremony.getBillingPlan() != null
-                ? new HashSet<>(retrievePurchasableUnitProductIds(ceremony))
-                : null;
-
         CeremonyUnitProductPurchase purchase = CeremonyUnitProductPurchase.builder().ceremony(ceremony).build();
         ceremonyUnitProductPurchaseRepository.save(purchase);
 
         List<CeremonyUnitProductPurchaseLine> lines = new ArrayList<>();
-        for (CeremonyDto.Request.PurchaseUnitProductLine line : request.getLines()) {
-            UnitProduct unitProduct = unitProductRepository.findById(line.getUnitProductId())
-                    .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
+        for (CeremonyUnitProductCartLine cartLine : cartLines) {
+            UnitProduct unitProduct = cartLine.getUnitProduct();
+            // 담을 때 이미 확인했지만, 담긴 뒤 카탈로그·플랜 구성이 바뀌었을 수 있어 구매
+            // 시점에 다시 한번 확인한다(가격·통화도 이 시점 값을 스냅샷으로 쓴다).
+            checkPurchasable(ceremony, unitProduct);
             UnitProductPricePeriod period = resolveSellableUnitProductPeriod(unitProduct, asOfDate);
             checkCurrencyMatches(ceremony.getCurrencyCode(), period.getPriceInfo().getCurrencyCode());
 
-            // 안 A(구매 가능 상품 큐레이션) — 이 Ceremony의 플랜에서 구매 후보로 열어두지 않은
-            // 상품은 거부한다. 플랜이 없는 행사(4.8절 예외)는 제한 없이 전부 허용한다.
-            if (purchasableIds != null && !purchasableIds.contains(unitProduct.getId())) {
-                throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_AVAILABLE_FOR_PLAN);
-            }
-
             if (unitProduct.getType().isToggle()) {
-                if (line.getQuantity() > 1) {
+                if (cartLine.getQuantity() > 1) {
                     throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
                 }
                 boolean alreadyRequested = ceremonyUnitProductPurchaseLineRepository
@@ -478,7 +576,7 @@ public class CeremonyService {
                     CeremonyUnitProductPurchaseLine.builder()
                             .purchase(purchase)
                             .unitProduct(unitProduct)
-                            .quantity(line.getQuantity())
+                            .quantity(cartLine.getQuantity())
                             .currencyCode(period.getPriceInfo().getCurrencyCode())
                             .purchasedName(unitProduct.getName())
                             .purchasedSalePrice(period.getPriceInfo().getSalePrice())
@@ -487,7 +585,28 @@ public class CeremonyService {
             ));
         }
 
+        boolean allSystemUsageFee = lines.stream().allMatch(line -> line.getUnitProduct().getCategory().isSystemUsageFee());
+        if (allSystemUsageFee) {
+            purchase.autoApprove();
+        }
+        ceremonyUnitProductCartLineRepository.deleteAllByCeremonyId(ceremonyId);
+
         return toUnitProductPurchaseSummary(purchase, lines);
+    }
+
+    /**
+     * 안 A(구매 가능 상품 큐레이션) — 이 Ceremony의 플랜에서 구매 후보로 열어두지 않은 상품은
+     * 거부한다. 플랜이 없는 행사(4.8절 예외)는 제한 없이 전부 허용한다. 장바구니 담기·구매
+     * 양쪽에서 같은 기준으로 쓴다.
+     */
+    private void checkPurchasable(Ceremony ceremony, UnitProduct unitProduct) {
+        if (ceremony.getBillingPlan() == null) {
+            return;
+        }
+        Set<Long> purchasableIds = new HashSet<>(retrievePurchasableUnitProductIds(ceremony));
+        if (!purchasableIds.contains(unitProduct.getId())) {
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_AVAILABLE_FOR_PLAN);
+        }
     }
 
     /** 요청자 본인 이력 조회 — 대기중/승인됨/반려됨 전부 보여준다. */
@@ -686,14 +805,21 @@ public class CeremonyService {
     // ---- 플랫폼 관리자 — 단위 상품 추가구매 승인 대기열 ----
     // feature.platformadmin.service에 별도 래퍼를 두지 않고 여기 직접 붙인다(위 updateStatusByPlatformAdmin과 같은 이유).
 
-    /** status를 생략하면(null) 전체 상태를 최신순으로 돌려준다(조직 생성 요청 목록과 같은 규약). */
+    /**
+     * status를 생략하면(null) 전체 상태를 최신순으로 돌려준다(조직 생성 요청 목록과 같은 규약).
+     * organizationId/ceremonyId도 선택 필터다 — 기존 "승인 큐"(둘 다 null, status=PENDING
+     * 기본)와 신규 "행사 이력" 화면(ceremonyId로 좁힘, signstage-docs
+     * business/unit-product-purchase-self-checkout-review.md 8.6절 결정, 2026-09-11)이 이
+     * 메서드를 같이 쓴다.
+     */
     public Page<PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary> findUnitProductPurchaseRequests(
             PurchaseStatus status,
+            Long organizationId,
+            Long ceremonyId,
             Pageable pageable
     ) {
-        Page<CeremonyUnitProductPurchase> purchases = status != null
-                ? ceremonyUnitProductPurchaseRepository.findAllByStatus(status, pageable)
-                : ceremonyUnitProductPurchaseRepository.findAll(pageable);
+        Page<CeremonyUnitProductPurchase> purchases =
+                ceremonyUnitProductPurchaseRepository.search(status, organizationId, ceremonyId, pageable);
         Map<Long, String> loginIdsByUserId = resolveUserLoginIds(
                 purchases.getContent().stream().flatMap(purchase -> Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy()))
         );
@@ -1025,13 +1151,16 @@ public class CeremonyService {
     }
 
     /**
-     * {@link #calculateEstimatedTotal}(예상 청구 금액)과 {@code BillingQuoteService}(확정 견적,
-     * signstage-docs business/currency-tax-internationalization-review.md 9장)이 공유하는
-     * 계산 본체다 — 같은 계산이 두 곳에서 갈라지면 "예상"과 "확정"이 서로 다른 숫자를 보여주는
-     * 사고가 나므로 소스를 하나로 둔다. 계산 순서는 8장 그대로: 플랜 소계 → 플랜 할인(품목
-     * 할인) → 추가구매 합산 → subtotal → 행사 건별 재량 할인(ceremony 할인) → 세금(라인별
-     * 비례 배분 + 라인별 taxCode로 계산). 호출자가 이미 조직/행사 접근 권한을 검증했다고
-     * 전제한다(이 메서드 자체는 검증하지 않음).
+     * {@link #calculateEstimatedTotal}("플랫폼 이용료", 옛 "예상 청구 금액")과
+     * {@link com.eformworks.signstage.backend.feature.ceremony.service.CustomerQuoteService
+     * #generateCustomerQuote}(고객 정산의 시스템 사용료 원가 산정)이 공유하는 계산 본체다 —
+     * 같은 계산이 두 곳에서 갈라지면 서로 다른 숫자를 보여주는 사고가 나므로 소스를 하나로
+     * 둔다. 옛 "확정 견적"({@code BillingQuoteService})도 이 메서드를 썼지만, 자가-체크아웃
+     * 도입으로 그 기능 자체가 완전히 제거됐다(signstage-docs
+     * business/unit-product-purchase-self-checkout-review.md 6장 결정, 2026-09-11). 계산
+     * 순서는 원래 설계 그대로: 플랜 소계 → 플랜 할인(품목 할인) → 추가구매 합산 → subtotal →
+     * 행사 건별 재량 할인(ceremony 할인) → 세금(라인별 비례 배분 + 라인별 taxCode로 계산).
+     * 호출자가 이미 조직/행사 접근 권한을 검증했다고 전제한다(이 메서드 자체는 검증하지 않음).
      */
     QuoteCalculation buildQuoteCalculation(Ceremony ceremony) {
         CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
@@ -1339,14 +1468,21 @@ public class CeremonyService {
      * 추가) 옛 스냅샷 때문에 추가구매 후보 목록에 반영되지 않던 문제. 호출부가
      * {@code ceremony.getBillingPlan() != null}을 먼저 확인해야 한다 — 플랜 없는 행사는 제한
      * 자체가 없다.
+     *
+     * <p>시스템 사용료(ESSENTIAL/APPLICATION)만 돌려준다 — 장비·인력(EQUIPMENT/PERSONNEL)은
+     * "플랫폼 이용료" 흐름에서 완전히 분리됐다(signstage-docs
+     * business/unit-product-purchase-self-checkout-review.md 8.2절 결정, 2026-09-11).
+     * 플랜 구성에 장비·인력이 포함돼 있어도 이 메서드는 걸러낸다.
      */
     List<Long> retrievePurchasableUnitProductIds(Ceremony ceremony) {
         Optional<CeremonyPlanHistory> snapshot = findLatestPlanHistoryForSnapshot(ceremony);
         return snapshot
                 .map(history -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(history.getId()).stream()
+                        .filter(line -> line.getUnitProduct().getCategory().isSystemUsageFee())
                         .map(line -> line.getUnitProduct().getId())
                         .toList())
                 .orElseGet(() -> billingPlanUnitProductRepository.findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
+                        .filter(source -> source.getUnitProduct().getCategory().isSystemUsageFee())
                         .map(source -> source.getUnitProduct().getId())
                         .toList());
     }
@@ -1355,7 +1491,9 @@ public class CeremonyService {
      * 이 Ceremony가 실제로 구매 요청할 수 있는 단위 상품 카탈로그만 필터링해 돌려준다(안 A) —
      * {@link #retrieveApplicableUnitProducts}와 같은 목적으로, 구매 화면의 선택 목록이 이
      * 목록으로 채워야 플랜에서 열어두지 않은 상품을 골라 제출한 뒤에야 거부당하는 UX를
-     * 피할 수 있다. 플랜이 없는 행사(4.8절 예외)는 활성 상품 전체를 제한 없이 돌려준다.
+     * 피할 수 있다. 플랜이 없는 행사(4.8절 예외)는 시스템 사용료 활성 상품 전체를 제한 없이
+     * 돌려준다 — 장비·인력은 플랜 유무와 무관하게 항상 제외한다(위 {@link
+     * #retrievePurchasableUnitProductIds} 참고).
      */
     public List<UnitProductDto.Response.UnitProductSummary> retrievePurchasableUnitProducts(
             Long organizationId,
@@ -1367,7 +1505,10 @@ public class CeremonyService {
         checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         if (ceremony.getBillingPlan() == null) {
-            return unitProductRepository.findAll().stream().map(this::toUnitProductSummaryForPurchase).toList();
+            return unitProductRepository.findAll().stream()
+                    .filter(unitProduct -> unitProduct.getCategory().isSystemUsageFee())
+                    .map(this::toUnitProductSummaryForPurchase)
+                    .toList();
         }
 
         List<Long> availableIds = retrievePurchasableUnitProductIds(ceremony);

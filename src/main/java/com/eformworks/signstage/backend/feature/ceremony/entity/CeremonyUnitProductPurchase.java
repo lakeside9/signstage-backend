@@ -73,6 +73,19 @@ public class CeremonyUnitProductPurchase extends BaseEntity {
         this.reviewedAt = LocalDateTime.now();
     }
 
+    /**
+     * 자가-체크아웃 승인 — 시스템 사용료(ESSENTIAL/APPLICATION)만 담긴 구매는 관리자 승인
+     * 없이 즉시 반영된다(signstage-docs
+     * business/unit-product-purchase-self-checkout-review.md 2·4장 결정, 2026-09-11).
+     * {@link #approve}와 결과 상태는 같지만 {@code reviewedBy}를 null로 둔다 — "관리자가
+     * 승인한 게 아니다"를 그 컬럼 자체로 구분한다.
+     */
+    public void autoApprove() {
+        this.status = PurchaseStatus.APPROVED;
+        this.reviewedBy = null;
+        this.reviewedAt = LocalDateTime.now();
+    }
+
     public void reject(Long reviewedBy, String rejectionReason) {
         this.status = PurchaseStatus.REJECTED;
         this.reviewedBy = reviewedBy;

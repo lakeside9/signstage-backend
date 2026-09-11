@@ -23,11 +23,13 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * 파트너 → 실고객 고객 견적서 헤더 — signstage-docs
- * business/partner-customer-quote-design-review.md 결정(2026-09-11). {@link BillingQuote}와
- * 같은 스냅샷/append-only 패턴(버전 번호, 재견적은 새 버전 추가)을 쓰지만 별개 엔티티다 —
- * {@code BillingQuote}는 플랫폼이 확정하는 불변 기록(파트너→플랫폼)이고, 이건 파트너가 영업
- * 단계에서 마진을 바꿔가며 여러 번 다시 뽑아보는 도구(파트너→실고객)라 라이프사이클과
- * 소유권이 다르다. 무효화(VOID) 개념은 두지 않는다 — 오래된 버전은 그냥 안 쓰면 된다.
+ * business/partner-customer-quote-design-review.md 결정(2026-09-11). 옛 {@code BillingQuote}
+ * (2026-09-11 자가-체크아웃 도입으로 완전 삭제, business/unit-product-purchase-self-checkout-review.md
+ * 6장 결정)와 같은 스냅샷/append-only 패턴(버전 번호, 재견적은 새 버전 추가)을 쓰지만 별개
+ * 엔티티였다 — {@code BillingQuote}는 플랫폼이 확정하는 불변 기록(파트너→플랫폼)이었고, 이건
+ * 파트너가 영업 단계에서 마진을 바꿔가며 여러 번 다시 뽑아보는 도구(파트너→실고객)라
+ * 라이프사이클과 소유권이 다르다. 무효화(VOID) 개념은 두지 않는다 — 오래된 버전은 그냥 안
+ * 쓰면 된다.
  *
  * <p>{@code systemUsageCostAmount}는 이 견적을 만든 시점에 {@code CeremonyService
  * #buildQuoteCalculation}의 라인 중 {@link UnitProductCategory#isSystemUsageFee()}가 참인

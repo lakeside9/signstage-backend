@@ -3,7 +3,6 @@ package com.eformworks.signstage.backend.feature.ceremony.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -72,12 +71,16 @@ public final class CeremonyDto {
             private String contactEmail;
         }
 
-        /** 장바구니형 구매 요청 한 줄 — 단위 상품 하나 + 수량. */
+        /**
+         * 장바구니에 담기("추가 구매하기", 옛 "구매 요청") — 단위 상품 하나 + 수량
+         * (signstage-docs business/unit-product-purchase-self-checkout-review.md 4장 결정,
+         * 2026-09-11). 같은 항목을 다시 담으면 새 줄이 아니라 기존 줄의 수량에 더해진다.
+         */
         @Getter
         @Setter
         @NoArgsConstructor
         @AllArgsConstructor
-        public static class PurchaseUnitProductLine {
+        public static class AddToCart {
 
             @NotNull
             private Long unitProductId;
@@ -87,20 +90,16 @@ public final class CeremonyDto {
             private Integer quantity;
         }
 
-        /**
-         * 단위 상품 추가구매 — 옛 {@code PurchaseCapacity}/{@code PurchaseOptionalFeature} 통합
-         * (signstage-docs business/billing-catalog-unit-product-model-redesign-review.md 결정,
-         * 2026-09-10, 3.4절). 한 번에 여러 단위 상품 줄을 담아 제출할 수 있다("장바구니형") —
-         * 승인/반려는 이 요청 전체를 한 단위로 처리된다.
-         */
+        /** 장바구니 검토 화면에서 수량을 직접 고쳐 쓸 때. */
         @Getter
         @Setter
         @NoArgsConstructor
         @AllArgsConstructor
-        public static class PurchaseUnitProducts {
+        public static class UpdateCartLine {
 
-            @NotEmpty
-            private List<PurchaseUnitProductLine> lines;
+            @NotNull
+            @Min(1)
+            private Integer quantity;
         }
 
         /** 플랫폼 관리자 전용. IN_PROGRESS/COMPLETED만 허용한다. */
@@ -208,6 +207,19 @@ public final class CeremonyDto {
             private final String rejectionReason;
             private final LocalDateTime reviewedAt;
             private final LocalDateTime createdAt;
+        }
+
+        /**
+         * 장바구니 한 줄 — 담은 수량 + 지금 카탈로그 기준 표시 정보(정가는 스냅샷이 아니라
+         * "구매하기"를 누르는 순간 다시 조회한다).
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class CartLineSummary {
+
+            private final Long unitProductId;
+            private final Integer quantity;
+            private final UnitProductDto.Response.UnitProductSummary unitProduct;
         }
 
         /**

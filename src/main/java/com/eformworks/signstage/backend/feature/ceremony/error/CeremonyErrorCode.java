@@ -250,6 +250,16 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "이 행사의 플랜에서는 구매할 수 없는 단위 상품입니다."
     ),
+    CART_LINE_NOT_FOUND(
+            "CEREMONY_CART_LINE_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "장바구니에 담긴 항목이 아닙니다."
+    ),
+    CART_EMPTY(
+            "CEREMONY_CART_EMPTY",
+            HttpStatus.CONFLICT,
+            "장바구니가 비어 있습니다. 먼저 항목을 담아주세요."
+    ),
     UNIT_PRODUCT_IN_USE(
             "CEREMONY_UNIT_PRODUCT_IN_USE",
             HttpStatus.CONFLICT,
@@ -465,15 +475,15 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "청구할 항목이 없는 행사는 고객 견적서를 만들 수 없습니다."
     ),
-    CUSTOMER_QUOTE_PRICE_REQUIRED(
-            "CEREMONY_CUSTOMER_QUOTE_PRICE_REQUIRED",
-            HttpStatus.BAD_REQUEST,
-            "실고객에게 청구할 장비/인력 단가를 전부 입력해주세요."
-    ),
     CUSTOMER_QUOTE_PRICE_INVALID(
             "CEREMONY_CUSTOMER_QUOTE_PRICE_INVALID",
             HttpStatus.BAD_REQUEST,
             "실고객 청구 단가가 올바르지 않습니다. 0 이상이어야 합니다."
+    ),
+    CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL(
+            "CEREMONY_CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL",
+            HttpStatus.BAD_REQUEST,
+            "장비/인력(태블릿·현장지원 등) 카탈로그에 있는 상품만 고객 정산 줄로 담을 수 있습니다."
     );
 
     private final String code;

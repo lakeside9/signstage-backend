@@ -12,11 +12,13 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CustomerQuoteLin
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.MarginInfo;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationMarginPolicy;
+import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyMarginOverrideRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CustomerQuoteLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CustomerQuoteRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationMarginPolicyRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
@@ -27,12 +29,9 @@ import com.eformworks.signstage.backend.feature.organization.repository.MemberRe
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -60,6 +59,7 @@ public class CustomerQuoteService {
     private final CeremonyMarginOverrideRepository ceremonyMarginOverrideRepository;
     private final CustomerQuoteRepository customerQuoteRepository;
     private final CustomerQuoteLineRepository customerQuoteLineRepository;
+    private final UnitProductRepository unitProductRepository;
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final UserRepository userRepository;
@@ -153,20 +153,6 @@ public class CustomerQuoteService {
 
     // ==================== 고객 견적서 ====================
 
-    /** 장비·인력(EQUIPMENT/PERSONNEL) 단위 상품별 참고 원가/수량 — 고객 단가 입력 폼이 이 목록을 그대로 그린다. */
-    public List<CustomerQuoteDto.Response.PricingInput> retrievePricingInputs(Long organizationId, Long ceremonyId, Long currentUserId) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        checkCustomerQuoteAccess(actingMember);
-        CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
-
-        return groupEquipmentPersonnelLines(ceremonyService.buildQuoteCalculation(ceremony), currencyPolicy).values().stream()
-                .map(group -> new CustomerQuoteDto.Response.PricingInput(
-                        group.itemId, group.itemName, group.quantity, group.unitCost(currencyPolicy), group.netAmount
-                ))
-                .toList();
-    }
-
     @Transactional
     public CustomerQuoteDto.Response.QuoteDetail generateCustomerQuote(
             Long organizationId, Long ceremonyId, Long currentUserId, CustomerQuoteDto.Request.GenerateQuote request
@@ -187,22 +173,19 @@ public class CustomerQuoteService {
                 .map(CeremonyService.QuoteLineDetail::netAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Map<Long, EquipmentPersonnelGroup> equipmentPersonnelGroups = groupEquipmentPersonnelLines(calculation, currencyPolicy);
-        if (systemUsageCostAmount.signum() == 0 && equipmentPersonnelGroups.isEmpty()) {
+        // 장비/인력은 더 이상 승인된 구매 기록에서 역산하지 않는다 — 파트너가 카탈로그에서
+        // 직접 고른 품목·수량·고객 단가를 그대로 쓴다(signstage-docs
+        // business/unit-product-purchase-self-checkout-review.md 8.5절 결정, 2026-09-11).
+        List<CustomerQuoteDto.Request.EquipmentPersonnelLine> requestedLines =
+                request.getEquipmentPersonnelLines() == null ? List.of() : request.getEquipmentPersonnelLines();
+        if (systemUsageCostAmount.signum() == 0 && requestedLines.isEmpty()) {
             throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_EMPTY);
         }
-
-        Map<Long, BigDecimal> requestedPrices = new LinkedHashMap<>();
-        for (CustomerQuoteDto.Request.EquipmentPersonnelPrice price : request.getEquipmentPersonnelPrices()) {
-            if (price.getCustomerUnitAmount().signum() < 0) {
-                throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_PRICE_INVALID);
-            }
-            requestedPrices.put(price.getUnitProductId(), price.getCustomerUnitAmount());
-        }
-        for (Long unitProductId : equipmentPersonnelGroups.keySet()) {
-            if (!requestedPrices.containsKey(unitProductId)) {
-                throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_PRICE_REQUIRED);
-            }
+        List<Long> requestedIds = requestedLines.stream()
+                .map(CustomerQuoteDto.Request.EquipmentPersonnelLine::getUnitProductId)
+                .toList();
+        if (requestedIds.size() != requestedIds.stream().distinct().count()) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
 
         BigDecimal systemUsageMarginAmount = moneyCalculator.applyMargin(systemUsageCostAmount, margin, currencyPolicy)
@@ -211,18 +194,28 @@ public class CustomerQuoteService {
 
         // 장비/인력 줄별 고객 청구액을 먼저 전부 계산해둔다 — CustomerQuote 헤더를 한 번에
         // 완결된 값으로 만들기 위해서다(BillingQuote와 같은 완전-불변 빌더 원칙).
-        record EquipmentPersonnelLineAmount(EquipmentPersonnelGroup group, BigDecimal customerUnitAmount, BigDecimal customerAmount) {
+        record EquipmentPersonnelLineAmount(
+                Long unitProductId, String itemName, Integer quantity, BigDecimal customerUnitAmount, BigDecimal customerAmount
+        ) {
         }
         List<EquipmentPersonnelLineAmount> equipmentPersonnelLineAmounts = new ArrayList<>();
         BigDecimal equipmentPersonnelTotal = BigDecimal.ZERO;
-        for (Map.Entry<Long, EquipmentPersonnelGroup> entry : equipmentPersonnelGroups.entrySet()) {
-            EquipmentPersonnelGroup group = entry.getValue();
-            BigDecimal customerUnitAmount = requestedPrices.get(entry.getKey());
+        for (CustomerQuoteDto.Request.EquipmentPersonnelLine line : requestedLines) {
+            if (line.getCustomerUnitAmount().signum() < 0) {
+                throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_PRICE_INVALID);
+            }
+            UnitProduct unitProduct = unitProductRepository.findById(line.getUnitProductId())
+                    .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
+            if (unitProduct.getCategory().isSystemUsageFee()) {
+                throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL);
+            }
             BigDecimal customerAmount = moneyCalculator.normalize(
-                    customerUnitAmount.multiply(BigDecimal.valueOf(group.quantity)), currencyPolicy
+                    line.getCustomerUnitAmount().multiply(BigDecimal.valueOf(line.getQuantity())), currencyPolicy
             );
             equipmentPersonnelTotal = equipmentPersonnelTotal.add(customerAmount);
-            equipmentPersonnelLineAmounts.add(new EquipmentPersonnelLineAmount(group, customerUnitAmount, customerAmount));
+            equipmentPersonnelLineAmounts.add(new EquipmentPersonnelLineAmount(
+                    unitProduct.getId(), unitProduct.getName(), line.getQuantity(), line.getCustomerUnitAmount(), customerAmount
+            ));
         }
         BigDecimal totalCustomerAmount = moneyCalculator.normalize(
                 systemUsageCustomerAmount.add(equipmentPersonnelTotal), currencyPolicy
@@ -257,14 +250,15 @@ public class CustomerQuoteService {
                 .build());
 
         for (EquipmentPersonnelLineAmount lineAmount : equipmentPersonnelLineAmounts) {
-            EquipmentPersonnelGroup group = lineAmount.group();
             customerQuoteLineRepository.save(CustomerQuoteLine.builder()
                     .customerQuote(quote)
                     .lineType("EQUIPMENT_PERSONNEL")
-                    .itemId(group.itemId)
-                    .itemName(group.itemName)
-                    .quantity(group.quantity)
-                    .referenceCostUnitAmount(group.unitCost(currencyPolicy))
+                    .itemId(lineAmount.unitProductId())
+                    .itemName(lineAmount.itemName())
+                    .quantity(lineAmount.quantity())
+                    // 파트너가 플랫폼에 내는 원가 자체가 없어졌다(8.2절 결정) — 참고 원가는
+                    // 항상 비운다.
+                    .referenceCostUnitAmount(null)
                     .customerUnitAmount(lineAmount.customerUnitAmount())
                     .customerAmount(lineAmount.customerAmount())
                     .build());
@@ -318,43 +312,6 @@ public class CustomerQuoteService {
             return new MarginInfo(DiscountType.valueOf(marginType), marginValue);
         } catch (IllegalArgumentException e) {
             throw new ApplicationException(CeremonyErrorCode.MARGIN_VALUE_INVALID);
-        }
-    }
-
-    /** {@code QuoteCalculation} 라인 중 실물·인력(EQUIPMENT/PERSONNEL)만 골라 단위 상품별로 수량·원가를 합산한다. */
-    private Map<Long, EquipmentPersonnelGroup> groupEquipmentPersonnelLines(
-            CeremonyService.QuoteCalculation calculation, CurrencyPolicy currencyPolicy
-    ) {
-        Map<Long, EquipmentPersonnelGroup> groups = new LinkedHashMap<>();
-        for (CeremonyService.QuoteLineDetail line : calculation.lines()) {
-            if (line.category().isSystemUsageFee()) {
-                continue;
-            }
-            EquipmentPersonnelGroup group = groups.computeIfAbsent(
-                    line.itemId(), id -> new EquipmentPersonnelGroup(id, line.itemName())
-            );
-            group.quantity += line.quantity();
-            group.netAmount = moneyCalculator.normalize(group.netAmount.add(line.netAmount()), currencyPolicy);
-        }
-        return groups;
-    }
-
-    private static final class EquipmentPersonnelGroup {
-        private final Long itemId;
-        private final String itemName;
-        private int quantity;
-        private BigDecimal netAmount = BigDecimal.ZERO;
-
-        private EquipmentPersonnelGroup(Long itemId, String itemName) {
-            this.itemId = itemId;
-            this.itemName = itemName;
-        }
-
-        private BigDecimal unitCost(CurrencyPolicy currencyPolicy) {
-            if (quantity == 0) {
-                return BigDecimal.ZERO;
-            }
-            return netAmount.divide(BigDecimal.valueOf(quantity), currencyPolicy.fractionDigits(), RoundingMode.HALF_UP);
         }
     }
 

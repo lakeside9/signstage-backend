@@ -4,12 +4,10 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
-import com.eformworks.signstage.backend.feature.ceremony.dto.BillingQuoteDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CustomerQuoteDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
-import com.eformworks.signstage.backend.feature.ceremony.service.BillingQuoteService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CustomerQuoteService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -50,7 +48,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class CeremonyController {
 
     private final CeremonyService ceremonyService;
-    private final BillingQuoteService billingQuoteService;
     private final CustomerQuoteService customerQuoteService;
     private final TraceIdProvider traceIdProvider;
 
@@ -196,19 +193,78 @@ public class CeremonyController {
     }
 
     @Operation(
-            summary = "단위 상품 추가구매",
-            description = "여러 단위 상품 줄을 한 번에 담을 수 있다(장바구니형). 요청 즉시 PENDING으로 생기고, "
-                    + "플랫폼 관리자가 승인해야 한도/적용 가능 목록에 반영된다."
+            summary = "장바구니 조회",
+            description = "담은 순서대로, 항목마다 지금 카탈로그 기준 표시 정보(이름/가격 등)를 같이 돌려준다."
+    )
+    @GetMapping("/{ceremonyId}/unit-product-cart")
+    public ApiResponse<List<CeremonyDto.Response.CartLineSummary>> retrieveCart(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId
+    ) {
+        List<CeremonyDto.Response.CartLineSummary> response =
+                ceremonyService.retrieveCart(organizationId, ceremonyId, currentUser.userId());
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "장바구니에 담기(추가 구매하기)",
+            description = "아직 구매를 만들지 않는다 — 서버에 저장된 장바구니에 담길 뿐이다. 같은 항목을 다시 담으면 "
+                    + "새 줄이 아니라 기존 줄의 수량에 더해진다."
+    )
+    @PostMapping("/{ceremonyId}/unit-product-cart/items")
+    public ApiResponse<List<CeremonyDto.Response.CartLineSummary>> addToCart(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @Valid @RequestBody CeremonyDto.Request.AddToCart request
+    ) {
+        List<CeremonyDto.Response.CartLineSummary> response =
+                ceremonyService.addToCart(organizationId, ceremonyId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "장바구니 줄 수량 수정", description = "장바구니 검토 화면에서 수량을 직접 고쳐 쓸 때 쓴다.")
+    @PutMapping("/{ceremonyId}/unit-product-cart/items/{unitProductId}")
+    public ApiResponse<List<CeremonyDto.Response.CartLineSummary>> updateCartLine(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long unitProductId,
+            @Valid @RequestBody CeremonyDto.Request.UpdateCartLine request
+    ) {
+        List<CeremonyDto.Response.CartLineSummary> response =
+                ceremonyService.updateCartLine(organizationId, ceremonyId, currentUser.userId(), unitProductId, request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "장바구니 줄 삭제")
+    @DeleteMapping("/{ceremonyId}/unit-product-cart/items/{unitProductId}")
+    public ApiResponse<List<CeremonyDto.Response.CartLineSummary>> removeCartLine(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long unitProductId
+    ) {
+        List<CeremonyDto.Response.CartLineSummary> response =
+                ceremonyService.removeCartLine(organizationId, ceremonyId, currentUser.userId(), unitProductId);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "구매하기(구매 확정)",
+            description = "장바구니에 담긴 내용을 그대로 읽어 구매를 만든다 — 더 이상 요청 바디로 라인을 받지 않는다. "
+                    + "담긴 줄이 전부 시스템 사용료(서명자·템플릿·테스트/본행사 추가, 이벤트 효과)면 관리자 승인 없이 "
+                    + "그 즉시 반영되고(자가-체크아웃), 성공하면 장바구니는 비워진다."
     )
     @PostMapping("/{ceremonyId}/unit-product-purchases")
     public ApiResponse<CeremonyDto.Response.UnitProductPurchaseSummary> purchaseUnitProducts(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long organizationId,
-            @PathVariable Long ceremonyId,
-            @Valid @RequestBody CeremonyDto.Request.PurchaseUnitProducts request
+            @PathVariable Long ceremonyId
     ) {
         CeremonyDto.Response.UnitProductPurchaseSummary response =
-                ceremonyService.purchaseUnitProducts(organizationId, ceremonyId, currentUser.userId(), request);
+                ceremonyService.purchaseUnitProducts(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -292,65 +348,6 @@ public class CeremonyController {
     }
 
     @Operation(
-            summary = "확정 견적 생성",
-            description = "지금 이 순간의 예상 청구 금액을 스냅샷으로 고정한다(signstage-docs "
-                    + "business/currency-tax-internationalization-review.md 9장) — 이후 카탈로그/세금 정책/할인이 바뀌어도 이 견적은 "
-                    + "바뀌지 않는다. 재견적은 새 버전을 만드는 것이고, 기존 버전은 지우거나 자동으로 무효화하지 않는다."
-    )
-    @PostMapping("/{ceremonyId}/quotes")
-    public ApiResponse<BillingQuoteDto.Response.QuoteDetail> finalizeQuote(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long organizationId,
-            @PathVariable Long ceremonyId
-    ) {
-        BillingQuoteDto.Response.QuoteDetail response =
-                billingQuoteService.finalizeQuote(organizationId, ceremonyId, currentUser.userId());
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
-    }
-
-    @Operation(summary = "확정 견적 목록 조회", description = "버전 역순(최신이 먼저) — 무효화된 버전도 그대로 포함된다.")
-    @GetMapping("/{ceremonyId}/quotes")
-    public ApiResponse<List<BillingQuoteDto.Response.QuoteSummary>> findQuotes(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long organizationId,
-            @PathVariable Long ceremonyId
-    ) {
-        List<BillingQuoteDto.Response.QuoteSummary> response =
-                billingQuoteService.findQuotes(organizationId, ceremonyId, currentUser.userId());
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
-    }
-
-    @Operation(summary = "확정 견적 상세 조회", description = "줄 단위 내역(품목/수량/할인/세금 배분)까지 포함한다.")
-    @GetMapping("/{ceremonyId}/quotes/{quoteId}")
-    public ApiResponse<BillingQuoteDto.Response.QuoteDetail> findQuoteDetail(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long organizationId,
-            @PathVariable Long ceremonyId,
-            @PathVariable Long quoteId
-    ) {
-        BillingQuoteDto.Response.QuoteDetail response =
-                billingQuoteService.findQuoteDetail(organizationId, ceremonyId, quoteId, currentUser.userId());
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
-    }
-
-    @Operation(
-            summary = "확정 견적 무효화",
-            description = "견적 행 자체는 지우거나 고치지 않는다 — 상태 이력에 VOID 이벤트를 추가할 뿐이다(append-only)."
-    )
-    @PostMapping("/{ceremonyId}/quotes/{quoteId}/void")
-    public ApiResponse<BillingQuoteDto.Response.QuoteSummary> voidQuote(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long organizationId,
-            @PathVariable Long ceremonyId,
-            @PathVariable Long quoteId,
-            @Valid @RequestBody BillingQuoteDto.Request.VoidQuote request
-    ) {
-        BillingQuoteDto.Response.QuoteSummary response =
-                billingQuoteService.voidQuote(organizationId, ceremonyId, quoteId, currentUser.userId(), request);
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
-    }
-
-    @Operation(
             summary = "이 행사에 적용되는 마진 조회",
             description = "행사별 override가 있으면 그 값(source=CEREMONY_OVERRIDE), 없으면 조직 기본값"
                     + "(source=ORGANIZATION_DEFAULT), 둘 다 없으면 source=NONE(고객 견적서 생성 불가). 호출자가 OWNER여야 한다."
@@ -388,22 +385,6 @@ public class CeremonyController {
     ) {
         customerQuoteService.clearCeremonyMarginOverride(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(null, traceIdProvider.getTraceId());
-    }
-
-    @Operation(
-            summary = "고객 견적서 작성에 필요한 장비/인력 단가 입력 목록 조회",
-            description = "이 행사에서 승인된 장비/인력(태블릿·현장지원 등) 단위 상품별 수량·참고 원가 — 고객 견적서를 생성하려면 "
-                    + "이 목록에 나온 unitProductId 전부에 고객 단가를 채워 보내야 한다. 호출자가 OWNER여야 한다."
-    )
-    @GetMapping("/{ceremonyId}/customer-quotes/pricing-inputs")
-    public ApiResponse<List<CustomerQuoteDto.Response.PricingInput>> retrievePricingInputs(
-            @AuthenticationPrincipal CurrentUser currentUser,
-            @PathVariable Long organizationId,
-            @PathVariable Long ceremonyId
-    ) {
-        List<CustomerQuoteDto.Response.PricingInput> response =
-                customerQuoteService.retrievePricingInputs(organizationId, ceremonyId, currentUser.userId());
-        return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
     @Operation(

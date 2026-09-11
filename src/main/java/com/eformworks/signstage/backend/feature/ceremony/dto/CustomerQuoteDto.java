@@ -1,7 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.dto;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -39,14 +39,26 @@ public final class CustomerQuoteDto {
             private BigDecimal marginValue;
         }
 
+        /**
+         * 장비/인력(EQUIPMENT/PERSONNEL) 고객 정산 줄 하나 — 파트너가 카탈로그에서 직접 고른
+         * 품목·수량·고객 단가(signstage-docs
+         * business/unit-product-purchase-self-checkout-review.md 8.5절 결정, 2026-09-11).
+         * 승인된 구매 기록에서 역산하던 옛 방식(파생 목록에 가격만 채워 넣는 방식)을 완전히
+         * 대체한다 — 이제 품목·수량 자체도 파트너가 자유롭게 정한다(플랫폼이 실물을 커밋하지
+         * 않으므로 수량 상한이 없다).
+         */
         @Getter
         @Setter
         @NoArgsConstructor
         @AllArgsConstructor
-        public static class EquipmentPersonnelPrice {
+        public static class EquipmentPersonnelLine {
 
             @NotNull
             private Long unitProductId;
+
+            @NotNull
+            @Min(1)
+            private Integer quantity;
 
             @NotNull
             private BigDecimal customerUnitAmount;
@@ -59,14 +71,13 @@ public final class CustomerQuoteDto {
         public static class GenerateQuote {
 
             /**
-             * 이 행사에서 승인된 장비/인력(EQUIPMENT/PERSONNEL) 단위 상품마다 실고객에게 청구할
-             * 단가 — {@link com.eformworks.signstage.backend.feature.ceremony.service
-             * .CustomerQuoteService#retrievePricingInputs}가 알려주는 unitProductId 전부를
-             * 빠짐없이 담아야 한다(누락 시 CUSTOMER_QUOTE_PRICE_REQUIRED).
+             * 실고객에게 청구할 장비/인력 줄 목록 — 비어 있어도 된다(시스템 사용료만으로 견적을
+             * 만들 수도 있다). 각 {@code unitProductId}는 {@code UnitProductCategory}가
+             * {@code EQUIPMENT}/{@code PERSONNEL}인 상품이어야 한다(그 외는
+             * CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL).
              */
-            @NotEmpty
             @Valid
-            private List<EquipmentPersonnelPrice> equipmentPersonnelPrices;
+            private List<EquipmentPersonnelLine> equipmentPersonnelLines = List.of();
         }
     }
 
@@ -91,18 +102,6 @@ public final class CustomerQuoteDto {
             private final String marginType;
             private final BigDecimal marginValue;
             private final String source;
-        }
-
-        /** 이 행사에서 승인된 장비/인력 단위 상품 하나 — 고객 단가 입력 화면이 이 목록을 그대로 폼으로 그린다. */
-        @Getter
-        @AllArgsConstructor
-        public static class PricingInput {
-
-            private final Long unitProductId;
-            private final String itemName;
-            private final Integer quantity;
-            private final BigDecimal referenceCostUnitAmount;
-            private final BigDecimal referenceCostAmount;
         }
 
         @Getter
