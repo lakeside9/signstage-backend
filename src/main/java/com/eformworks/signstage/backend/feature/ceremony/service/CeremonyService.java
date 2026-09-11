@@ -438,6 +438,11 @@ public class CeremonyService {
      * "추가 구매하기" — 장바구니에 담는다("구매 확정"이 아니다). 같은 항목을 다시 담으면
      * 새 줄을 만들지 않고 수량을 더한다(signstage-docs
      * business/unit-product-purchase-self-checkout-review.md 6장 결정, 2026-09-11).
+     *
+     * <p>플랜이 확정(DRAFT → IN_PROGRESS)된 행사에서만 담을 수 있다(2026-09-11 사용자 요청) —
+     * 플랜을 고르기만 하고 아직 확정 전인 상태에서 미리 장바구니를 채워두는 걸 막는다.
+     * {@link #checkCeremonyPlanConfirmed}는 배포 전 레거시(plan 없음, 영원히 IN_PROGRESS)
+     * 행사는 그대로 통과시킨다 — DRAFT인지만 본다.
      */
     @Transactional
     public List<CeremonyDto.Response.CartLineSummary> addToCart(
@@ -447,9 +452,7 @@ public class CeremonyService {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         checkCeremonyEditable(ceremony);
-        if (ceremony.getBillingPlan() == null && ceremony.getStatus() == CeremonyStatus.DRAFT) {
-            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
-        }
+        checkCeremonyPlanConfirmed(ceremony);
 
         UnitProduct unitProduct = unitProductRepository.findById(request.getUnitProductId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
@@ -530,15 +533,12 @@ public class CeremonyService {
         Member actingMember = findActiveMemberOrThrow(organizationId, currentUserId);
         checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         checkCeremonyEditable(ceremony);
-        // 플랜을 아직 한 번도 선택하지 않은 신규 행사(2026-09-10부터 DRAFT로 만들 수 있게 됨)는
-        // 여기서 막는다 — 안 A 큐레이션이 "플랜 없음"을 배포 전 레거시 행사(영원히 plan_id
-        // NULL, status IN_PROGRESS/COMPLETED — 아래에서 그대로 무제한 허용)의 예외로 취급해서,
-        // status로 구분하지 않으면 "아직 안 골랐을 뿐"인 DRAFT 행사도 카탈로그 전체를 제한 없이
-        // 구매할 수 있는 구멍이 생긴다(signstage-docs
-        // business/ceremony-registration-flow-and-billing-tab-separation-review.md 4장).
-        if (ceremony.getBillingPlan() == null && ceremony.getStatus() == CeremonyStatus.DRAFT) {
-            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
-        }
+        // 플랜이 확정(DRAFT → IN_PROGRESS)된 행사에서만 구매할 수 있다(2026-09-11 사용자
+        // 요청) — addToCart에서 이미 막지만, 이 요청 이전에 이미 담겨 있던 장바구니로
+        // 구매를 시도하는 경우까지 방어한다. checkCeremonyPlanConfirmed는 배포 전 레거시
+        // (plan 없음, 영원히 IN_PROGRESS) 행사는 그대로 통과시킨다 — DRAFT인지만 본다
+        // (signstage-docs business/ceremony-registration-flow-and-billing-tab-separation-review.md 4장).
+        checkCeremonyPlanConfirmed(ceremony);
 
         List<CeremonyUnitProductCartLine> cartLines = ceremonyUnitProductCartLineRepository
                 .findAllByCeremonyIdOrderByIdAsc(ceremonyId);

@@ -636,13 +636,54 @@ class CeremonyServiceTest {
         Ceremony ceremony = ceremony(organization, CEREMONY_ID);
         stubOwnerMember(ceremony);
 
-        // 플랜 미선택 가드가 장바구니 조회보다 먼저 걸려야 한다 — 장바구니 리포지토리는
+        // 플랜 확정 가드가 장바구니 조회보다 먼저 걸려야 한다 — 장바구니 리포지토리는
         // 아예 안 불려야 한다.
         assertThatThrownBy(() -> ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID))
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
-                .isEqualTo(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
+                .isEqualTo(CeremonyErrorCode.CEREMONY_PLAN_NOT_CONFIRMED);
         verify(ceremonyUnitProductCartLineRepository, never()).findAllByCeremonyIdOrderByIdAsc(any());
+    }
+
+    /**
+     * 2026-09-11 사용자 요청 — "플랜 확정 후에 단위 상품 추가 구매를 할 수 있도록 제약을
+     * 걸어주세요." 플랜을 고르기만 하고 아직 확정 전인 DRAFT 행사는 담긴 것과 무관하게
+     * 거부된다 — {@code checkCeremonyPlanConfirmed}는 billingPlan 값이 아니라 status만 본다.
+     */
+    @Test
+    @DisplayName("추가구매 — 플랜을 선택만 하고 아직 확정 전(DRAFT)인 행사는 거부한다")
+    void purchaseUnitProducts_rejectsWhenPlanSelectedButNotConfirmed() {
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder().name("스탠다드").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", CEREMONY_ID);
+        stubOwnerMember(ceremony);
+
+        assertThatThrownBy(() -> ceremonyService.purchaseUnitProducts(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CEREMONY_PLAN_NOT_CONFIRMED);
+        verify(ceremonyUnitProductCartLineRepository, never()).findAllByCeremonyIdOrderByIdAsc(any());
+    }
+
+    @Test
+    @DisplayName("장바구니 담기 — 플랜을 선택만 하고 아직 확정 전(DRAFT)인 행사는 거부한다")
+    void addToCart_rejectsWhenPlanSelectedButNotConfirmed() {
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder().name("스탠다드").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", CEREMONY_ID);
+        stubOwnerMember(ceremony);
+
+        assertThatThrownBy(() -> ceremonyService.addToCart(
+                ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, new CeremonyDto.Request.AddToCart(201L, 1)
+        ))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CEREMONY_PLAN_NOT_CONFIRMED);
+        verify(unitProductRepository, never()).findById(any());
     }
 
     @Test
