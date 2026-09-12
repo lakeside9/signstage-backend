@@ -1565,18 +1565,32 @@ public class CeremonyService {
      * "플랫폼 이용료" 흐름에서 완전히 분리됐다(signstage-docs
      * business/unit-product-purchase-self-checkout-review.md 8.2절 결정, 2026-09-11).
      * 플랜 구성에 장비·인력이 포함돼 있어도 이 메서드는 걸러낸다.
+     *
+     * <p>토글형({@link UnitProductType#isToggle()}, 지금은 EVENT_EFFECT_BUNDLE)은 플랜이 이미
+     * {@code includedQuantity ≥ 1}로 포함하고 있으면 후보에서 뺀다(2026-09-12 사용자 지적) —
+     * {@link #retrieveApplicableUnitProductIds}가 "플랜 기본 포함"만으로도 CeremonyEvent에
+     * 적용 가능하다고 이미 인정하는 것과 같은 원칙이라, 포함된 걸 또 추가구매하게 두면 같은
+     * 효과를 중복으로 사는 셈이 된다. 수량형(태블릿 등)은 기본 포함 수량을 넘겨 더 사는 게
+     * 정상 흐름이라 이 필터를 타지 않는다.
      */
     List<Long> retrievePurchasableUnitProductIds(Ceremony ceremony) {
         Optional<CeremonyPlanHistory> snapshot = findLatestPlanHistoryForSnapshot(ceremony);
         return snapshot
                 .map(history -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(history.getId()).stream()
                         .filter(line -> line.getUnitProduct().getCategory().isSystemUsageFee())
+                        .filter(line -> !alreadyIncludedToggle(line.getUnitProduct(), line.getIncludedQuantity()))
                         .map(line -> line.getUnitProduct().getId())
                         .toList())
                 .orElseGet(() -> billingPlanUnitProductRepository.findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
                         .filter(source -> source.getUnitProduct().getCategory().isSystemUsageFee())
+                        .filter(source -> !alreadyIncludedToggle(source.getUnitProduct(), source.getIncludedQuantity()))
                         .map(source -> source.getUnitProduct().getId())
                         .toList());
+    }
+
+    /** {@link #retrievePurchasableUnitProductIds}가 쓰는 판정 — 토글형이면서 이미 1개 이상 포함돼 있는지. */
+    private boolean alreadyIncludedToggle(UnitProduct unitProduct, Integer includedQuantity) {
+        return unitProduct.getType().isToggle() && includedQuantity != null && includedQuantity >= 1;
     }
 
     /**

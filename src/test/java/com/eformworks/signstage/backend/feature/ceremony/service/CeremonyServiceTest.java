@@ -926,6 +926,59 @@ class CeremonyServiceTest {
         assertThat(result).containsExactly(901L);
     }
 
+    /**
+     * 2026-09-12 사용자 지적 — "이벤트 효과 묶음 단위상품을 행사에서 이미 구매를 한 상태이면
+     * 추가 구매도 안되도록 구현이 되어 있는지 확인해주세요. 과금플랜에 포함되어 있어도 추가
+     * 구매가 안되도록 제약이 필요합니다." 확인해보니 후자(플랜 기본 포함분)는 막혀 있지
+     * 않았다 — retrieveApplicableUnitProductIds는 "플랜 기본 포함만으로도 적용 가능"이라고
+     * 이미 인정하는데, 추가구매 후보 목록엔 그 판단이 반영되지 않아 같은 효과를 또 살 수
+     * 있었다.
+     */
+    @Test
+    @DisplayName("추가구매 후보 목록 — 이벤트 효과 묶음(토글형)이 플랜에 이미 포함(1개)돼 있으면 후보에서 뺀다")
+    void retrievePurchasableUnitProductIds_excludesToggleAlreadyIncludedInPlan() {
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder().name("플랜").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+
+        UnitProduct signers = unitProduct(901L, UnitProductType.SIGNERS); // 수량형 — 기본 포함이어도 추가구매 가능해야 한다.
+        UnitProduct bundle = UnitProduct.builder()
+                .type(UnitProductType.EVENT_EFFECT_BUNDLE).name("3종 묶음").category(UnitProductCategory.APPLICATION).build();
+        ReflectionTestUtils.setField(bundle, "id", 902L);
+        BillingPlanUnitProduct signersLine = BillingPlanUnitProduct.builder()
+                .billingPlan(plan).unitProduct(signers).includedQuantity(5).build();
+        BillingPlanUnitProduct bundleLine = BillingPlanUnitProduct.builder()
+                .billingPlan(plan).unitProduct(bundle).includedQuantity(1).build();
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of(signersLine, bundleLine));
+
+        List<Long> result = ceremonyService.retrievePurchasableUnitProductIds(ceremony);
+
+        assertThat(result).containsExactly(901L);
+    }
+
+    @Test
+    @DisplayName("추가구매 후보 목록 — 이벤트 효과 묶음이 플랜에 0개 포함(구매로만 확보)이면 후보에 남는다")
+    void retrievePurchasableUnitProductIds_includesToggleWhenIncludedQuantityIsZero() {
+        Organization organization = organization();
+        BillingPlan plan = BillingPlan.builder().name("플랜").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Ceremony ceremony = Ceremony.builder().organization(organization).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+
+        UnitProduct bundle = UnitProduct.builder()
+                .type(UnitProductType.EVENT_EFFECT_BUNDLE).name("3종 묶음").category(UnitProductCategory.APPLICATION).build();
+        ReflectionTestUtils.setField(bundle, "id", 902L);
+        BillingPlanUnitProduct bundleLine = BillingPlanUnitProduct.builder()
+                .billingPlan(plan).unitProduct(bundle).includedQuantity(0).build();
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of(bundleLine));
+
+        List<Long> result = ceremonyService.retrievePurchasableUnitProductIds(ceremony);
+
+        assertThat(result).containsExactly(902L);
+    }
+
     @Test
     @DisplayName("배타 그룹 검사 — 같은 exclusivityGroup의 단위 상품이 2개 이상이면 거부된다")
     void checkExclusivityGroups_conflictingGroup_throws() {
