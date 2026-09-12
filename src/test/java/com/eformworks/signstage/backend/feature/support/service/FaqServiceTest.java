@@ -25,6 +25,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** {@link FaqService} 단위 테스트 — signstage-docs business/partner-support-center-review.md 4장. */
@@ -76,6 +80,19 @@ class FaqServiceTest {
         FaqDto.Response.FaqSummary response = faqService.findFaq(1L);
 
         assertThat(response.isActive()).isFalse();
+    }
+
+    @Test
+    @DisplayName("목록 조회 — keyword/active를 그대로 리포지토리 검색에 넘긴다")
+    void findFaqs_delegatesKeywordAndActiveToRepository() {
+        Pageable pageable = PageRequest.of(0, 20);
+        given(faqRepository.search("결제", true, pageable))
+                .willReturn(new PageImpl<>(List.of(faq(1L, 10)), pageable, 1));
+
+        Page<FaqDto.Response.FaqSummary> response = faqService.findFaqs("결제", true, pageable);
+
+        assertThat(response.getTotalElements()).isEqualTo(1);
+        verify(faqRepository).search("결제", true, pageable);
     }
 
     @Test

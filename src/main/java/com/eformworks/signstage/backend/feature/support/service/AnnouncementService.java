@@ -55,11 +55,9 @@ public class AnnouncementService {
                 .orElseThrow(() -> new ApplicationException(SupportErrorCode.ANNOUNCEMENT_NOT_FOUND)));
     }
 
-    public Page<AnnouncementDto.Response.AnnouncementSummary> findAnnouncements(Boolean active, Pageable pageable) {
-        Page<Announcement> page = active == null
-                ? announcementRepository.findAllByOrderByPinnedDescCreatedAtDesc(pageable)
-                : announcementRepository.findAllByActiveOrderByPinnedDescCreatedAtDesc(active, pageable);
-        return page.map(this::toSummary);
+    /** {@code keyword}는 title/content 중 하나라도 포함하면 매칭된다(2026-09-12 사용자 요청). */
+    public Page<AnnouncementDto.Response.AnnouncementSummary> findAnnouncements(String keyword, Boolean active, Pageable pageable) {
+        return announcementRepository.search(keyword, active, pageable).map(this::toSummary);
     }
 
     @Transactional

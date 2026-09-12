@@ -38,13 +38,17 @@ public class PlatformAdminAnnouncementController {
     private final AnnouncementService announcementService;
     private final TraceIdProvider traceIdProvider;
 
-    @Operation(summary = "공지사항 목록 조회", description = "active로 필터할 수 있다(생략하면 전체).")
+    @Operation(
+            summary = "공지사항 목록 조회",
+            description = "keyword(title/content 부분일치), active 둘 다 선택 필터다(생략하면 그 조건 없이 전체)."
+    )
     @GetMapping
     public ApiResponse<PageResponse<AnnouncementDto.Response.AnnouncementSummary>> findAnnouncements(
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Boolean active,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        Page<AnnouncementDto.Response.AnnouncementSummary> response = announcementService.findAnnouncements(active, pageable);
+        Page<AnnouncementDto.Response.AnnouncementSummary> response = announcementService.findAnnouncements(keyword, active, pageable);
         return ApiResponse.success(PageResponse.from(response), traceIdProvider.getTraceId());
     }
 

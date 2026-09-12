@@ -51,9 +51,9 @@ public class FaqService {
                 .orElseThrow(() -> new ApplicationException(SupportErrorCode.FAQ_NOT_FOUND)));
     }
 
-    public Page<FaqDto.Response.FaqSummary> findFaqs(Boolean active, Pageable pageable) {
-        Page<Faq> page = active == null ? faqRepository.findAll(pageable) : faqRepository.findAllByActive(active, pageable);
-        return page.map(this::toSummary);
+    /** {@code keyword}는 category/question/answer 중 하나라도 포함하면 매칭된다(2026-09-12 사용자 요청). */
+    public Page<FaqDto.Response.FaqSummary> findFaqs(String keyword, Boolean active, Pageable pageable) {
+        return faqRepository.search(keyword, active, pageable).map(this::toSummary);
     }
 
     @Transactional

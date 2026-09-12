@@ -23,6 +23,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** {@link AnnouncementService} 단위 테스트 — signstage-docs business/partner-support-center-review.md 3장. */
@@ -99,6 +103,21 @@ class AnnouncementServiceTest {
         AnnouncementDto.Response.AnnouncementSummary response = announcementService.findAnnouncement(1L);
 
         assertThat(response.isActive()).isFalse();
+    }
+
+    @Test
+    @DisplayName("관리자 목록 조회 — keyword/active를 그대로 리포지토리 검색에 넘긴다")
+    void findAnnouncements_delegatesKeywordAndActiveToRepository() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Announcement announcement = Announcement.builder().title("점검 안내").content("내용").pinned(false).build();
+        given(announcementRepository.search("점검", true, pageable))
+                .willReturn(new PageImpl<>(List.of(announcement), pageable, 1));
+
+        Page<AnnouncementDto.Response.AnnouncementSummary> response =
+                announcementService.findAnnouncements("점검", true, pageable);
+
+        assertThat(response.getTotalElements()).isEqualTo(1);
+        verify(announcementRepository).search("점검", true, pageable);
     }
 
     @Test
