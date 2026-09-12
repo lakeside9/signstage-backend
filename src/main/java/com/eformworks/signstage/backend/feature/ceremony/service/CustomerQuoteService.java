@@ -157,6 +157,29 @@ public class CustomerQuoteService {
     // ==================== 고객 견적서 ====================
 
     /**
+     * 장비/인력 줄별 고객 청구액 계산 결과 — {@link #computeQuote}가 미리보기(저장 없음)와
+     * 생성(저장) 양쪽에서 재사용한다.
+     */
+    private record EquipmentPersonnelLineAmount(
+            Long unitProductId, String itemName, Integer quantity, BigDecimal customerUnitAmount, BigDecimal customerAmount
+    ) {
+    }
+
+    /**
+     * 견적 계산 결과 전체 — 검증·계산은 {@link #computeQuote} 한 곳에서만 하고,
+     * {@link #previewCustomerQuote}(저장 없이 화면에 보여주기, 2026-09-12 사용자 요청)와
+     * {@link #generateCustomerQuote}(실제 저장)가 이 결과를 각자 다르게 소비한다 — 두 경로가
+     * 계산 로직을 따로 두면 나중에 한쪽만 고쳐 숫자가 어긋날 위험이 있어 하나로 합쳤다.
+     */
+    private record QuoteComputation(
+            Ceremony ceremony, int nextVersion, MarginInfo margin,
+            BigDecimal systemUsageCostAmount, BigDecimal systemUsageMarginAmount, BigDecimal systemUsageCustomerAmount,
+            List<EquipmentPersonnelLineAmount> equipmentPersonnelLineAmounts, BigDecimal equipmentPersonnelTotal,
+            BigDecimal totalCustomerAmount
+    ) {
+    }
+
+    /**
      * 플랜이 확정(DRAFT → IN_PROGRESS)된 행사에서만 견적서를 만들 수 있다(2026-09-11 사용자
      * 요청 — 단위 상품 추가구매와 같은 기준, {@link CeremonyService#checkCeremonyPlanConfirmed}).
      * DRAFT 상태에서는 플랜 스냅샷이 아직 없어(2.4절, {@code findLatestPlanHistoryForSnapshot}이
@@ -165,8 +188,7 @@ public class CustomerQuoteService {
      * 위에서 실고객에게 청구할 견적서를 만들면, 견적서 생성 이후 원가가 바뀌어도 그 견적서
      * 자체는 스냅샷이라 조용히 어긋난 기준으로 남는다.
      */
-    @Transactional
-    public CustomerQuoteDto.Response.QuoteDetail generateCustomerQuote(
+    private QuoteComputation computeQuote(
             Long organizationId, Long ceremonyId, Long currentUserId, CustomerQuoteDto.Request.GenerateQuote request
     ) {
         Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
@@ -209,12 +231,6 @@ public class CustomerQuoteService {
                 .subtract(systemUsageCostAmount);
         BigDecimal systemUsageCustomerAmount = systemUsageCostAmount.add(systemUsageMarginAmount);
 
-        // 장비/인력 줄별 고객 청구액을 먼저 전부 계산해둔다 — CustomerQuote 헤더를 한 번에
-        // 완결된 값으로 만들기 위해서다(BillingQuote와 같은 완전-불변 빌더 원칙).
-        record EquipmentPersonnelLineAmount(
-                Long unitProductId, String itemName, Integer quantity, BigDecimal customerUnitAmount, BigDecimal customerAmount
-        ) {
-        }
         // 1차: 요청 라인을 전부 검증·해석한다 — 사용중지(또는 가격 기간 공백) 단위 상품과
         // 배타 그룹 충돌 둘 다 이 화면엔 검사가 아예 없어 그대로 담기던 문제였다(2026-09-11
         // 발견). CeremonyEventService의 "이벤트에 옵션 적용" 경로가 쓰던 검사를
@@ -270,18 +286,74 @@ public class CustomerQuoteService {
         );
 
         int nextVersion = customerQuoteRepository.findMaxVersion(ceremonyId) + 1;
+        return new QuoteComputation(
+                ceremony, nextVersion, margin, systemUsageCostAmount, systemUsageMarginAmount, systemUsageCustomerAmount,
+                equipmentPersonnelLineAmounts, equipmentPersonnelTotal, totalCustomerAmount
+        );
+    }
+
+    /**
+     * 저장하지 않고 계산 결과만 보여준다 — "생성" 버튼을 누르면 먼저 이걸로 화면에 견적
+     * 내역을 띄우고, 파트너가 "저장" 버튼을 눌러야 {@link #generateCustomerQuote}로 실제
+     * 저장된다(2026-09-12 사용자 요청 — "닫기"로 저장하지 않고 취소할 수도 있다). 응답 모양은
+     * {@link #generateCustomerQuote}와 같은 {@code QuoteDetail}이지만 저장된 게 아니므로
+     * {@code id}/{@code createdByLoginId}/{@code createdAt}은 없다(null) — {@code version}은
+     * "저장하면 몇 번째 버전이 될지" 참고용으로 채운다.
+     */
+    public CustomerQuoteDto.Response.QuoteDetail previewCustomerQuote(
+            Long organizationId, Long ceremonyId, Long currentUserId, CustomerQuoteDto.Request.GenerateQuote request
+    ) {
+        QuoteComputation computation = computeQuote(organizationId, ceremonyId, currentUserId, request);
+
+        CustomerQuoteDto.Response.QuoteSummary summary = new CustomerQuoteDto.Response.QuoteSummary(
+                null,
+                computation.nextVersion(),
+                computation.ceremony().getCurrencyCode(),
+                computation.ceremony().getCurrencyFractionDigits(),
+                computation.systemUsageCostAmount(),
+                computation.margin().getMarginType().name(),
+                computation.margin().getMarginValue(),
+                computation.systemUsageMarginAmount(),
+                computation.systemUsageCustomerAmount(),
+                computation.equipmentPersonnelTotal(),
+                computation.totalCustomerAmount(),
+                LocalDateTime.now(),
+                null,
+                null
+        );
+        List<CustomerQuoteDto.Response.QuoteLineSummary> lines = new ArrayList<>();
+        lines.add(new CustomerQuoteDto.Response.QuoteLineSummary(
+                "SYSTEM_USAGE", null, "시스템 사용료", 1,
+                computation.systemUsageCostAmount(), computation.systemUsageCustomerAmount(), computation.systemUsageCustomerAmount()
+        ));
+        for (EquipmentPersonnelLineAmount lineAmount : computation.equipmentPersonnelLineAmounts()) {
+            lines.add(new CustomerQuoteDto.Response.QuoteLineSummary(
+                    "EQUIPMENT_PERSONNEL", lineAmount.unitProductId(), lineAmount.itemName(), lineAmount.quantity(),
+                    null, lineAmount.customerUnitAmount(), lineAmount.customerAmount()
+            ));
+        }
+        return new CustomerQuoteDto.Response.QuoteDetail(summary, lines);
+    }
+
+    @Transactional
+    public CustomerQuoteDto.Response.QuoteDetail generateCustomerQuote(
+            Long organizationId, Long ceremonyId, Long currentUserId, CustomerQuoteDto.Request.GenerateQuote request
+    ) {
+        QuoteComputation computation = computeQuote(organizationId, ceremonyId, currentUserId, request);
+        Ceremony ceremony = computation.ceremony();
+
         CustomerQuote quote = CustomerQuote.builder()
                 .ceremony(ceremony)
-                .version(nextVersion)
+                .version(computation.nextVersion())
                 .currencyCode(ceremony.getCurrencyCode())
                 .currencyFractionDigits(ceremony.getCurrencyFractionDigits())
                 .currencyRoundingMode(ceremony.getCurrencyRoundingMode())
-                .systemUsageCostAmount(systemUsageCostAmount)
-                .margin(margin)
-                .systemUsageMarginAmount(systemUsageMarginAmount)
-                .systemUsageCustomerAmount(systemUsageCustomerAmount)
-                .equipmentPersonnelCustomerAmount(equipmentPersonnelTotal)
-                .totalCustomerAmount(totalCustomerAmount)
+                .systemUsageCostAmount(computation.systemUsageCostAmount())
+                .margin(computation.margin())
+                .systemUsageMarginAmount(computation.systemUsageMarginAmount())
+                .systemUsageCustomerAmount(computation.systemUsageCustomerAmount())
+                .equipmentPersonnelCustomerAmount(computation.equipmentPersonnelTotal())
+                .totalCustomerAmount(computation.totalCustomerAmount())
                 .pricingCalculatedAt(LocalDateTime.now())
                 .build();
         customerQuoteRepository.save(quote);
@@ -292,12 +364,12 @@ public class CustomerQuoteService {
                 .itemId(null)
                 .itemName("시스템 사용료")
                 .quantity(1)
-                .referenceCostUnitAmount(systemUsageCostAmount)
-                .customerUnitAmount(systemUsageCustomerAmount)
-                .customerAmount(systemUsageCustomerAmount)
+                .referenceCostUnitAmount(computation.systemUsageCostAmount())
+                .customerUnitAmount(computation.systemUsageCustomerAmount())
+                .customerAmount(computation.systemUsageCustomerAmount())
                 .build());
 
-        for (EquipmentPersonnelLineAmount lineAmount : equipmentPersonnelLineAmounts) {
+        for (EquipmentPersonnelLineAmount lineAmount : computation.equipmentPersonnelLineAmounts()) {
             customerQuoteLineRepository.save(CustomerQuoteLine.builder()
                     .customerQuote(quote)
                     .lineType("EQUIPMENT_PERSONNEL")
@@ -313,6 +385,21 @@ public class CustomerQuoteService {
         }
 
         return findCustomerQuoteDetail(organizationId, ceremonyId, quote.getId(), currentUserId);
+    }
+
+    /** 파트너가 잘못 만든 견적서를 지운다(2026-09-12 사용자 요청) — 줄을 먼저 지우고 헤더를
+     * 지운다(FK, cascade 없음). 다른 버전 번호에는 영향을 주지 않는다 — 버전은 append-only
+     * 증가값이라 지워도 재사용하지 않는다. */
+    @Transactional
+    public void deleteCustomerQuote(Long organizationId, Long ceremonyId, Long quoteId, Long currentUserId) {
+        ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        checkCustomerQuoteAccess(actingMember);
+
+        CustomerQuote quote = customerQuoteRepository.findByIdAndCeremonyId(quoteId, ceremonyId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_NOT_FOUND));
+        customerQuoteLineRepository.deleteAllByCustomerQuoteId(quote.getId());
+        customerQuoteRepository.delete(quote);
     }
 
     public List<CustomerQuoteDto.Response.QuoteSummary> findCustomerQuotes(Long organizationId, Long ceremonyId, Long currentUserId) {

@@ -239,4 +239,71 @@ class CustomerQuoteServiceTest {
         assertThat(captor.getValue()).isEmpty();
         verify(customerQuoteRepository).save(any());
     }
+
+    @Test
+    @DisplayName("미리보기는 같은 계산을 하지만 저장하지 않는다(2026-09-12 사용자 요청 — 생성 버튼은 미리보기, 저장 버튼이 눌러야 저장)")
+    void previewCustomerQuote_computesButDoesNotSave() {
+        Ceremony ceremony = ceremony();
+        stubCommon(ceremony);
+        given(customerQuoteRepository.findMaxVersion(CEREMONY_ID)).willReturn(2);
+
+        CustomerQuoteDto.Request.GenerateQuote request = new CustomerQuoteDto.Request.GenerateQuote(
+                List.of(new CustomerQuoteDto.Request.EquipmentPersonnelLine(null, "태블릿 받침대", 2, BigDecimal.valueOf(5000)))
+        );
+
+        CustomerQuoteDto.Response.QuoteDetail result =
+                customerQuoteService.previewCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request);
+
+        assertThat(result.getSummary().getId()).isNull();
+        assertThat(result.getSummary().getCreatedByLoginId()).isNull();
+        assertThat(result.getSummary().getCreatedAt()).isNull();
+        assertThat(result.getSummary().getVersion()).isEqualTo(3);
+        assertThat(result.getSummary().getEquipmentPersonnelCustomerAmount()).isEqualByComparingTo(BigDecimal.valueOf(10000));
+        assertThat(result.getSummary().getTotalCustomerAmount()).isEqualByComparingTo(BigDecimal.valueOf(10000));
+        assertThat(result.getLines()).hasSize(2);
+        verify(customerQuoteRepository, never()).save(any());
+        verify(customerQuoteLineRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("견적서 삭제 — 줄을 먼저 지우고 헤더를 지운다")
+    void deleteCustomerQuote_deletesLinesThenHeader() {
+        Ceremony ceremony = ceremony();
+        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+                .willReturn(Member.builder().role(MemberRole.OWNER).build());
+        CustomerQuote quote = CustomerQuote.builder()
+                .ceremony(ceremony).version(1)
+                .currencyCode("KRW").currencyFractionDigits((short) 0).currencyRoundingMode("HALF_UP")
+                .systemUsageCostAmount(BigDecimal.ZERO)
+                .margin(new MarginInfo(DiscountType.PERCENT, BigDecimal.TEN))
+                .systemUsageMarginAmount(BigDecimal.ZERO)
+                .systemUsageCustomerAmount(BigDecimal.ZERO)
+                .equipmentPersonnelCustomerAmount(BigDecimal.ZERO)
+                .totalCustomerAmount(BigDecimal.ZERO)
+                .build();
+        ReflectionTestUtils.setField(quote, "id", 500L);
+        given(customerQuoteRepository.findByIdAndCeremonyId(500L, CEREMONY_ID)).willReturn(Optional.of(quote));
+
+        customerQuoteService.deleteCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, 500L, CURRENT_USER_ID);
+
+        verify(customerQuoteLineRepository).deleteAllByCustomerQuoteId(500L);
+        verify(customerQuoteRepository).delete(quote);
+    }
+
+    @Test
+    @DisplayName("견적서 삭제 — 없는 견적서면 거부된다")
+    void deleteCustomerQuote_notFound_rejected() {
+        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony());
+        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+                .willReturn(Member.builder().role(MemberRole.OWNER).build());
+        given(customerQuoteRepository.findByIdAndCeremonyId(999L, CEREMONY_ID)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> customerQuoteService.deleteCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, 999L, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CUSTOMER_QUOTE_NOT_FOUND);
+        verify(customerQuoteLineRepository, never()).deleteAllByCustomerQuoteId(any());
+        verify(customerQuoteRepository, never()).delete(any(CustomerQuote.class));
+    }
 }

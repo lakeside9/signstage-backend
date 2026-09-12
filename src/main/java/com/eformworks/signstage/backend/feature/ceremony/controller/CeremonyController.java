@@ -388,9 +388,28 @@ public class CeremonyController {
     }
 
     @Operation(
-            summary = "고객 견적서 생성",
+            summary = "고객 견적서 미리보기",
             description = "지금 유효한 마진(행사별 override 또는 조직 기본값)으로 시스템 사용료를 계산하고, 장비/인력은 요청에 담긴 "
-                    + "고객 단가를 그대로 스냅샷한다(세전 금액). 마진이 설정돼 있지 않으면 실패한다. 호출자가 OWNER여야 한다."
+                    + "고객 단가를 그대로 반영해 화면에 보여줄 결과만 계산한다 — 저장하지 않는다(2026-09-12 사용자 요청, "
+                    + "\"생성\" 버튼을 누르면 먼저 내역을 보여주고 \"저장\" 버튼을 눌러야 실제로 저장한다). 마진이 설정돼 있지 "
+                    + "않으면 실패한다. 호출자가 OWNER여야 한다."
+    )
+    @PostMapping("/{ceremonyId}/customer-quotes/preview")
+    public ApiResponse<CustomerQuoteDto.Response.QuoteDetail> previewCustomerQuote(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @Valid @RequestBody CustomerQuoteDto.Request.GenerateQuote request
+    ) {
+        CustomerQuoteDto.Response.QuoteDetail response =
+                customerQuoteService.previewCustomerQuote(organizationId, ceremonyId, currentUser.userId(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "고객 견적서 저장",
+            description = "미리보기(POST .../customer-quotes/preview)와 같은 입력을 그대로 다시 계산해 저장한다 — 세전 금액. "
+                    + "마진이 설정돼 있지 않으면 실패한다. 호출자가 OWNER여야 한다."
     )
     @PostMapping("/{ceremonyId}/customer-quotes")
     public ApiResponse<CustomerQuoteDto.Response.QuoteDetail> generateCustomerQuote(
@@ -427,5 +446,17 @@ public class CeremonyController {
         CustomerQuoteDto.Response.QuoteDetail response =
                 customerQuoteService.findCustomerQuoteDetail(organizationId, ceremonyId, quoteId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "고객 견적서 삭제", description = "잘못 만든 견적서를 지운다(2026-09-12 사용자 요청). 호출자가 OWNER여야 한다.")
+    @DeleteMapping("/{ceremonyId}/customer-quotes/{quoteId}")
+    public ApiResponse<Void> deleteCustomerQuote(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long quoteId
+    ) {
+        customerQuoteService.deleteCustomerQuote(organizationId, ceremonyId, quoteId, currentUser.userId());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 }
