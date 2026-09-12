@@ -71,6 +71,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -908,21 +909,24 @@ public class CeremonyService {
      * organizationId/ceremonyId도 선택 필터다 — 기존 "승인 큐"(둘 다 null, status=PENDING
      * 기본)와 신규 "행사 이력" 화면(ceremonyId로 좁힘, signstage-docs
      * business/unit-product-purchase-self-checkout-review.md 8.6절 결정, 2026-09-11)이 이
-     * 메서드를 같이 쓴다.
+     * 메서드를 같이 쓴다. requesterKeyword/ceremonyTitle도 선택 필터다(2026-09-12 사용자
+     * 요청 추가 — 요청자/행사명 검색).
      */
     public Page<PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary> findUnitProductPurchaseRequests(
             PurchaseStatus status,
             Long organizationId,
             Long ceremonyId,
+            String requesterKeyword,
+            String ceremonyTitle,
             Pageable pageable
     ) {
         Page<CeremonyUnitProductPurchase> purchases =
-                ceremonyUnitProductPurchaseRepository.search(status, organizationId, ceremonyId, pageable);
-        Map<Long, String> loginIdsByUserId = resolveUserLoginIds(
+                ceremonyUnitProductPurchaseRepository.search(status, organizationId, ceremonyId, requesterKeyword, ceremonyTitle, pageable);
+        Map<Long, User> usersByUserId = resolveUsers(
                 purchases.getContent().stream()
                         .flatMap(purchase -> Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy()))
         );
-        return purchases.map(purchase -> toUnitProductRequestSummary(purchase, loginIdsByUserId));
+        return purchases.map(purchase -> toUnitProductRequestSummary(purchase, usersByUserId));
     }
 
     @Transactional
@@ -940,7 +944,7 @@ public class CeremonyService {
                 purchase.getCeremony().getOrganization().getId(),
                 "purchaseId=" + purchaseId + ", ceremonyId=" + purchase.getCeremony().getId()
         );
-        return toUnitProductRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy())));
+        return toUnitProductRequestSummary(purchase, resolveUsers(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy())));
     }
 
     @Transactional
@@ -959,7 +963,7 @@ public class CeremonyService {
                 purchase.getCeremony().getOrganization().getId(),
                 "purchaseId=" + purchaseId + ", reason=" + request.getRejectionReason()
         );
-        return toUnitProductRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy())));
+        return toUnitProductRequestSummary(purchase, resolveUsers(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy())));
     }
 
     /**
@@ -986,7 +990,7 @@ public class CeremonyService {
                 purchase.getCeremony().getOrganization().getId(),
                 "purchaseId=" + purchaseId + ", reason=" + request.getCancellationReason()
         );
-        return toUnitProductRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy())));
+        return toUnitProductRequestSummary(purchase, resolveUsers(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy())));
     }
 
     private CeremonyUnitProductPurchase findPendingUnitProductPurchaseOrThrow(Long purchaseId) {
@@ -1063,13 +1067,18 @@ public class CeremonyService {
         }
     }
 
-    private Map<Long, String> resolveUserLoginIds(Stream<Long> userIds) {
+    /**
+     * loginId만 돌려주던 {@code resolveUserLoginIds}를 일반화했다(2026-09-12) — 요청자
+     * "명"(name)도 보여달라는 요청으로 {@code User} 객체 자체를 돌려주고, 호출부가 필요한
+     * 필드(loginId/name)를 그때그때 꺼내 쓴다.
+     */
+    private Map<Long, User> resolveUsers(Stream<Long> userIds) {
         List<Long> ids = userIds.filter(Objects::nonNull).distinct().toList();
         if (ids.isEmpty()) {
             return Map.of();
         }
         return userRepository.findAllById(ids).stream()
-                .collect(Collectors.toMap(User::getId, User::getLoginId));
+                .collect(Collectors.toMap(User::getId, Function.identity()));
     }
 
     // ---- CeremonyEventService/CustomerQuoteService와 공유하는 package-private 헬퍼 ----
@@ -1891,7 +1900,7 @@ public class CeremonyService {
 
     private PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary toUnitProductRequestSummary(
             CeremonyUnitProductPurchase purchase,
-            Map<Long, String> loginIdsByUserId
+            Map<Long, User> usersByUserId
     ) {
         List<CeremonyDto.Response.UnitProductPurchaseLineSummary> lines = ceremonyUnitProductPurchaseLineRepository
                 .findAllByPurchaseIdOrderByIdAsc(purchase.getId()).stream()
@@ -1904,19 +1913,24 @@ public class CeremonyService {
                                 event.getScheduledStartAt(), event.getActualStartAt()
                         ))
                         .toList();
+        User requester = usersByUserId.get(purchase.getCreatedBy());
+        User reviewer = purchase.getReviewedBy() != null ? usersByUserId.get(purchase.getReviewedBy()) : null;
+        User canceller = purchase.getCancelledBy() != null ? usersByUserId.get(purchase.getCancelledBy()) : null;
         return new PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary(
                 purchase.getId(),
                 purchase.getCreatedBy(),
-                loginIdsByUserId.get(purchase.getCreatedBy()),
+                requester != null ? requester.getLoginId() : null,
+                // 요청자 "명"(name)도 보여달라는 요청(2026-09-12) — loginId와 별개 필드다.
+                requester != null ? requester.getName() : null,
                 purchase.getCeremony().getOrganization().getId(),
                 purchase.getCeremony().getId(),
                 purchase.getCeremony().getTitle(),
                 lines,
                 purchase.getStatus().name(),
                 purchase.getRejectionReason(),
-                purchase.getReviewedBy() != null ? loginIdsByUserId.get(purchase.getReviewedBy()) : null,
+                reviewer != null ? reviewer.getLoginId() : null,
                 purchase.getReviewedAt(),
-                purchase.getCancelledBy() != null ? loginIdsByUserId.get(purchase.getCancelledBy()) : null,
+                canceller != null ? canceller.getLoginId() : null,
                 purchase.getCancelledAt(),
                 purchase.getCancellationReason(),
                 ceremonyEvents,

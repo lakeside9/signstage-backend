@@ -42,19 +42,22 @@ public class PlatformAdminCeremonyPurchaseController {
 
     @Operation(
             summary = "단위 상품 추가구매 요청 목록 조회",
-            description = "status/organizationId/ceremonyId 전부 선택 필터다(생략하면 그 조건 없이 전체 최신순). "
-                    + "ceremonyId로 좁히면 신규 \"행사 이력\" 화면(signstage-docs "
-                    + "business/unit-product-purchase-self-checkout-review.md 8.6절 결정, 2026-09-11)의 구매 이력 조회로 쓸 수 있다."
+            description = "status/organizationId/ceremonyId/requesterKeyword/ceremonyTitle 전부 선택 필터다(생략하면 그 조건 없이 "
+                    + "전체 최신순). ceremonyId로 좁히면 신규 \"행사 이력\" 화면(signstage-docs "
+                    + "business/unit-product-purchase-self-checkout-review.md 8.6절 결정, 2026-09-11)의 구매 이력 조회로 쓸 수 있다. "
+                    + "requesterKeyword는 요청자 loginId/name에, ceremonyTitle은 행사 제목에 포함되는 문자열로 찾는다(2026-09-12 추가)."
     )
     @GetMapping("/unit-product-purchases")
     public ApiResponse<PageResponse<PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary>> findUnitProductPurchaseRequests(
             @RequestParam(required = false) PurchaseStatus status,
             @RequestParam(required = false) Long organizationId,
             @RequestParam(required = false) Long ceremonyId,
+            @RequestParam(required = false) String requesterKeyword,
+            @RequestParam(required = false) String ceremonyTitle,
             @PageableDefault(size = 20) Pageable pageable
     ) {
         Page<PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary> result =
-                ceremonyService.findUnitProductPurchaseRequests(status, organizationId, ceremonyId, pageable);
+                ceremonyService.findUnitProductPurchaseRequests(status, organizationId, ceremonyId, requesterKeyword, ceremonyTitle, pageable);
         return ApiResponse.success(PageResponse.from(result), traceIdProvider.getTraceId());
     }
 

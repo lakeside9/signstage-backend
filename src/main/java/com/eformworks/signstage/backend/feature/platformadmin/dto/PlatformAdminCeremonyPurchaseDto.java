@@ -65,6 +65,8 @@ public final class PlatformAdminCeremonyPurchaseDto {
             private final Long id;
             private final Long requesterId;
             private final String requesterLoginId;
+            /** 요청자 실명 — loginId와 별개다(2026-09-12 사용자 요청). */
+            private final String requesterName;
             private final Long organizationId;
             private final Long ceremonyId;
             private final String ceremonyTitle;
