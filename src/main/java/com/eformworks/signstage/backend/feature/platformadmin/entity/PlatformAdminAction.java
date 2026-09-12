@@ -56,5 +56,7 @@ public enum PlatformAdminAction {
     REORDER_FAQS,
     /** 답변/종료를 한 액션으로 묶는다({@code APPROVE/REJECT_UNIT_PRODUCT_PURCHASE}와 달리 성격이 대칭이라 통합). */
     REPLY_CEREMONY_INQUIRY,
-    CLOSE_CEREMONY_INQUIRY
+    CLOSE_CEREMONY_INQUIRY,
+    /** 현장지원 요청에 거리 등을 보고 실제 금액을 매긴다 — signstage-docs business/onsite-support-negotiation-and-billing-classification-review.md 3.2절(2026-09-12). */
+    QUOTE_ONSITE_SUPPORT_REQUEST
 }

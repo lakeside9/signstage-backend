@@ -46,8 +46,19 @@ public enum UnitProductType {
     MAIN_EVENTS,
     /** 태블릿 대여 대수. */
     TABLETS,
-    /** 현장지원 실제 지원 건수. */
+    /** 현장지원 실제 지원 건수 — 고객 정산에서 파트너가 실고객에게 직접 판매하는 고정가 카탈로그(수도권/근·중·원거리 4종)가 쓴다. */
     ONSITE_SUPPORT,
+    /**
+     * 현장지원 요청(관리자 견적) 전용 앵커 상품 — {@link #ONSITE_SUPPORT}와 별개 타입이다
+     * (2026-09-12, signstage-docs
+     * business/onsite-support-negotiation-and-billing-classification-review.md 3.2절
+     * 결정). {@code CeremonyOnsiteSupportRequest}가 수락되면 이 타입의 단위 상품(정확히
+     * 1행만 존재해야 한다, 마이그레이션이 시딩)을 참조하는 구매를 만든다 — 카테고리는
+     * PERSONNEL이지만 {@code UnitProduct#isPlatformUsageFee()}는 true다. 관리자 카탈로그
+     * 등록 화면에서 새로 만들 수 없다(단위 상품 종류 선택 목록에 없음) — 오직 이 하나뿐이어야
+     * 한다.
+     */
+    ONSITE_SUPPORT_REQUEST,
     /** 온라인지원 실제 지원 건수. */
     ONLINE_SUPPORT,
     /**

@@ -510,6 +510,27 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_INQUIRY_ALREADY_CLOSED",
             HttpStatus.CONFLICT,
             "종료된 문의입니다. 답변이 더 필요하면 새 문의를 등록해주세요."
+    ),
+    /**
+     * 현장지원 요청(관리자 견적) 협상 — signstage-docs
+     * business/onsite-support-negotiation-and-billing-classification-review.md 3.2절
+     * (2026-09-12). CeremonyInquiry와 같이 Ceremony 직속이라 이 코드에 둔다.
+     */
+    ONSITE_SUPPORT_REQUEST_NOT_FOUND("ONSITE_SUPPORT_REQUEST_NOT_FOUND", HttpStatus.NOT_FOUND, "현장지원 요청을 찾을 수 없습니다."),
+    ONSITE_SUPPORT_REQUEST_NOT_REQUESTED(
+            "ONSITE_SUPPORT_REQUEST_NOT_REQUESTED",
+            HttpStatus.CONFLICT,
+            "아직 요청 상태가 아니거나 이미 견적을 매긴 요청입니다."
+    ),
+    ONSITE_SUPPORT_REQUEST_NOT_QUOTED(
+            "ONSITE_SUPPORT_REQUEST_NOT_QUOTED",
+            HttpStatus.CONFLICT,
+            "견적이 아직 없거나 이미 응답한 요청입니다."
+    ),
+    ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND(
+            "ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND",
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "현장지원 요청 전용 단위 상품이 카탈로그에 등록되어 있지 않습니다. 플랫폼 관리자에게 문의해주세요."
     );
 
     private final String code;

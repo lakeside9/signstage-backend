@@ -40,7 +40,7 @@ public class UnitProductHistory extends BaseEntity {
     private UnitProduct unitProduct;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 30)
     private UnitProductType type;
 
     @Column(nullable = false, length = 100)

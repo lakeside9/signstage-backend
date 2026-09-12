@@ -44,6 +44,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlan
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyInquiryMessageRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyInquiryRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOnsiteSupportRequestRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductCartLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseRepository;
@@ -116,6 +117,7 @@ public class CeremonyService {
     private final CeremonyUnitProductCartLineRepository ceremonyUnitProductCartLineRepository;
     private final CeremonyInquiryRepository ceremonyInquiryRepository;
     private final CeremonyInquiryMessageRepository ceremonyInquiryMessageRepository;
+    private final CeremonyOnsiteSupportRequestRepository ceremonyOnsiteSupportRequestRepository;
     private final BillingPlanUnitProductRepository billingPlanUnitProductRepository;
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
@@ -341,6 +343,7 @@ public class CeremonyService {
         ceremonyAssignmentRepository.deleteAllByCeremonyId(ceremonyId);
         ceremonyInquiryMessageRepository.deleteAllByInquiry_CeremonyId(ceremonyId);
         ceremonyInquiryRepository.deleteAllByCeremonyId(ceremonyId);
+        ceremonyOnsiteSupportRequestRepository.deleteAllByCeremonyId(ceremonyId);
         ceremonyRepository.delete(ceremony);
     }
 

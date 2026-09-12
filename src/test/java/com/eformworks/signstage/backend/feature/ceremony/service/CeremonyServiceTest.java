@@ -52,6 +52,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlan
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyInquiryMessageRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyInquiryRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOnsiteSupportRequestRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductCartLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseRepository;
@@ -127,6 +128,8 @@ class CeremonyServiceTest {
     private CeremonyInquiryRepository ceremonyInquiryRepository;
     @Mock
     private CeremonyInquiryMessageRepository ceremonyInquiryMessageRepository;
+    @Mock
+    private CeremonyOnsiteSupportRequestRepository ceremonyOnsiteSupportRequestRepository;
     @Mock
     private BillingPlanUnitProductRepository billingPlanUnitProductRepository;
     @Mock
