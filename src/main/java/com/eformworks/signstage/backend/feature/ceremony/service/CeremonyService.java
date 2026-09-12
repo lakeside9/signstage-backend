@@ -42,6 +42,8 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEven
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyInquiryMessageRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyInquiryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductCartLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseRepository;
@@ -112,6 +114,8 @@ public class CeremonyService {
     private final CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
     private final CeremonyPlanHistoryUnitProductRepository ceremonyPlanHistoryUnitProductRepository;
     private final CeremonyUnitProductCartLineRepository ceremonyUnitProductCartLineRepository;
+    private final CeremonyInquiryRepository ceremonyInquiryRepository;
+    private final CeremonyInquiryMessageRepository ceremonyInquiryMessageRepository;
     private final BillingPlanUnitProductRepository billingPlanUnitProductRepository;
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
@@ -335,6 +339,8 @@ public class CeremonyService {
         ceremonyUnitProductPurchaseRepository.deleteAllByCeremonyId(ceremonyId);
         ceremonyUnitProductCartLineRepository.deleteAllByCeremonyId(ceremonyId);
         ceremonyAssignmentRepository.deleteAllByCeremonyId(ceremonyId);
+        ceremonyInquiryMessageRepository.deleteAllByInquiry_CeremonyId(ceremonyId);
+        ceremonyInquiryRepository.deleteAllByCeremonyId(ceremonyId);
         ceremonyRepository.delete(ceremony);
     }
 

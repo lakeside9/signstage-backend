@@ -499,6 +499,17 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL",
             HttpStatus.BAD_REQUEST,
             "장비/인력(태블릿·현장지원 등) 카탈로그에 있는 상품만 고객 견적 줄로 담을 수 있습니다."
+    ),
+    /**
+     * 행사별 1:1 문의(CeremonyInquiry) — signstage-docs
+     * business/partner-support-center-review.md 5장(2026-09-12). Signer/Template과 같이
+     * {@code Ceremony} 직속이라 이 코드에 둔다.
+     */
+    CEREMONY_INQUIRY_NOT_FOUND("CEREMONY_INQUIRY_NOT_FOUND", HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
+    CEREMONY_INQUIRY_ALREADY_CLOSED(
+            "CEREMONY_INQUIRY_ALREADY_CLOSED",
+            HttpStatus.CONFLICT,
+            "종료된 문의입니다. 답변이 더 필요하면 새 문의를 등록해주세요."
     );
 
     private final String code;
