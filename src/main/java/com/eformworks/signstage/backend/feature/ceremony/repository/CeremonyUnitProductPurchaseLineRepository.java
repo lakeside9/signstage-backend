@@ -31,6 +31,17 @@ public interface CeremonyUnitProductPurchaseLineRepository extends JpaRepository
             List<PurchaseStatus> statuses
     );
 
+    /**
+     * "지금까지 담은/구매한 수량 합"을 계산하는 데 쓴다 — 최대 구매 수량 검사
+     * ({@code CeremonyService#checkPurchaseQuantity}, 2026-09-12). REJECTED는 셈에서 뺀다(위
+     * {@code existsBy...}와 같은 이유).
+     */
+    List<CeremonyUnitProductPurchaseLine> findAllByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(
+            Long ceremonyId,
+            Long unitProductId,
+            List<PurchaseStatus> statuses
+    );
+
     /** 카탈로그 관리 화면의 "사용 중" 경고용 — 이 단위 상품을 승인받아 쓰는 구매 줄 수. */
     long countByUnitProduct_IdAndPurchase_Status(Long unitProductId, PurchaseStatus status);
 

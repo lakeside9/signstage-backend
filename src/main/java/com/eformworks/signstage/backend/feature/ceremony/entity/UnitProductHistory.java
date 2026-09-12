@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Immutable;
 
 /**
- * 단위 상품(UnitProduct)의 이름/설명/배타그룹/분류 변경 이력 — 기존 {@code OptionalFeatureHistory}/
+ * 단위 상품(UnitProduct)의 이름/설명/배타그룹/분류/최대 구매 수량 변경 이력 — 기존 {@code OptionalFeatureHistory}/
  * {@code CapacityAddOnHistory} 통합. append-only다. {@code type}은 원본에서 불변이지만 조인
  * 없이 이력만으로 표시할 수 있게 그대로 스냅샷에 포함한다. 가격정보/사용여부 변경 이력은
  * {@link UnitProductPricePeriodHistory}가 담당한다.
@@ -56,6 +56,9 @@ public class UnitProductHistory extends BaseEntity {
     @Column(name = "exclusivity_group", length = 50)
     private String exclusivityGroup;
 
+    @Column(name = "max_purchase_quantity")
+    private Integer maxPurchaseQuantity;
+
     @Builder
     private UnitProductHistory(UnitProduct unitProduct) {
         this.unitProduct = unitProduct;
@@ -64,5 +67,6 @@ public class UnitProductHistory extends BaseEntity {
         this.description = unitProduct.getDescription();
         this.category = unitProduct.getCategory();
         this.exclusivityGroup = unitProduct.getExclusivityGroup();
+        this.maxPurchaseQuantity = unitProduct.getMaxPurchaseQuantity();
     }
 }

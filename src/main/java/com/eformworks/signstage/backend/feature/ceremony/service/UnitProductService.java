@@ -108,6 +108,7 @@ public class UnitProductService {
                 .description(request.getDescription())
                 .category(parseCategory(request.getCategory()))
                 .exclusivityGroup(request.getExclusivityGroup())
+                .maxPurchaseQuantity(request.getMaxPurchaseQuantity())
                 .build();
         unitProductRepository.save(unitProduct);
         recordProductHistory(unitProduct);
@@ -153,7 +154,10 @@ public class UnitProductService {
         String detail = "unitProductId=" + unitProductId
                 + ", name: " + unitProduct.getName() + " -> " + request.getName();
 
-        unitProduct.updateInfo(request.getName(), request.getDescription(), parseCategory(request.getCategory()), request.getExclusivityGroup());
+        unitProduct.updateInfo(
+                request.getName(), request.getDescription(), parseCategory(request.getCategory()),
+                request.getExclusivityGroup(), request.getMaxPurchaseQuantity()
+        );
         recordProductHistory(unitProduct);
 
         // null이면(생략) 기존 구성을 그대로 두고, 값이 오면(빈 배열 포함) 통째로 교체한다
@@ -534,6 +538,7 @@ public class UnitProductService {
                 unitProduct.getDescription(),
                 unitProduct.getCategory().name(),
                 unitProduct.getExclusivityGroup(),
+                unitProduct.getMaxPurchaseQuantity(),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
@@ -560,6 +565,7 @@ public class UnitProductService {
                 history.getDescription(),
                 history.getCategory().name(),
                 history.getExclusivityGroup(),
+                history.getMaxPurchaseQuantity(),
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );

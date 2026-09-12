@@ -69,6 +69,17 @@ public class UnitProduct extends BaseEntity {
     private String exclusivityGroup;
 
     /**
+     * 이 상품을 한 행사에서 추가구매로 누적 살 수 있는 최대 수량 — nullable(무제한, 기본값).
+     * 관리자가 카탈로그에서 설정한다(2026-09-12 사용자 요청). 토글형({@link
+     * UnitProductType#isToggle()}, 지금은 {@code EVENT_EFFECT_BUNDLE})은 이 값과 무관하게
+     * 타입 자체의 규칙으로 항상 최대 1이라({@code CeremonyService#checkPurchaseQuantity})
+     * 이 필드는 항상 {@code null}로 정규화한다(생성자/{@link #updateInfo} 양쪽) — 관리자가
+     * 실수로 값을 보내도 저장되지 않는다.
+     */
+    @Column(name = "max_purchase_quantity")
+    private Integer maxPurchaseQuantity;
+
+    /**
      * 카탈로그 목록 화면의 표시 순서(2026-09-10, 사용자 요청 — {@code Signer}/{@code Template}/
      * {@code CeremonyEvent}와 같은 displayOrder 일괄 재정렬 패턴). 위/아래 이동 버튼이 전체
      * 목록을 다시 인덱싱해 저장한다({@code UnitProductService#updateDisplayOrders}). 동률이면
@@ -80,12 +91,19 @@ public class UnitProduct extends BaseEntity {
     private Integer displayOrder = 0;
 
     @Builder
-    private UnitProduct(UnitProductType type, String name, String description, UnitProductCategory category, String exclusivityGroup) {
+    private UnitProduct(
+            UnitProductType type, String name, String description, UnitProductCategory category,
+            String exclusivityGroup, Integer maxPurchaseQuantity
+    ) {
         this.type = type;
         this.name = name;
         this.description = description;
         this.category = category;
         this.exclusivityGroup = exclusivityGroup;
+        // type이 null인 빌더 호출(테스트 픽스처가 id만 필요해 다른 필드를 생략하는 경우 등)이
+        // 있어 null-safe하게 판정한다 — type이 실제로 정해지는 실서비스 경로(createUnitProduct)
+        // 에서는 항상 non-null이다.
+        this.maxPurchaseQuantity = (type != null && type.isToggle()) ? null : maxPurchaseQuantity;
     }
 
     /**
@@ -93,11 +111,12 @@ public class UnitProduct extends BaseEntity {
      * 생성 후 불변이고 여기서 바꾸지 않는다(바꾸려면 새 상품을 만든다). 가격/사용여부는 여기서
      * 다루지 않는다 — {@link UnitProductPricePeriod} 기간 단위 CRUD로 관리한다.
      */
-    public void updateInfo(String name, String description, UnitProductCategory category, String exclusivityGroup) {
+    public void updateInfo(String name, String description, UnitProductCategory category, String exclusivityGroup, Integer maxPurchaseQuantity) {
         this.name = name;
         this.description = description;
         this.category = category;
         this.exclusivityGroup = exclusivityGroup;
+        this.maxPurchaseQuantity = this.type.isToggle() ? null : maxPurchaseQuantity;
     }
 
     /** 단위 상품 목록의 위/아래 이동 버튼이 호출한다 — {@code null}이면 바꾸지 않는다. */

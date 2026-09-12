@@ -494,7 +494,7 @@ public class CeremonyService {
         Optional<CeremonyUnitProductCartLine> existingLine =
                 ceremonyUnitProductCartLineRepository.findByCeremonyIdAndUnitProductId(ceremonyId, unitProduct.getId());
         int resultingQuantity = existingLine.map(CeremonyUnitProductCartLine::getQuantity).orElse(0) + request.getQuantity();
-        checkToggleQuantity(ceremony, unitProduct, resultingQuantity);
+        checkPurchaseQuantity(ceremony, unitProduct, resultingQuantity);
 
         existingLine.ifPresentOrElse(
                 existing -> existing.addQuantity(request.getQuantity()),
@@ -523,7 +523,7 @@ public class CeremonyService {
         CeremonyUnitProductCartLine line = ceremonyUnitProductCartLineRepository
                 .findByCeremonyIdAndUnitProductId(ceremonyId, unitProductId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CART_LINE_NOT_FOUND));
-        checkToggleQuantity(ceremony, line.getUnitProduct(), request.getQuantity());
+        checkPurchaseQuantity(ceremony, line.getUnitProduct(), request.getQuantity());
         line.changeQuantity(request.getQuantity());
 
         return retrieveCart(organizationId, ceremonyId, currentUserId);
@@ -600,7 +600,7 @@ public class CeremonyService {
             // 담을 때/수량 수정 때 이미 검사하지만(addToCart/updateCartLine), 그 사이 다른 요청으로
             // 이미 구매됐을 수 있어 구매 확정 시점에 다시 한번 확인한다(checkPurchasable 재검증과
             // 같은 이유).
-            checkToggleQuantity(ceremony, unitProduct, cartLine.getQuantity());
+            checkPurchaseQuantity(ceremony, unitProduct, cartLine.getQuantity());
 
             lines.add(ceremonyUnitProductPurchaseLineRepository.save(
                     CeremonyUnitProductPurchaseLine.builder()
@@ -640,29 +640,58 @@ public class CeremonyService {
     }
 
     /**
-     * 토글형({@link UnitProductType#isToggle()}, 지금은 EVENT_EFFECT_BUNDLE만) 단위 상품은
+     * 담기/수량 수정/구매 확정 세 지점이 공유하는 수량 상한 검사 — 서로 배타적인 두 상한을 본다.
+     *
+     * <p><b>1. 토글형</b>({@link UnitProductType#isToggle()}, 지금은 EVENT_EFFECT_BUNDLE만)은
      * 수량으로 여러 개를 담는 게 아니라 행사당 1회만 "가졌다/안 가졌다"로 다룬다(2026-09-11
      * 사용자 지적 — "이벤트 효과 묶음의 경우 행사에 한번 구매하면 됩니다. 수량으로 추가할
-     * 내용이 아닙니다"). {@code purchaseUnitProducts}(구매 확정)만 이 검사를 하던 것을
-     * {@code addToCart}/{@code updateCartLine}(장바구니 담기/수량 수정)까지 넓혔다 — 전에는
-     * 장바구니 단계에선 수량 2 이상으로 담아도 막지 않다가 마지막 구매 확정 시점에야
-     * 거부돼서, 사용자가 장바구니를 다 채운 뒤에야 실패를 알게 됐다.
+     * 내용이 아닙니다"). 관리자가 조정할 수 없는 타입 자체의 규칙이라 {@link
+     * UnitProduct#getMaxPurchaseQuantity()}는 아예 보지 않는다({@code UnitProduct} 생성자/
+     * {@code updateInfo}가 토글형이면 항상 null로 정규화해두므로 사실 봐도 null이다).
      *
-     * @param resultingQuantity 이 검사 뒤에 실제로 반영될 수량(추가/수정 전이 아니라 후 값)
+     * <p><b>2. 그 외 타입</b>은 카탈로그에 설정된 {@code maxPurchaseQuantity}(nullable=무제한) —
+     * "이 행사에서 지금까지 담은/구매(PENDING+APPROVED) 수량 합"이 이 값을 넘으면 거부한다
+     * (2026-09-12 사용자 요청 — "단위 상품을 구매할 수 있는 최대 수량을 관리하려고 합니다").
+     * 플랜에 기본 포함된 수량은 이 합계에 넣지 않는다 — 추가구매로 "더 살 수 있는 양"만 상한을
+     * 적용하는 게 자연스럽고, 플랜을 바꿀 때마다 이미 산 게 상한을 넘기는 애매한 상황을
+     * 피한다.
+     *
+     * <p>{@code purchaseUnitProducts}(구매 확정)만 검사하던 것을 {@code addToCart}/
+     * {@code updateCartLine}(장바구니 담기/수량 수정)까지 넓혔다(2026-09-11) — 전에는 장바구니
+     * 단계에선 상한을 넘겨 담아도 막지 않다가 마지막 구매 확정 시점에야 거부돼서, 사용자가
+     * 장바구니를 다 채운 뒤에야 실패를 알게 됐다.
+     *
+     * @param resultingQuantity 이 검사 뒤에 실제로 반영될 "장바구니 줄" 수량(추가/수정 전이
+     *                          아니라 후 값) — 과거 구매분과는 별개로 더한다
      */
-    private void checkToggleQuantity(Ceremony ceremony, UnitProduct unitProduct, int resultingQuantity) {
-        if (!unitProduct.getType().isToggle()) {
+    private void checkPurchaseQuantity(Ceremony ceremony, UnitProduct unitProduct, int resultingQuantity) {
+        if (unitProduct.getType().isToggle()) {
+            if (resultingQuantity > 1) {
+                throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_TOGGLE_QUANTITY_INVALID);
+            }
+            boolean alreadyRequested = ceremonyUnitProductPurchaseLineRepository
+                    .existsByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(
+                            ceremony.getId(), unitProduct.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
+                    );
+            if (alreadyRequested) {
+                throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_ALREADY_PURCHASED);
+            }
             return;
         }
-        if (resultingQuantity > 1) {
-            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_TOGGLE_QUANTITY_INVALID);
+
+        Integer maxQuantity = unitProduct.getMaxPurchaseQuantity();
+        if (maxQuantity == null) {
+            return;
         }
-        boolean alreadyRequested = ceremonyUnitProductPurchaseLineRepository
-                .existsByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(
+        int alreadyPurchased = ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(
                         ceremony.getId(), unitProduct.getId(), List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)
-                );
-        if (alreadyRequested) {
-            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_ALREADY_PURCHASED);
+                )
+                .stream()
+                .mapToInt(CeremonyUnitProductPurchaseLine::getQuantity)
+                .sum();
+        if (alreadyPurchased + resultingQuantity > maxQuantity) {
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_MAX_QUANTITY_EXCEEDED);
         }
     }
 
@@ -738,6 +767,7 @@ public class CeremonyService {
                             unitProduct.getDescription(),
                             unitProduct.getCategory().name(),
                             unitProduct.getExclusivityGroup(),
+                            unitProduct.getMaxPurchaseQuantity(),
                             line != null ? line.getCurrencyCode() : effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                             effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
                             line != null ? line.getPurchasedSalePrice() : effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
@@ -1634,6 +1664,7 @@ public class CeremonyService {
                 unitProduct.getDescription(),
                 unitProduct.getCategory().name(),
                 unitProduct.getExclusivityGroup(),
+                unitProduct.getMaxPurchaseQuantity(),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),

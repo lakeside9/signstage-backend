@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.ceremony.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
@@ -57,6 +58,14 @@ public final class UnitProductDto {
             /** 같은 값을 가진 다른 단위 상품과 한 CeremonyEvent에 동시 적용할 수 없다. 생략하면(null) 배타 관계 없음. */
             private String exclusivityGroup;
 
+            /**
+             * 이 상품을 한 행사에서 추가구매로 누적 살 수 있는 최대 수량. 생략하면(null) 무제한
+             * (2026-09-12 사용자 요청). 토글형({@code type='EVENT_EFFECT_BUNDLE'})은 이 값을
+             * 보내도 무시된다 — 그 타입은 항상 최대 1로 고정돼 있다({@code UnitProductType#isToggle()}).
+             */
+            @Min(1)
+            private Integer maxPurchaseQuantity;
+
             private String currencyCode;
 
             /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
@@ -113,6 +122,14 @@ public final class UnitProductDto {
 
             /** 같은 값을 가진 다른 단위 상품과 한 CeremonyEvent에 동시 적용할 수 없다. null이면 배타 관계 없음. */
             private String exclusivityGroup;
+
+            /**
+             * 이 상품을 한 행사에서 추가구매로 누적 살 수 있는 최대 수량. null이면 무제한
+             * (2026-09-12 사용자 요청). 토글형은 이 값을 보내도 무시된다({@link CreateUnitProduct}와
+             * 같은 이유).
+             */
+            @Min(1)
+            private Integer maxPurchaseQuantity;
 
             /**
              * 이 묶음이 열어주는 이벤트 효과 목록을 통째로 교체한다(delete-all-then-recreate) —
@@ -194,6 +211,8 @@ public final class UnitProductDto {
             private final String description;
             private final String category;
             private final String exclusivityGroup;
+            /** 한 행사에서 추가구매로 누적 살 수 있는 최대 수량. null이면 무제한. 토글형은 항상 null(타입 자체가 최대 1로 고정). */
+            private final Integer maxPurchaseQuantity;
             private final String currencyCode;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
@@ -219,7 +238,7 @@ public final class UnitProductDto {
             private final boolean canDelete;
         }
 
-        /** 단위 상품 이름/설명/분류/배타그룹 변경 이력 한 행(가격/사용여부는 판매가격 기간 이력 참고). */
+        /** 단위 상품 이름/설명/분류/배타그룹/최대 구매 수량 변경 이력 한 행(가격/사용여부는 판매가격 기간 이력 참고). */
         @Getter
         @AllArgsConstructor
         public static class UnitProductHistorySummary {
@@ -230,6 +249,7 @@ public final class UnitProductDto {
             private final String description;
             private final String category;
             private final String exclusivityGroup;
+            private final Integer maxPurchaseQuantity;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }

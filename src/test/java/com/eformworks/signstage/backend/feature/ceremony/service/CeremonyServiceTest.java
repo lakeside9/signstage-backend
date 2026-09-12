@@ -548,6 +548,121 @@ class CeremonyServiceTest {
         assertThat(existing.getQuantity()).isEqualTo(1);
     }
 
+    /**
+     * 2026-09-12 사용자 요청("단위 상품을 구매할 수 있는 최대 수량을 관리하려고 합니다") 권장안
+     * 구현 — 카탈로그에 설정한 {@code maxPurchaseQuantity}를 넘겨 담으면 거부된다. 과거
+     * PENDING/APPROVED 구매 수량 합 + 이번에 담을 수량이 상한을 넘는지 본다(플랜 기본 포함
+     * 수량은 이 합계에 넣지 않는다).
+     */
+    @Test
+    @DisplayName("장바구니 담기 — 카탈로그에 설정한 최대 구매 수량을 넘기면 거부된다")
+    void addToCart_maxQuantityExceeded_rejected() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        ceremony.confirmPlan();
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        UnitProduct tablets = UnitProduct.builder()
+                .type(UnitProductType.TABLETS).name("태블릿").category(UnitProductCategory.EQUIPMENT)
+                .maxPurchaseQuantity(5).build();
+        ReflectionTestUtils.setField(tablets, "id", 401L);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(unitProductRepository.findById(401L)).willReturn(Optional.of(tablets));
+        given(ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(10L, 401L, List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)))
+                .willReturn(List.of(purchaseLine(tablets, 3))); // 이미 3개 구매됨.
+
+        // 3(이미 구매) + 3(이번에 담을 양) = 6 > 5(최대) → 거부.
+        assertThatThrownBy(() -> ceremonyService.addToCart(ORGANIZATION_ID, 10L, CURRENT_USER_ID, new CeremonyDto.Request.AddToCart(401L, 3)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_MAX_QUANTITY_EXCEEDED);
+        verify(ceremonyUnitProductCartLineRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("장바구니 담기 — 과거 구매분 + 이번 수량이 최대 구매 수량과 같으면 통과한다")
+    void addToCart_reachingExactMaxQuantity_succeeds() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        ceremony.confirmPlan();
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        UnitProduct tablets = UnitProduct.builder()
+                .type(UnitProductType.TABLETS).name("태블릿").category(UnitProductCategory.EQUIPMENT)
+                .maxPurchaseQuantity(5).build();
+        ReflectionTestUtils.setField(tablets, "id", 401L);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(unitProductRepository.findById(401L)).willReturn(Optional.of(tablets));
+        given(ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(10L, 401L, List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)))
+                .willReturn(List.of(purchaseLine(tablets, 3)));
+        given(ceremonyUnitProductCartLineRepository.findAllByCeremonyIdOrderByIdAsc(10L)).willReturn(List.of());
+
+        // 3(이미 구매) + 2(이번에 담을 양) = 5 == 5(최대) → 통과.
+        ceremonyService.addToCart(ORGANIZATION_ID, 10L, CURRENT_USER_ID, new CeremonyDto.Request.AddToCart(401L, 2));
+
+        verify(ceremonyUnitProductCartLineRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("장바구니 수량 수정 — 과거 구매분과 합쳐 최대 구매 수량을 넘기면 거부된다")
+    void updateCartLine_maxQuantityExceeded_rejected() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        UnitProduct tablets = UnitProduct.builder()
+                .type(UnitProductType.TABLETS).name("태블릿").category(UnitProductCategory.EQUIPMENT)
+                .maxPurchaseQuantity(5).build();
+        ReflectionTestUtils.setField(tablets, "id", 401L);
+        CeremonyUnitProductCartLine existing = cartLine(ceremony, tablets, 1);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(ceremonyUnitProductCartLineRepository.findByCeremonyIdAndUnitProductId(10L, 401L))
+                .willReturn(Optional.of(existing));
+        given(ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(10L, 401L, List.of(PurchaseStatus.PENDING, PurchaseStatus.APPROVED)))
+                .willReturn(List.of(purchaseLine(tablets, 3)));
+
+        // 3(이미 구매) + 3(장바구니 줄을 3으로 고침) = 6 > 5(최대) → 거부.
+        assertThatThrownBy(() -> ceremonyService.updateCartLine(
+                ORGANIZATION_ID, 10L, CURRENT_USER_ID, 401L, new CeremonyDto.Request.UpdateCartLine(3)
+        ))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_MAX_QUANTITY_EXCEEDED);
+        assertThat(existing.getQuantity()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("최대 구매 수량이 설정되지 않으면(null) 제한 없이 담을 수 있다")
+    void addToCart_noMaxQuantitySet_unlimited() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        ceremony.confirmPlan();
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        UnitProduct tablets = unitProduct(401L, UnitProductType.TABLETS); // maxPurchaseQuantity 미설정(null).
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(unitProductRepository.findById(401L)).willReturn(Optional.of(tablets));
+        given(ceremonyUnitProductCartLineRepository.findAllByCeremonyIdOrderByIdAsc(10L)).willReturn(List.of());
+
+        ceremonyService.addToCart(ORGANIZATION_ID, 10L, CURRENT_USER_ID, new CeremonyDto.Request.AddToCart(401L, 999));
+
+        verify(ceremonyUnitProductCartLineRepository).save(any());
+        // 무제한이라 과거 구매 수량 합계를 조회할 필요조차 없어야 한다.
+        verify(ceremonyUnitProductPurchaseLineRepository, never())
+                .findAllByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(any(), any(), any());
+    }
+
     @Test
     @DisplayName("유효 한도는 플랜 기본값(스냅샷) + 승인된 구매 줄의 수량 합이다 — 묶음 상품의 보조 용량 개념은 폐지됐다")
     void calculateEffectiveCapacity_sumsApprovedPurchaseLines() {
