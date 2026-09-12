@@ -182,7 +182,7 @@ public class CustomerQuoteService {
 
         CeremonyService.QuoteCalculation calculation = ceremonyService.buildQuoteCalculation(ceremony);
         BigDecimal systemUsageCostAmount = calculation.lines().stream()
-                .filter(line -> line.category().isSystemUsageFee())
+                .filter(CeremonyService.QuoteLineDetail::platformUsageFee)
                 .map(CeremonyService.QuoteLineDetail::netAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -240,7 +240,7 @@ public class CustomerQuoteService {
             }
             UnitProduct unitProduct = unitProductRepository.findById(line.getUnitProductId())
                     .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
-            if (unitProduct.getCategory().isSystemUsageFee()) {
+            if (unitProduct.isPlatformUsageFee()) {
                 throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL);
             }
             ceremonyService.resolveSellableUnitProductPeriod(unitProduct, asOfDate);

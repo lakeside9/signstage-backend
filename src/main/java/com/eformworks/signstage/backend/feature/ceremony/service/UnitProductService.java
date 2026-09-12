@@ -109,6 +109,7 @@ public class UnitProductService {
                 .category(parseCategory(request.getCategory()))
                 .exclusivityGroup(request.getExclusivityGroup())
                 .maxPurchaseQuantity(request.getMaxPurchaseQuantity())
+                .platformUsageFee(request.getPlatformUsageFee())
                 .build();
         unitProductRepository.save(unitProduct);
         recordProductHistory(unitProduct);
@@ -156,7 +157,7 @@ public class UnitProductService {
 
         unitProduct.updateInfo(
                 request.getName(), request.getDescription(), parseCategory(request.getCategory()),
-                request.getExclusivityGroup(), request.getMaxPurchaseQuantity()
+                request.getExclusivityGroup(), request.getMaxPurchaseQuantity(), request.getPlatformUsageFee()
         );
         recordProductHistory(unitProduct);
 
@@ -539,6 +540,7 @@ public class UnitProductService {
                 unitProduct.getCategory().name(),
                 unitProduct.getExclusivityGroup(),
                 unitProduct.getMaxPurchaseQuantity(),
+                unitProduct.isPlatformUsageFee(),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
@@ -566,6 +568,7 @@ public class UnitProductService {
                 history.getCategory().name(),
                 history.getExclusivityGroup(),
                 history.getMaxPurchaseQuantity(),
+                history.isPlatformUsageFee(),
                 history.getCreatedBy(),
                 history.getCreatedAt()
         );

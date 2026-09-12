@@ -66,6 +66,15 @@ public final class UnitProductDto {
             @Min(1)
             private Integer maxPurchaseQuantity;
 
+            /**
+             * 플랫폼 이용료 대상인지 — 생략하면(null) 카테고리로부터 자동 계산한다
+             * (ESSENTIAL/APPLICATION=true, EQUIPMENT/PERSONNEL=false). 명시하면 그 값을
+             * 우선한다(2026-09-12 사용자 요청 — 분류체계 명시화, signstage-docs
+             * business/onsite-support-negotiation-and-billing-classification-review.md
+             * 3.1절/결정 #2).
+             */
+            private Boolean platformUsageFee;
+
             private String currencyCode;
 
             /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
@@ -130,6 +139,14 @@ public final class UnitProductDto {
              */
             @Min(1)
             private Integer maxPurchaseQuantity;
+
+            /**
+             * 플랫폼 이용료 대상인지 — 수정 화면은 항상 값을 보낸다(생략 불가, 이미 등록된
+             * 상품은 이 값을 이미 갖고 있어 카테고리로부터 다시 계산할 필요가 없다).
+             * 관리자가 자유롭게 override할 수 있다(같은 문서 결정 #2).
+             */
+            @NotNull
+            private Boolean platformUsageFee;
 
             /**
              * 이 묶음이 열어주는 이벤트 효과 목록을 통째로 교체한다(delete-all-then-recreate) —
@@ -213,6 +230,13 @@ public final class UnitProductDto {
             private final String exclusivityGroup;
             /** 한 행사에서 추가구매로 누적 살 수 있는 최대 수량. null이면 무제한. 토글형은 항상 null(타입 자체가 최대 1로 고정). */
             private final Integer maxPurchaseQuantity;
+            /**
+             * 플랫폼 이용료 대상인지 — 카테고리와 별개인 명시적 분류다(2026-09-12, signstage-docs
+             * business/onsite-support-negotiation-and-billing-classification-review.md 3.1절
+             * 결정). 대부분은 카테고리와 일치하지만(ESSENTIAL/APPLICATION=true,
+             * EQUIPMENT/PERSONNEL=false), 관리자가 등록/수정 시 override할 수 있다.
+             */
+            private final boolean platformUsageFee;
             private final String currencyCode;
             private final BigDecimal supplyPrice;
             private final BigDecimal salePrice;
@@ -250,6 +274,7 @@ public final class UnitProductDto {
             private final String category;
             private final String exclusivityGroup;
             private final Integer maxPurchaseQuantity;
+            private final boolean platformUsageFee;
             private final Long createdBy;
             private final LocalDateTime createdAt;
         }

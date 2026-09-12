@@ -577,8 +577,10 @@ public class CeremonyService {
      * (signstage-docs business/billing-catalog-unit-product-model-redesign-review.md 결정,
      * 2026-09-10, 3.4절)에 이어, 장바구니형 2단계 자가-체크아웃(같은 문서
      * business/unit-product-purchase-self-checkout-review.md 4장 결정, 2026-09-11)으로
-     * 재정의됐다 — 담긴 줄이 전부 시스템 사용료(ESSENTIAL/APPLICATION,
-     * {@code UnitProductCategory#isSystemUsageFee})면 관리자 승인 없이 그 즉시 APPROVED로
+     * 재정의됐다 — 담긴 줄이 전부 플랫폼 이용료 대상({@link UnitProduct#isPlatformUsageFee},
+     * 2026-09-12부터 카테고리 파생이 아니라 저장된 값 — signstage-docs
+     * business/onsite-support-negotiation-and-billing-classification-review.md 3.1절)이면
+     * 관리자 승인 없이 그 즉시 APPROVED로
      * 반영되고({@link CeremonyUnitProductPurchase#autoApprove}), 아니면(레거시 플랜 없는 행사가
      * 장비·인력을 담은 경우) 예전처럼 PENDING으로 남아 관리자 승인을 기다린다. 성공하면 장바구니는
      * 비워진다. 토글형({@code EVENT_EFFECT_BUNDLE}) 단위 상품은 수량이 0/1 관례를 따라야 하고
@@ -639,7 +641,7 @@ public class CeremonyService {
             ));
         }
 
-        boolean allSystemUsageFee = lines.stream().allMatch(line -> line.getUnitProduct().getCategory().isSystemUsageFee());
+        boolean allSystemUsageFee = lines.stream().allMatch(line -> line.getUnitProduct().isPlatformUsageFee());
         if (allSystemUsageFee) {
             purchase.autoApprove();
         }
@@ -792,6 +794,7 @@ public class CeremonyService {
                             unitProduct.getCategory().name(),
                             unitProduct.getExclusivityGroup(),
                             unitProduct.getMaxPurchaseQuantity(),
+                            unitProduct.isPlatformUsageFee(),
                             line != null ? line.getCurrencyCode() : effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                             effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
                             line != null ? line.getPurchasedSalePrice() : effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
@@ -1427,7 +1430,7 @@ public class CeremonyService {
                     BigDecimal listAmount = line.getSnapshotSalePrice().multiply(BigDecimal.valueOf(line.getIncludedQuantity()));
                     planLines.add(new QuoteLineDraft(
                             "PLAN_UNIT_PRODUCT", line.getUnitProduct().getId(), line.getUnitProduct().getName(),
-                            line.getUnitProduct().getCategory(),
+                            line.getUnitProduct().getCategory(), line.getUnitProduct().isPlatformUsageFee(),
                             line.getIncludedQuantity(), line.getSnapshotSalePrice(), listAmount, BigDecimal.ZERO,
                             line.getSnapshotTaxCode()
                     ));
@@ -1444,7 +1447,7 @@ public class CeremonyService {
                                         .multiply(BigDecimal.valueOf(source.getIncludedQuantity()));
                                 planLines.add(new QuoteLineDraft(
                                         "PLAN_UNIT_PRODUCT", source.getUnitProduct().getId(), source.getUnitProduct().getName(),
-                                        source.getUnitProduct().getCategory(),
+                                        source.getUnitProduct().getCategory(), source.getUnitProduct().isPlatformUsageFee(),
                                         source.getIncludedQuantity(), period.getPriceInfo().getSalePrice(), listAmount,
                                         BigDecimal.ZERO, period.getPriceInfo().getTaxCode()
                                 ));
@@ -1477,7 +1480,7 @@ public class CeremonyService {
                     BigDecimal listAmount = line.getPurchasedSalePrice().multiply(BigDecimal.valueOf(line.getQuantity()));
                     return new QuoteLineDraft(
                             "UNIT_PRODUCT_PURCHASE", line.getUnitProduct().getId(), line.getPurchasedName(),
-                            line.getUnitProduct().getCategory(),
+                            line.getUnitProduct().getCategory(), line.getUnitProduct().isPlatformUsageFee(),
                             line.getQuantity(), line.getPurchasedSalePrice(), listAmount, BigDecimal.ZERO,
                             line.getPurchasedTaxCode()
                     );
@@ -1523,8 +1526,8 @@ public class CeremonyService {
                 runningTotal = runningTotal.add(share);
             }
             allocated.add(new QuoteLineDraft(
-                    line.lineType(), line.itemId(), line.itemName(), line.category(), line.quantity(), line.unitListAmount(),
-                    line.listAmount(), line.listAmount().subtract(share), line.taxCode()
+                    line.lineType(), line.itemId(), line.itemName(), line.category(), line.platformUsageFee(),
+                    line.quantity(), line.unitListAmount(), line.listAmount(), line.listAmount().subtract(share), line.taxCode()
             ));
         }
         return allocated;
@@ -1565,8 +1568,8 @@ public class CeremonyService {
             BigDecimal taxAmount = moneyCalculator.calculateExclusiveTax(lineNet, taxPolicy.getRatePercent(), currencyPolicy);
             BigDecimal grossAmount = moneyCalculator.normalize(lineNet.add(taxAmount), currencyPolicy);
             result.add(new QuoteLineDetail(
-                    line.lineType(), line.itemId(), line.itemName(), line.category(), line.quantity(), line.unitListAmount(),
-                    line.listAmount(), line.itemDiscountAmount(), ceremonyDiscount, lineNet,
+                    line.lineType(), line.itemId(), line.itemName(), line.category(), line.platformUsageFee(),
+                    line.quantity(), line.unitListAmount(), line.listAmount(), line.itemDiscountAmount(), ceremonyDiscount, lineNet,
                     line.taxCode(), taxPolicy.getCategory().name(), taxPolicy.getRatePercent(), taxPolicy.getPriceInclusion(),
                     taxAmount, grossAmount
             ));
@@ -1586,12 +1589,20 @@ public class CeremonyService {
     ) {
     }
 
-    /** 품목 할인 배분 전 단계의 줄 초안 — {@code itemDiscountAmount}는 {@link #allocateItemDiscount} 전엔 0. */
+    /**
+     * 품목 할인 배분 전 단계의 줄 초안 — {@code itemDiscountAmount}는 {@link #allocateItemDiscount} 전엔 0.
+     * {@code platformUsageFee}는 "플랫폼 이용료 대상인지"를 그 시점 {@code UnitProduct.isPlatformUsageFee()}
+     * 값으로 스냅샷한다(2026-09-12, signstage-docs
+     * business/onsite-support-negotiation-and-billing-classification-review.md 3.1절
+     * 결정) — {@code category}에서 다시 계산하지 않는다. {@code category}는 여전히 갖고
+     * 있지만 이제 순수 참고용이다(이 판정에는 안 쓴다).
+     */
     private record QuoteLineDraft(
             String lineType,
             Long itemId,
             String itemName,
             UnitProductCategory category,
+            boolean platformUsageFee,
             int quantity,
             BigDecimal unitListAmount,
             BigDecimal listAmount,
@@ -1609,6 +1620,7 @@ public class CeremonyService {
             Long itemId,
             String itemName,
             UnitProductCategory category,
+            boolean platformUsageFee,
             int quantity,
             BigDecimal unitListAmount,
             BigDecimal listAmount,
@@ -1732,12 +1744,12 @@ public class CeremonyService {
         Optional<CeremonyPlanHistory> snapshot = findLatestPlanHistoryForSnapshot(ceremony);
         return snapshot
                 .map(history -> ceremonyPlanHistoryUnitProductRepository.findAllByCeremonyPlanHistoryId(history.getId()).stream()
-                        .filter(line -> line.getUnitProduct().getCategory().isSystemUsageFee())
+                        .filter(line -> line.getUnitProduct().isPlatformUsageFee())
                         .filter(line -> !alreadyIncludedToggle(line.getUnitProduct(), line.getIncludedQuantity()))
                         .map(line -> line.getUnitProduct().getId())
                         .toList())
                 .orElseGet(() -> billingPlanUnitProductRepository.findAllByBillingPlanId(ceremony.getBillingPlan().getId()).stream()
-                        .filter(source -> source.getUnitProduct().getCategory().isSystemUsageFee())
+                        .filter(source -> source.getUnitProduct().isPlatformUsageFee())
                         .filter(source -> !alreadyIncludedToggle(source.getUnitProduct(), source.getIncludedQuantity()))
                         .map(source -> source.getUnitProduct().getId())
                         .toList());
@@ -1767,7 +1779,7 @@ public class CeremonyService {
 
         if (ceremony.getBillingPlan() == null) {
             return unitProductRepository.findAll().stream()
-                    .filter(unitProduct -> unitProduct.getCategory().isSystemUsageFee())
+                    .filter(UnitProduct::isPlatformUsageFee)
                     .map(this::toUnitProductSummaryForPurchase)
                     .toList();
         }
@@ -1790,6 +1802,7 @@ public class CeremonyService {
                 unitProduct.getCategory().name(),
                 unitProduct.getExclusivityGroup(),
                 unitProduct.getMaxPurchaseQuantity(),
+                unitProduct.isPlatformUsageFee(),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),

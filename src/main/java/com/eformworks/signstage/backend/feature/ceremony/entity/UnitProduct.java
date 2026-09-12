@@ -90,10 +90,23 @@ public class UnitProduct extends BaseEntity {
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder = 0;
 
+    /**
+     * 이 상품이 "플랫폼 이용료"(파트너가 플랫폼에 내는 돈) 대상인지 — 기존
+     * {@code UnitProductCategory#isSystemUsageFee()}의 카테고리 파생 판정을 저장된 값으로
+     * 승격한 필드다(2026-09-12 사용자 요청 — 분류체계를 명시적으로 분리, signstage-docs
+     * business/onsite-support-negotiation-and-billing-classification-review.md 3.1절
+     * 결정). 등록 시 카테고리로부터 자동 계산해 기본값을 채우지만, 관리자가 등록/수정
+     * 화면에서 자유롭게 override할 수 있다(같은 문서 결정 #2) — 현장지원 요청(관리자 견적)
+     * 전용 앵커 상품처럼 카테고리(PERSONNEL)와 과금 축(플랫폼 이용료)이 어긋나는 예외가
+     * 실제로 있다.
+     */
+    @Column(name = "is_platform_usage_fee", nullable = false)
+    private boolean platformUsageFee;
+
     @Builder
     private UnitProduct(
             UnitProductType type, String name, String description, UnitProductCategory category,
-            String exclusivityGroup, Integer maxPurchaseQuantity
+            String exclusivityGroup, Integer maxPurchaseQuantity, Boolean platformUsageFee
     ) {
         this.type = type;
         this.name = name;
@@ -104,6 +117,7 @@ public class UnitProduct extends BaseEntity {
         // 있어 null-safe하게 판정한다 — type이 실제로 정해지는 실서비스 경로(createUnitProduct)
         // 에서는 항상 non-null이다.
         this.maxPurchaseQuantity = (type != null && type.isToggle()) ? null : maxPurchaseQuantity;
+        this.platformUsageFee = platformUsageFee != null ? platformUsageFee : (category != null && category.isSystemUsageFee());
     }
 
     /**
@@ -111,12 +125,16 @@ public class UnitProduct extends BaseEntity {
      * 생성 후 불변이고 여기서 바꾸지 않는다(바꾸려면 새 상품을 만든다). 가격/사용여부는 여기서
      * 다루지 않는다 — {@link UnitProductPricePeriod} 기간 단위 CRUD로 관리한다.
      */
-    public void updateInfo(String name, String description, UnitProductCategory category, String exclusivityGroup, Integer maxPurchaseQuantity) {
+    public void updateInfo(
+            String name, String description, UnitProductCategory category, String exclusivityGroup,
+            Integer maxPurchaseQuantity, boolean platformUsageFee
+    ) {
         this.name = name;
         this.description = description;
         this.category = category;
         this.exclusivityGroup = exclusivityGroup;
         this.maxPurchaseQuantity = this.type.isToggle() ? null : maxPurchaseQuantity;
+        this.platformUsageFee = platformUsageFee;
     }
 
     /** 단위 상품 목록의 위/아래 이동 버튼이 호출한다 — {@code null}이면 바꾸지 않는다. */
