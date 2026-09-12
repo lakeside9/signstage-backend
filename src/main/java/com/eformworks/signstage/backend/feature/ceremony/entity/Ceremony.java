@@ -132,7 +132,11 @@ public class Ceremony extends BaseEntity {
     private DiscountInfo finalDiscount;
 
     @Builder
-    private Ceremony(Organization organization, BillingPlan billingPlan, String title) {
+    private Ceremony(
+            Organization organization, BillingPlan billingPlan, String title,
+            String description, String organizingInstitution, String organizingDepartment,
+            String contactName, String contactTitle, String contactPhone, String contactEmail
+    ) {
         this.organization = organization;
         this.billingPlan = billingPlan;
         this.currencyCode = organization == null
@@ -144,6 +148,17 @@ public class Ceremony extends BaseEntity {
                 ? com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults.TIME_ZONE_ID
                 : organization.getDefaultTimeZoneId();
         this.title = title;
+        // 등록 화면에서 제목과 함께 나머지 정보도 바로 입력받을 수 있게 됐다(2026-09-12
+        // 사용자 요청) — updateInfo와 마찬가지로 전부 선택 입력이라 null을 그대로 허용한다.
+        // "선등록 후플랜"(business/ceremony-registration-flow-and-billing-tab-separation-review.md)
+        // 원칙은 그대로 유지한다 — 여기 추가된 건 플랜과 무관한 서술/담당자 정보뿐이다.
+        this.description = description;
+        this.organizingInstitution = organizingInstitution;
+        this.organizingDepartment = organizingDepartment;
+        this.contactName = contactName;
+        this.contactTitle = contactTitle;
+        this.contactPhone = contactPhone;
+        this.contactEmail = contactEmail;
         this.status = CeremonyStatus.DRAFT;
         this.finalDiscount = new DiscountInfo(DiscountType.FIXED_AMOUNT, BigDecimal.ZERO);
     }

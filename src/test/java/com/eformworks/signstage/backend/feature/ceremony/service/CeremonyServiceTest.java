@@ -246,6 +246,41 @@ class CeremonyServiceTest {
         assertThat(result.getFractionDigits()).isZero();
     }
 
+    /**
+     * 2026-09-12 사용자 요청 — "행사를 만들때 현재는 행사제목만 우선 입력을 받는데 나머지
+     * 필드도 입력할 수 있도록 화면을 변경해주세요." 등록 화면에서 제목과 함께 받을 수 있게
+     * 확장한 나머지 정보(설명/주관 기관·부서/담당자 정보)가 실제로 저장되는지 확인한다 —
+     * "선등록 후플랜" 원칙(플랜은 여기서 다루지 않음)은 그대로다.
+     */
+    @Test
+    @DisplayName("Ceremony 생성 — 제목 외 나머지 정보(설명/주관 기관·부서/담당자)도 함께 저장한다")
+    void createCeremony_withOptionalFields_savesThemAll() {
+        Organization organization = organization();
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        User creator = User.builder().loginId("user1").name("사용자1").build();
+
+        given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(organization));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(userRepository.findById(CURRENT_USER_ID)).willReturn(Optional.of(creator));
+
+        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(
+                null, "행사1", "설명입니다", "주관기관", "주관부서",
+                "담당자", "과장", "010-1234-5678", "contact@example.com"
+        );
+
+        CeremonyDto.Response.CeremonySummary result = ceremonyService.createCeremony(ORGANIZATION_ID, CURRENT_USER_ID, request);
+
+        assertThat(result.getTitle()).isEqualTo("행사1");
+        assertThat(result.getDescription()).isEqualTo("설명입니다");
+        assertThat(result.getOrganizingInstitution()).isEqualTo("주관기관");
+        assertThat(result.getOrganizingDepartment()).isEqualTo("주관부서");
+        assertThat(result.getContactName()).isEqualTo("담당자");
+        assertThat(result.getContactTitle()).isEqualTo("과장");
+        assertThat(result.getContactPhone()).isEqualTo("010-1234-5678");
+        assertThat(result.getContactEmail()).isEqualTo("contact@example.com");
+    }
+
     @Test
     @DisplayName("Ceremony 생성 시 조직×플랜 할인 오버라이드가 있으면 카탈로그 값 대신 그 값을 CeremonyPlanHistory에 스냅샷한다")
     void createCeremony_withPlanDiscountOverride_snapshotsOverride() {
@@ -272,7 +307,7 @@ class CeremonyServiceTest {
         given(organizationDiscountService.resolveBillingPlanDiscount(eq(organization), eq(101L), any(), any(), any(LocalDate.class)))
                 .willReturn(overrideDiscount);
 
-        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1");
+        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1", null, null, null, null, null, null, null);
 
         // when
         ceremonyService.createCeremony(ORGANIZATION_ID, CURRENT_USER_ID, request);
@@ -316,7 +351,7 @@ class CeremonyServiceTest {
         given(organizationDiscountService.resolveBillingPlanDiscount(eq(organization), eq(101L), any(), any(), any(LocalDate.class)))
                 .willReturn(new OrganizationDiscountService.EffectiveDiscount(DiscountType.FIXED_AMOUNT, BigDecimal.ZERO));
 
-        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1");
+        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1", null, null, null, null, null, null, null);
 
         // 실제로는 @Transactional이라 ceremonyRepository.save 자체는 먼저 불리고 예외로 롤백된다 —
         // 여기서는 순수하게 "예외가 나는가"만 확인한다.
@@ -883,7 +918,7 @@ class CeremonyServiceTest {
         User creator = User.builder().loginId("u1").name("사용자").build();
         given(userRepository.findById(CURRENT_USER_ID)).willReturn(Optional.of(creator));
 
-        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(null, "행사");
+        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(null, "행사", null, null, null, null, null, null, null);
 
         CeremonyDto.Response.CeremonySummary result = ceremonyService.createCeremony(ORGANIZATION_ID, CURRENT_USER_ID, request);
 

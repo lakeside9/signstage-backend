@@ -40,6 +40,26 @@ public final class CeremonyDto {
 
             @NotBlank
             private String title;
+
+            /**
+             * title 외 나머지 항목은 전부 선택 입력이다(2026-09-12 사용자 요청 — 등록 화면에서
+             * 제목만 우선 받던 것을 나머지 정보도 함께 받을 수 있게 확장). {@link UpdateCeremony}와
+             * 같은 필드 구성이다 — 생략하면(null) 나중에 수정 화면에서 채울 수 있다.
+             */
+            private String description;
+
+            private String organizingInstitution;
+
+            private String organizingDepartment;
+
+            private String contactName;
+
+            private String contactTitle;
+
+            private String contactPhone;
+
+            @Email
+            private String contactEmail;
         }
 
         /**

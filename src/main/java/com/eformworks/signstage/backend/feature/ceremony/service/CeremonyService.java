@@ -160,6 +160,13 @@ public class CeremonyService {
                 .organization(organization)
                 .billingPlan(plan)
                 .title(request.getTitle())
+                .description(request.getDescription())
+                .organizingInstitution(request.getOrganizingInstitution())
+                .organizingDepartment(request.getOrganizingDepartment())
+                .contactName(request.getContactName())
+                .contactTitle(request.getContactTitle())
+                .contactPhone(request.getContactPhone())
+                .contactEmail(request.getContactEmail())
                 .build();
         ceremonyRepository.save(ceremony);
         if (plan != null) {
