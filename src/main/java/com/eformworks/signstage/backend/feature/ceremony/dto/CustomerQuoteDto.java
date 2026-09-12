@@ -2,7 +2,9 @@ package com.eformworks.signstage.backend.feature.ceremony.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -46,6 +48,14 @@ public final class CustomerQuoteDto {
          * 승인된 구매 기록에서 역산하던 옛 방식(파생 목록에 가격만 채워 넣는 방식)을 완전히
          * 대체한다 — 이제 품목·수량 자체도 파트너가 자유롭게 정한다(플랫폼이 실물을 커밋하지
          * 않으므로 수량 상한이 없다).
+         *
+         * <p>{@code unitProductId}는 이제 선택값이다(2026-09-12 사용자 요청 — 카탈로그에
+         * 없는 기타 품목도 담을 수 있어야 한다, signstage-docs
+         * business/onsite-support-negotiation-and-billing-classification-review.md 3.3절
+         * 결정) — 생략하면 자유 품목(카탈로그 검증 없음)이다. {@code itemName}은 카탈로그
+         * 줄이든 자유 품목이든 항상 이 요청 값을 그대로 스냅샷한다 — 같은 문서 결정 #6,
+         * 카탈로그 이름을 강제하지 않고 편집 가능한 텍스트 필드 하나로 화면·검증을
+         * 통일한다.
          */
         @Getter
         @Setter
@@ -53,8 +63,11 @@ public final class CustomerQuoteDto {
         @AllArgsConstructor
         public static class EquipmentPersonnelLine {
 
-            @NotNull
             private Long unitProductId;
+
+            @NotBlank
+            @Size(max = 100)
+            private String itemName;
 
             @NotNull
             @Min(1)

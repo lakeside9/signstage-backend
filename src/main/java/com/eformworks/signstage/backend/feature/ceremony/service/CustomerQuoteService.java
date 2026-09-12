@@ -34,6 +34,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -193,8 +194,12 @@ public class CustomerQuoteService {
         if (systemUsageCostAmount.signum() == 0 && requestedLines.isEmpty()) {
             throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_EMPTY);
         }
+        // 자유 품목(unitProductId 없음)은 카탈로그 참조가 없어 중복 검사 대상이 아니다 —
+        // 같은 이름을 여러 줄로 나눠 적어도 막을 이유가 없다(signstage-docs
+        // business/onsite-support-negotiation-and-billing-classification-review.md 3.3절).
         List<Long> requestedIds = requestedLines.stream()
                 .map(CustomerQuoteDto.Request.EquipmentPersonnelLine::getUnitProductId)
+                .filter(Objects::nonNull)
                 .toList();
         if (requestedIds.size() != requestedIds.stream().distinct().count()) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
@@ -214,6 +219,13 @@ public class CustomerQuoteService {
         // 배타 그룹 충돌 둘 다 이 화면엔 검사가 아예 없어 그대로 담기던 문제였다(2026-09-11
         // 발견). CeremonyEventService의 "이벤트에 옵션 적용" 경로가 쓰던 검사를
         // CeremonyService의 공유 헬퍼로 옮겨 여기서도 재사용한다.
+        //
+        // unitProductId가 없는 줄은 자유 품목이다(카탈로그에 없는 품목, 2026-09-12 사용자
+        // 요청 — signstage-docs
+        // business/onsite-support-negotiation-and-billing-classification-review.md 3.3절) —
+        // 카탈로그 검증(활성·가격기간·배타그룹)을 전부 스킵하고 unitProduct는 null로 둔다.
+        // itemName은 카탈로그 줄이든 자유 품목이든 항상 요청 값을 그대로 스냅샷한다 — 같은
+        // 문서 결정 #6, 카탈로그 이름을 강제하지 않아 화면·검증 로직을 하나로 통일한다.
         LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
         record ResolvedLine(CustomerQuoteDto.Request.EquipmentPersonnelLine request, UnitProduct unitProduct) {
         }
@@ -221,6 +233,10 @@ public class CustomerQuoteService {
         for (CustomerQuoteDto.Request.EquipmentPersonnelLine line : requestedLines) {
             if (line.getCustomerUnitAmount().signum() < 0) {
                 throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_PRICE_INVALID);
+            }
+            if (line.getUnitProductId() == null) {
+                resolvedLines.add(new ResolvedLine(line, null));
+                continue;
             }
             UnitProduct unitProduct = unitProductRepository.findById(line.getUnitProductId())
                     .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
@@ -230,7 +246,9 @@ public class CustomerQuoteService {
             ceremonyService.resolveSellableUnitProductPeriod(unitProduct, asOfDate);
             resolvedLines.add(new ResolvedLine(line, unitProduct));
         }
-        ceremonyService.checkExclusivityGroups(resolvedLines.stream().map(ResolvedLine::unitProduct).toList());
+        ceremonyService.checkExclusivityGroups(
+                resolvedLines.stream().map(ResolvedLine::unitProduct).filter(Objects::nonNull).toList()
+        );
 
         // 2차: 검증을 통과한 라인만으로 금액을 계산한다.
         List<EquipmentPersonnelLineAmount> equipmentPersonnelLineAmounts = new ArrayList<>();
@@ -243,7 +261,8 @@ public class CustomerQuoteService {
             );
             equipmentPersonnelTotal = equipmentPersonnelTotal.add(customerAmount);
             equipmentPersonnelLineAmounts.add(new EquipmentPersonnelLineAmount(
-                    unitProduct.getId(), unitProduct.getName(), line.getQuantity(), line.getCustomerUnitAmount(), customerAmount
+                    unitProduct == null ? null : unitProduct.getId(), line.getItemName(), line.getQuantity(),
+                    line.getCustomerUnitAmount(), customerAmount
             ));
         }
         BigDecimal totalCustomerAmount = moneyCalculator.normalize(

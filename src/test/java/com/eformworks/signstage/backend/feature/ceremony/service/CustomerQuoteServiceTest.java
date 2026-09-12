@@ -133,7 +133,7 @@ class CustomerQuoteServiceTest {
                 .given(ceremonyService).resolveSellableUnitProductPeriod(eq(tablet), any(LocalDate.class));
 
         CustomerQuoteDto.Request.GenerateQuote request = new CustomerQuoteDto.Request.GenerateQuote(
-                List.of(new CustomerQuoteDto.Request.EquipmentPersonnelLine(901L, 1, BigDecimal.valueOf(10000)))
+                List.of(new CustomerQuoteDto.Request.EquipmentPersonnelLine(901L, "태블릿", 1, BigDecimal.valueOf(10000)))
         );
 
         assertThatThrownBy(() -> customerQuoteService.generateCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request))
@@ -156,8 +156,8 @@ class CustomerQuoteServiceTest {
                 .given(ceremonyService).checkExclusivityGroups(List.of(near, far));
 
         CustomerQuoteDto.Request.GenerateQuote request = new CustomerQuoteDto.Request.GenerateQuote(List.of(
-                new CustomerQuoteDto.Request.EquipmentPersonnelLine(902L, 1, BigDecimal.valueOf(50000)),
-                new CustomerQuoteDto.Request.EquipmentPersonnelLine(903L, 1, BigDecimal.valueOf(80000))
+                new CustomerQuoteDto.Request.EquipmentPersonnelLine(902L, "근거리 현장지원", 1, BigDecimal.valueOf(50000)),
+                new CustomerQuoteDto.Request.EquipmentPersonnelLine(903L, "원거리 현장지원", 1, BigDecimal.valueOf(80000))
         ));
 
         assertThatThrownBy(() -> customerQuoteService.generateCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request))
@@ -190,7 +190,7 @@ class CustomerQuoteServiceTest {
                 ));
 
         CustomerQuoteDto.Request.GenerateQuote request = new CustomerQuoteDto.Request.GenerateQuote(
-                List.of(new CustomerQuoteDto.Request.EquipmentPersonnelLine(901L, 1, BigDecimal.valueOf(10000)))
+                List.of(new CustomerQuoteDto.Request.EquipmentPersonnelLine(901L, "태블릿", 1, BigDecimal.valueOf(10000)))
         );
 
         CustomerQuoteDto.Response.QuoteDetail result =
@@ -201,6 +201,42 @@ class CustomerQuoteServiceTest {
         verify(ceremonyService).checkExclusivityGroups(captor.capture());
         assertThat(captor.getValue()).containsExactly(tablet);
         verify(ceremonyService).resolveSellableUnitProductPeriod(eq(tablet), any(LocalDate.class));
+        verify(customerQuoteRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("unitProductId 없는 줄(자유 품목)은 카탈로그 검증 없이 그대로 담긴다")
+    void generateCustomerQuote_withFreeformItem_skipsCatalogValidationAndSaves() {
+        Ceremony ceremony = ceremony();
+        stubCommon(ceremony);
+        given(customerQuoteRepository.findMaxVersion(CEREMONY_ID)).willReturn(0);
+        given(customerQuoteRepository.findByIdAndCeremonyId(any(), eq(CEREMONY_ID)))
+                .willAnswer(invocation -> Optional.of(
+                        CustomerQuote.builder()
+                                .ceremony(ceremony).version(1)
+                                .currencyCode("KRW").currencyFractionDigits((short) 0).currencyRoundingMode("HALF_UP")
+                                .systemUsageCostAmount(BigDecimal.ZERO)
+                                .margin(new MarginInfo(DiscountType.PERCENT, BigDecimal.TEN))
+                                .systemUsageMarginAmount(BigDecimal.ZERO)
+                                .systemUsageCustomerAmount(BigDecimal.ZERO)
+                                .equipmentPersonnelCustomerAmount(BigDecimal.valueOf(15000))
+                                .totalCustomerAmount(BigDecimal.valueOf(15000))
+                                .build()
+                ));
+
+        CustomerQuoteDto.Request.GenerateQuote request = new CustomerQuoteDto.Request.GenerateQuote(
+                List.of(new CustomerQuoteDto.Request.EquipmentPersonnelLine(null, "태블릿 받침대", 1, BigDecimal.valueOf(15000)))
+        );
+
+        CustomerQuoteDto.Response.QuoteDetail result =
+                customerQuoteService.generateCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request);
+
+        assertThat(result).isNotNull();
+        verify(unitProductRepository, never()).findById(any());
+        verify(ceremonyService, never()).resolveSellableUnitProductPeriod(any(), any(LocalDate.class));
+        ArgumentCaptor<List<UnitProduct>> captor = ArgumentCaptor.forClass(List.class);
+        verify(ceremonyService).checkExclusivityGroups(captor.capture());
+        assertThat(captor.getValue()).isEmpty();
         verify(customerQuoteRepository).save(any());
     }
 }
