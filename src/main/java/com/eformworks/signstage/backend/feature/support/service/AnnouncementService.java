@@ -46,6 +46,15 @@ public class AnnouncementService {
         return toSummary(announcement);
     }
 
+    /**
+     * 관리자 상세/수정 화면용 — {@link #findPublicAnnouncement}와 달리 활성 여부로 걸러내지
+     * 않는다(관리자는 비활성 공지도 수정할 수 있어야 한다, 2026-09-12 페이지 전환 시 발견).
+     */
+    public AnnouncementDto.Response.AnnouncementSummary findAnnouncement(Long announcementId) {
+        return toSummary(announcementRepository.findById(announcementId)
+                .orElseThrow(() -> new ApplicationException(SupportErrorCode.ANNOUNCEMENT_NOT_FOUND)));
+    }
+
     public Page<AnnouncementDto.Response.AnnouncementSummary> findAnnouncements(Boolean active, Pageable pageable) {
         Page<Announcement> page = active == null
                 ? announcementRepository.findAllByOrderByPinnedDescCreatedAtDesc(pageable)

@@ -51,7 +51,7 @@ public class PlatformAdminAnnouncementController {
     @Operation(summary = "공지사항 상세 조회")
     @GetMapping("/{announcementId}")
     public ApiResponse<AnnouncementDto.Response.AnnouncementSummary> findAnnouncement(@PathVariable Long announcementId) {
-        return ApiResponse.success(announcementService.findPublicAnnouncement(announcementId), traceIdProvider.getTraceId());
+        return ApiResponse.success(announcementService.findAnnouncement(announcementId), traceIdProvider.getTraceId());
     }
 
     @Operation(summary = "공지사항 등록", description = "ACTION_ANNOUNCEMENT_MANAGE가 허용된 등급만 호출할 수 있다(PLATFORM_OPS 이상).")

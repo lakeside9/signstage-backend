@@ -45,6 +45,12 @@ public class FaqService {
                 .toList();
     }
 
+    /** 관리자 상세/수정 화면용 단건 조회 — 활성 여부와 무관하게 조회할 수 있다. */
+    public FaqDto.Response.FaqSummary findFaq(Long faqId) {
+        return toSummary(faqRepository.findById(faqId)
+                .orElseThrow(() -> new ApplicationException(SupportErrorCode.FAQ_NOT_FOUND)));
+    }
+
     public Page<FaqDto.Response.FaqSummary> findFaqs(Boolean active, Pageable pageable) {
         Page<Faq> page = active == null ? faqRepository.findAll(pageable) : faqRepository.findAllByActive(active, pageable);
         return page.map(this::toSummary);

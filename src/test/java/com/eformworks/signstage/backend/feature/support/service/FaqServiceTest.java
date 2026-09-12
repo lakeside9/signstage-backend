@@ -18,6 +18,7 @@ import com.eformworks.signstage.backend.feature.support.entity.Faq;
 import com.eformworks.signstage.backend.feature.support.error.SupportErrorCode;
 import com.eformworks.signstage.backend.feature.support.repository.FaqRepository;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,6 +64,18 @@ class FaqServiceTest {
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CommonErrorCode.ACCESS_DENIED);
         verify(faqRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("단건 조회 — 비활성 FAQ도 관리자는 조회할 수 있다(수정 화면용)")
+    void findFaq_inactive_returnsAnyway() {
+        Faq faq = faq(1L, 10);
+        faq.updateInfo(faq.getCategory(), faq.getQuestion(), faq.getAnswer(), false);
+        given(faqRepository.findById(1L)).willReturn(Optional.of(faq));
+
+        FaqDto.Response.FaqSummary response = faqService.findFaq(1L);
+
+        assertThat(response.isActive()).isFalse();
     }
 
     @Test

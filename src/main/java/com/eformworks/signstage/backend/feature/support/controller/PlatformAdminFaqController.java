@@ -50,6 +50,12 @@ public class PlatformAdminFaqController {
         return ApiResponse.success(PageResponse.from(response), traceIdProvider.getTraceId());
     }
 
+    @Operation(summary = "FAQ 상세 조회")
+    @GetMapping("/{faqId}")
+    public ApiResponse<FaqDto.Response.FaqSummary> findFaq(@PathVariable Long faqId) {
+        return ApiResponse.success(faqService.findFaq(faqId), traceIdProvider.getTraceId());
+    }
+
     @Operation(summary = "FAQ 등록", description = "ACTION_FAQ_MANAGE가 허용된 등급만 호출할 수 있다(PLATFORM_OPS 이상).")
     @PostMapping
     public ApiResponse<FaqDto.Response.FaqSummary> createFaq(

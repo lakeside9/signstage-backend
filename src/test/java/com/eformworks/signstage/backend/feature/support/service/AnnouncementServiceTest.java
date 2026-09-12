@@ -89,6 +89,19 @@ class AnnouncementServiceTest {
     }
 
     @Test
+    @DisplayName("관리자 상세 조회(findAnnouncement)는 비활성 공지도 볼 수 있다 — 수정 화면용")
+    void findAnnouncement_inactive_returnsAnyway() {
+        Announcement announcement = Announcement.builder().title("제목").content("내용").pinned(false).build();
+        ReflectionTestUtils.setField(announcement, "id", 1L);
+        announcement.updateInfo("제목", "내용", false, false);
+        given(announcementRepository.findById(1L)).willReturn(Optional.of(announcement));
+
+        AnnouncementDto.Response.AnnouncementSummary response = announcementService.findAnnouncement(1L);
+
+        assertThat(response.isActive()).isFalse();
+    }
+
+    @Test
     @DisplayName("공개 목록 — 활성 공지만 고정 우선 + 최신순으로 반환한다")
     void findPublicAnnouncements_returnsActiveOnly() {
         Announcement pinned = Announcement.builder().title("고정 공지").content("내용").pinned(true).build();
