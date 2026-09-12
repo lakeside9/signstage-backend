@@ -80,4 +80,20 @@ public class PlatformAdminCeremonyPurchaseController {
                 .rejectUnitProductPurchase(purchaseId, currentUser.userId(), currentUser.platformRole(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
+
+    @Operation(
+            summary = "단위 상품 추가구매 요청 취소",
+            description = "이미 승인(APPROVED)된 구매를 취소한다. 취소 사유를 남긴다. PLATFORM_OPS 이상만 호출할 수 있다. "
+                    + "이벤트 효과 묶음이 포함돼 있고 STARTED가 아닌 하위 행사에 적용돼 있으면 자동으로 해제된다."
+    )
+    @PutMapping("/unit-product-purchases/{purchaseId}/cancel")
+    public ApiResponse<PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary> cancelUnitProductPurchase(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long purchaseId,
+            @Valid @RequestBody PlatformAdminCeremonyPurchaseDto.Request.Cancel request
+    ) {
+        PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary response = ceremonyService
+                .cancelUnitProductPurchase(purchaseId, currentUser.userId(), currentUser.platformRole(), request);
+        return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
 }

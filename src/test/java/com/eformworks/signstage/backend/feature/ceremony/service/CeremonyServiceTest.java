@@ -20,6 +20,10 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanDiscountPeriod;
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventOptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
@@ -40,6 +44,9 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanR
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventEffectSettingRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
@@ -58,6 +65,7 @@ import com.eformworks.signstage.backend.feature.organization.entity.Organization
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
+import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminCeremonyPurchaseDto;
 import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -101,6 +109,12 @@ class CeremonyServiceTest {
     private CeremonyUnitProductPurchaseLineRepository ceremonyUnitProductPurchaseLineRepository;
     @Mock
     private CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
+    @Mock
+    private CeremonyEventRepository ceremonyEventRepository;
+    @Mock
+    private CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
+    @Mock
+    private CeremonyEventEffectSettingRepository ceremonyEventEffectSettingRepository;
     @Mock
     private CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
     @Mock
@@ -147,6 +161,9 @@ class CeremonyServiceTest {
         // 이 테스트 파일의 시나리오는 전부 OWNER라 생성/관리 액션이 항상 허용된다고 가정한다 —
         // 권한 자체의 허용/거부 판단은 RolePermissionServiceTest가 검증한다.
         lenient().when(rolePermissionService.isAllowed(eq("OWNER"), anyString())).thenReturn(true);
+        // 취소(플랫폼 관리자 축) 테스트가 쓴다 — 권한 자체의 허용/거부 판단은
+        // RolePermissionServiceTest가 검증한다.
+        lenient().when(rolePermissionService.isAllowed(eq("PLATFORM_OPS"), anyString())).thenReturn(true);
     }
 
     private Organization organization() {
@@ -1124,5 +1141,112 @@ class CeremonyServiceTest {
 
         assertThatCode(() -> ceremonyService.checkExclusivityGroups(List.of(near, tablet, onlineSupport)))
                 .doesNotThrowAnyException();
+    }
+
+    /**
+     * 2026-09-12 사용자 요청 — "파트너가 구매한 것에 대해 플랫폼 관리자가 취소할 수 있게
+     * 하는 것을 검토해주세요" 구현. signstage-docs
+     * business/ceremony-unit-product-purchase-cancellation-review.md 결정.
+     */
+    @Test
+    @DisplayName("구매 취소 — 승인된 구매를 사유와 함께 취소한다(이벤트 효과 묶음 아님)")
+    void cancelUnitProductPurchase_approvedNonBundlePurchase_cancels() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        UnitProduct signers = unitProduct(901L, UnitProductType.SIGNERS);
+
+        CeremonyUnitProductPurchase purchase = CeremonyUnitProductPurchase.builder().ceremony(ceremony).build();
+        ReflectionTestUtils.setField(purchase, "id", 501L);
+        ReflectionTestUtils.setField(purchase, "status", PurchaseStatus.APPROVED);
+
+        CeremonyUnitProductPurchaseLine line = CeremonyUnitProductPurchaseLine.builder()
+                .purchase(purchase).unitProduct(signers).quantity(2).currencyCode("KRW")
+                .purchasedName("서명자").purchasedSalePrice(new BigDecimal("1000")).purchasedTaxCode("KR_VAT_STANDARD")
+                .build();
+
+        given(ceremonyUnitProductPurchaseRepository.findById(501L)).willReturn(Optional.of(purchase));
+        given(ceremonyUnitProductPurchaseLineRepository.findAllByPurchaseIdOrderByIdAsc(501L)).willReturn(List.of(line));
+        given(ceremonyEventRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(10L)).willReturn(List.of());
+
+        PlatformAdminCeremonyPurchaseDto.Request.Cancel request =
+                new PlatformAdminCeremonyPurchaseDto.Request.Cancel("파트너 요청으로 정정");
+
+        PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary result =
+                ceremonyService.cancelUnitProductPurchase(501L, 999L, "PLATFORM_OPS", request);
+
+        assertThat(result.getStatus()).isEqualTo("CANCELLED");
+        assertThat(result.getCancellationReason()).isEqualTo("파트너 요청으로 정정");
+        assertThat(purchase.getStatus()).isEqualTo(PurchaseStatus.CANCELLED);
+        assertThat(purchase.getCancelledBy()).isEqualTo(999L);
+        // 이벤트 효과 묶음이 아니므로 자동 해제 경로 자체를 타지 않아야 한다.
+        verify(ceremonyEventOptionalFeatureRepository, never()).findAllByCeremonyEventId(any());
+    }
+
+    @Test
+    @DisplayName("구매 취소 — PENDING 구매는 취소할 수 없다")
+    void cancelUnitProductPurchase_notApproved_rejected() {
+        CeremonyUnitProductPurchase purchase = CeremonyUnitProductPurchase.builder()
+                .ceremony(ceremony(organization(), 10L)).build();
+        ReflectionTestUtils.setField(purchase, "id", 502L);
+        // builder 기본값이 PENDING이라 별도 설정 불필요.
+
+        given(ceremonyUnitProductPurchaseRepository.findById(502L)).willReturn(Optional.of(purchase));
+
+        PlatformAdminCeremonyPurchaseDto.Request.Cancel request = new PlatformAdminCeremonyPurchaseDto.Request.Cancel("사유");
+
+        assertThatThrownBy(() -> ceremonyService.cancelUnitProductPurchase(502L, 999L, "PLATFORM_OPS", request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_PURCHASE_NOT_APPROVED);
+    }
+
+    @Test
+    @DisplayName("구매 취소 — 이벤트 효과 묶음은 STARTED가 아닌 하위 행사에서만 자동 해제된다")
+    void cancelUnitProductPurchase_eventEffectBundle_unappliesFromNonStartedEventsOnly() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        UnitProduct bundle = UnitProduct.builder()
+                .type(UnitProductType.EVENT_EFFECT_BUNDLE).name("3종 묶음").category(UnitProductCategory.APPLICATION).build();
+        ReflectionTestUtils.setField(bundle, "id", 902L);
+
+        CeremonyUnitProductPurchase purchase = CeremonyUnitProductPurchase.builder().ceremony(ceremony).build();
+        ReflectionTestUtils.setField(purchase, "id", 503L);
+        ReflectionTestUtils.setField(purchase, "status", PurchaseStatus.APPROVED);
+
+        CeremonyUnitProductPurchaseLine line = CeremonyUnitProductPurchaseLine.builder()
+                .purchase(purchase).unitProduct(bundle).quantity(1).currencyCode("KRW")
+                .purchasedName("3종 묶음").purchasedSalePrice(new BigDecimal("5000")).purchasedTaxCode("KR_VAT_STANDARD")
+                .build();
+
+        CeremonyEvent startedEvent = CeremonyEvent.builder()
+                .ceremony(ceremony).name("본행사").eventType(CeremonyEventType.MAIN).accessKey("key-1").build();
+        ReflectionTestUtils.setField(startedEvent, "id", 701L);
+        ReflectionTestUtils.setField(startedEvent, "status", CeremonyEventStatus.STARTED);
+
+        CeremonyEvent draftEvent = CeremonyEvent.builder()
+                .ceremony(ceremony).name("테스트").eventType(CeremonyEventType.TEST).accessKey("key-2").build();
+        ReflectionTestUtils.setField(draftEvent, "id", 702L);
+        // 기본값 DRAFT — 별도 설정 불필요.
+
+        CeremonyEventOptionalFeature draftMapping = CeremonyEventOptionalFeature.builder()
+                .ceremonyEvent(draftEvent).unitProduct(bundle).build();
+
+        given(ceremonyUnitProductPurchaseRepository.findById(503L)).willReturn(Optional.of(purchase));
+        given(ceremonyUnitProductPurchaseLineRepository.findAllByPurchaseIdOrderByIdAsc(503L)).willReturn(List.of(line));
+        given(ceremonyEventRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(10L))
+                .willReturn(List.of(startedEvent, draftEvent));
+        given(ceremonyEventOptionalFeatureRepository.findAllByCeremonyEventId(702L)).willReturn(List.of(draftMapping));
+        given(ceremonyEventEffectSettingRepository.findAllByEventIdWithDefinition(702L)).willReturn(List.of());
+
+        ceremonyService.cancelUnitProductPurchase(
+                503L, 999L, "PLATFORM_OPS", new PlatformAdminCeremonyPurchaseDto.Request.Cancel("사유")
+        );
+
+        // STARTED인 하위 행사는 조회조차 하지 않는다(효율적 단락 평가) — 자동 해제 대상에서 빠진다.
+        verify(ceremonyEventOptionalFeatureRepository, never()).findAllByCeremonyEventId(701L);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<CeremonyEventOptionalFeature>> captor = ArgumentCaptor.forClass(List.class);
+        verify(ceremonyEventOptionalFeatureRepository).deleteAll(captor.capture());
+        assertThat(captor.getValue()).containsExactly(draftMapping);
     }
 }

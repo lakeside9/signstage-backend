@@ -61,6 +61,22 @@ public class CeremonyUnitProductPurchase extends BaseEntity {
     @Column(name = "reviewed_at")
     private LocalDateTime reviewedAt;
 
+    /**
+     * 취소 기록 — 승인/반려 기록({@code reviewedBy}/{@code reviewedAt}/{@code rejectionReason})과
+     * 별도 컬럼으로 둔다(signstage-docs
+     * business/ceremony-unit-product-purchase-cancellation-review.md 3.1절, 2026-09-12
+     * 결정). 덮어쓰면 "누가 언제 승인했는지"(자가-체크아웃이면 {@code reviewedBy=null}로 그
+     * 자체가 정보였다)라는 원래 감사 기록이 사라진다 — 승인/취소 둘 다 한 행에서 보존한다.
+     */
+    @Column(name = "cancelled_by")
+    private Long cancelledBy;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "cancellation_reason", length = 500)
+    private String cancellationReason;
+
     @Builder
     private CeremonyUnitProductPurchase(Ceremony ceremony) {
         this.ceremony = ceremony;
@@ -91,5 +107,18 @@ public class CeremonyUnitProductPurchase extends BaseEntity {
         this.reviewedBy = reviewedBy;
         this.reviewedAt = LocalDateTime.now();
         this.rejectionReason = rejectionReason;
+    }
+
+    /**
+     * 이미 승인(APPROVED)된 구매를 관리자가 취소한다 — signstage-docs
+     * business/ceremony-unit-product-purchase-cancellation-review.md 결정(2026-09-12).
+     * 대상이 APPROVED인지는 호출부({@code CeremonyService#findApprovedUnitProductPurchaseOrThrow})가
+     * 이미 확인했다고 전제한다.
+     */
+    public void cancel(Long cancelledBy, String cancellationReason) {
+        this.status = PurchaseStatus.CANCELLED;
+        this.cancelledBy = cancelledBy;
+        this.cancelledAt = LocalDateTime.now();
+        this.cancellationReason = cancellationReason;
     }
 }

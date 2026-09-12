@@ -206,6 +206,9 @@ public final class CeremonyDto {
             private final String status;
             private final String rejectionReason;
             private final LocalDateTime reviewedAt;
+            /** 관리자가 이미 승인된 이 구매를 취소했다면 그 사유·시각 — signstage-docs business/ceremony-unit-product-purchase-cancellation-review.md(2026-09-12). */
+            private final String cancellationReason;
+            private final LocalDateTime cancelledAt;
             private final LocalDateTime createdAt;
         }
 

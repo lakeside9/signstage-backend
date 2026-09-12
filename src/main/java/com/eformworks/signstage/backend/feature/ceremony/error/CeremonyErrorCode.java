@@ -79,6 +79,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "이미 처리된 단위 상품 추가구매 요청입니다."
     ),
+    UNIT_PRODUCT_PURCHASE_NOT_APPROVED(
+            "CEREMONY_UNIT_PRODUCT_PURCHASE_NOT_APPROVED",
+            HttpStatus.CONFLICT,
+            "승인된 구매만 취소할 수 있습니다."
+    ),
     SIGNER_NOT_FOUND("CEREMONY_SIGNER_NOT_FOUND", HttpStatus.NOT_FOUND, "서명자를 찾을 수 없습니다."),
     CEREMONY_SIGNER_LIMIT_EXCEEDED(
             "CEREMONY_SIGNER_LIMIT_EXCEEDED",

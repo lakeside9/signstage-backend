@@ -13,6 +13,10 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanDisco
 import com.eformworks.signstage.backend.feature.ceremony.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyAssignment;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventEffectSetting;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventOptionalFeature;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHistoryUnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
@@ -32,6 +36,9 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanR
 import com.eformworks.signstage.backend.feature.ceremony.repository.BillingPlanUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventEffectSettingRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
@@ -98,6 +105,9 @@ public class CeremonyService {
     private final CeremonyUnitProductPurchaseRepository ceremonyUnitProductPurchaseRepository;
     private final CeremonyUnitProductPurchaseLineRepository ceremonyUnitProductPurchaseLineRepository;
     private final CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
+    private final CeremonyEventRepository ceremonyEventRepository;
+    private final CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
+    private final CeremonyEventEffectSettingRepository ceremonyEventEffectSettingRepository;
     private final CeremonyPlanHistoryRepository ceremonyPlanHistoryRepository;
     private final CeremonyPlanHistoryUnitProductRepository ceremonyPlanHistoryUnitProductRepository;
     private final CeremonyUnitProductCartLineRepository ceremonyUnitProductCartLineRepository;
@@ -909,7 +919,8 @@ public class CeremonyService {
         Page<CeremonyUnitProductPurchase> purchases =
                 ceremonyUnitProductPurchaseRepository.search(status, organizationId, ceremonyId, pageable);
         Map<Long, String> loginIdsByUserId = resolveUserLoginIds(
-                purchases.getContent().stream().flatMap(purchase -> Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy()))
+                purchases.getContent().stream()
+                        .flatMap(purchase -> Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy()))
         );
         return purchases.map(purchase -> toUnitProductRequestSummary(purchase, loginIdsByUserId));
     }
@@ -929,7 +940,7 @@ public class CeremonyService {
                 purchase.getCeremony().getOrganization().getId(),
                 "purchaseId=" + purchaseId + ", ceremonyId=" + purchase.getCeremony().getId()
         );
-        return toUnitProductRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
+        return toUnitProductRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy())));
     }
 
     @Transactional
@@ -948,7 +959,34 @@ public class CeremonyService {
                 purchase.getCeremony().getOrganization().getId(),
                 "purchaseId=" + purchaseId + ", reason=" + request.getRejectionReason()
         );
-        return toUnitProductRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy())));
+        return toUnitProductRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy())));
+    }
+
+    /**
+     * 이미 승인(APPROVED)된 구매를 취소한다 — signstage-docs
+     * business/ceremony-unit-product-purchase-cancellation-review.md 결정(2026-09-12).
+     * 반려와 대칭이다(사유 필수, 같은 권한). 이벤트 효과 묶음이 포함돼 있으면
+     * {@link #unapplyEventEffectBundlesIfCancelled}가 하이브리드 원칙(3.6절)으로 자동
+     * 해제한다.
+     */
+    @Transactional
+    public PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary cancelUnitProductPurchase(
+            Long purchaseId,
+            Long adminUserId,
+            String actingPlatformRole,
+            PlatformAdminCeremonyPurchaseDto.Request.Cancel request
+    ) {
+        checkAllowed(actingPlatformRole, "ACTION_PURCHASE_APPROVAL");
+        CeremonyUnitProductPurchase purchase = findApprovedUnitProductPurchaseOrThrow(purchaseId);
+        purchase.cancel(adminUserId, request.getCancellationReason());
+        unapplyEventEffectBundlesIfCancelled(purchase);
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId, PlatformAdminAction.CANCEL_UNIT_PRODUCT_PURCHASE, null,
+                purchase.getCeremony().getOrganization().getId(),
+                "purchaseId=" + purchaseId + ", reason=" + request.getCancellationReason()
+        );
+        return toUnitProductRequestSummary(purchase, resolveUserLoginIds(Stream.of(purchase.getCreatedBy(), purchase.getReviewedBy(), purchase.getCancelledBy())));
     }
 
     private CeremonyUnitProductPurchase findPendingUnitProductPurchaseOrThrow(Long purchaseId) {
@@ -958,6 +996,71 @@ public class CeremonyService {
             throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_PURCHASE_NOT_PENDING);
         }
         return purchase;
+    }
+
+    private CeremonyUnitProductPurchase findApprovedUnitProductPurchaseOrThrow(Long purchaseId) {
+        CeremonyUnitProductPurchase purchase = ceremonyUnitProductPurchaseRepository.findById(purchaseId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_PURCHASE_NOT_FOUND));
+        if (purchase.getStatus() != PurchaseStatus.APPROVED) {
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_PURCHASE_NOT_APPROVED);
+        }
+        return purchase;
+    }
+
+    /**
+     * 취소된 구매에 이벤트 효과 묶음(EVENT_EFFECT_BUNDLE)이 있으면, 그 효과가 적용된 하위
+     * 행사 중 {@code STARTED}가 아닌 것만 자동으로 해제한다 — 하이브리드안(signstage-docs
+     * business/ceremony-unit-product-purchase-cancellation-review.md 3.6절/5장 결정 1,
+     * 2026-09-12). {@code STARTED}(서명 진행 중)인 하위 행사는 그대로 두고, 관리자가 화면의
+     * 하위 행사 상태 표시로 직접 인지하고 처리하게 한다.
+     */
+    private void unapplyEventEffectBundlesIfCancelled(CeremonyUnitProductPurchase purchase) {
+        List<Long> cancelledBundleIds = ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchaseIdOrderByIdAsc(purchase.getId()).stream()
+                .map(CeremonyUnitProductPurchaseLine::getUnitProduct)
+                .filter(unitProduct -> unitProduct.getType() == UnitProductType.EVENT_EFFECT_BUNDLE)
+                .map(UnitProduct::getId)
+                .toList();
+        if (cancelledBundleIds.isEmpty()) {
+            return;
+        }
+
+        List<CeremonyEvent> events = ceremonyEventRepository
+                .findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(purchase.getCeremony().getId());
+        for (CeremonyEvent event : events) {
+            if (event.getStatus() == CeremonyEventStatus.STARTED) {
+                continue;
+            }
+            List<CeremonyEventOptionalFeature> mappings = ceremonyEventOptionalFeatureRepository
+                    .findAllByCeremonyEventId(event.getId());
+            List<CeremonyEventOptionalFeature> toRemove = mappings.stream()
+                    .filter(mapping -> cancelledBundleIds.contains(mapping.getUnitProduct().getId()))
+                    .toList();
+            if (toRemove.isEmpty()) {
+                continue;
+            }
+            ceremonyEventOptionalFeatureRepository.deleteAll(toRemove);
+            List<Long> remainingUnitProductIds = mappings.stream()
+                    .map(mapping -> mapping.getUnitProduct().getId())
+                    .filter(id -> !cancelledBundleIds.contains(id))
+                    .toList();
+            pruneEffectSettingsRequiringUnappliedFeatures(event.getId(), remainingUnitProductIds);
+        }
+    }
+
+    /**
+     * {@code CeremonyEventEffectSettingService#pruneSettingsRequiringUnappliedFeatures}와
+     * 같은 로직이다 — 그 서비스는 이미 {@code CeremonyService}에 의존해(순환 의존 위험) 여기서
+     * 직접 호출할 수 없어, 같은 두 리포지토리로 동일한 판정을 다시 구현했다.
+     */
+    private void pruneEffectSettingsRequiringUnappliedFeatures(Long eventId, List<Long> appliedUnitProductIds) {
+        for (CeremonyEventEffectSetting setting : ceremonyEventEffectSettingRepository.findAllByEventIdWithDefinition(eventId)) {
+            if (!ceremonyEffectDefinitionOptionRepository.existsByEffectDefinitionIdAndUnitProductIdIn(
+                    setting.getDefinition().getId(), appliedUnitProductIds
+            )) {
+                ceremonyEventEffectSettingRepository.delete(setting);
+            }
+        }
     }
 
     private Map<Long, String> resolveUserLoginIds(Stream<Long> userIds) {
@@ -1767,6 +1870,8 @@ public class CeremonyService {
                 purchase.getStatus().name(),
                 purchase.getRejectionReason(),
                 purchase.getReviewedAt(),
+                purchase.getCancellationReason(),
+                purchase.getCancelledAt(),
                 purchase.getCreatedAt()
         );
     }
@@ -1792,6 +1897,13 @@ public class CeremonyService {
                 .findAllByPurchaseIdOrderByIdAsc(purchase.getId()).stream()
                 .map(this::toUnitProductPurchaseLineSummary)
                 .toList();
+        List<PlatformAdminCeremonyPurchaseDto.Response.CeremonyEventStatusSummary> ceremonyEvents =
+                ceremonyEventRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(purchase.getCeremony().getId()).stream()
+                        .map(event -> new PlatformAdminCeremonyPurchaseDto.Response.CeremonyEventStatusSummary(
+                                event.getEventType().name(), event.getName(), event.getStatus().name(),
+                                event.getScheduledStartAt(), event.getActualStartAt()
+                        ))
+                        .toList();
         return new PlatformAdminCeremonyPurchaseDto.Response.UnitProductPurchaseRequestSummary(
                 purchase.getId(),
                 purchase.getCreatedBy(),
@@ -1804,6 +1916,10 @@ public class CeremonyService {
                 purchase.getRejectionReason(),
                 purchase.getReviewedBy() != null ? loginIdsByUserId.get(purchase.getReviewedBy()) : null,
                 purchase.getReviewedAt(),
+                purchase.getCancelledBy() != null ? loginIdsByUserId.get(purchase.getCancelledBy()) : null,
+                purchase.getCancelledAt(),
+                purchase.getCancellationReason(),
+                ceremonyEvents,
                 purchase.getCreatedAt()
         );
     }

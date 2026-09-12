@@ -36,6 +36,8 @@ public enum PlatformAdminAction {
     /** 옛 {@code APPROVE/REJECT_CAPACITY_PURCHASE}, {@code APPROVE/REJECT_OPTIONAL_FEATURE_PURCHASE} 통합. */
     APPROVE_UNIT_PRODUCT_PURCHASE,
     REJECT_UNIT_PRODUCT_PURCHASE,
+    /** 이미 승인된 구매를 나중에 취소 — signstage-docs business/ceremony-unit-product-purchase-cancellation-review.md(2026-09-12). */
+    CANCEL_UNIT_PRODUCT_PURCHASE,
     CREATE_CEREMONY_EFFECT_DEFINITION,
     UPDATE_CEREMONY_EFFECT_DEFINITION,
     REORDER_CEREMONY_EFFECT_DEFINITIONS,
