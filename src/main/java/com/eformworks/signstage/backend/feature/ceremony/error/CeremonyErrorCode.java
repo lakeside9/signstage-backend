@@ -64,6 +64,16 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "설정된 최대 구매 수량을 초과했습니다."
     ),
+    UNIT_PRODUCT_SALE_UNIT_QUANTITY_INVALID(
+            "CEREMONY_UNIT_PRODUCT_SALE_UNIT_QUANTITY_INVALID",
+            HttpStatus.CONFLICT,
+            "이 단위 상품은 지정된 판매 단위 수량의 배수로만 구매할 수 있습니다."
+    ),
+    UNIT_PRODUCT_MAX_QUANTITY_NOT_MULTIPLE_OF_SALE_UNIT(
+            "CEREMONY_UNIT_PRODUCT_MAX_QUANTITY_NOT_MULTIPLE_OF_SALE_UNIT",
+            HttpStatus.BAD_REQUEST,
+            "최대 구매 수량은 판매 단위 수량의 배수여야 합니다."
+    ),
     UNIT_PRODUCT_GROUP_CONFLICT(
             "CEREMONY_UNIT_PRODUCT_GROUP_CONFLICT",
             HttpStatus.CONFLICT,

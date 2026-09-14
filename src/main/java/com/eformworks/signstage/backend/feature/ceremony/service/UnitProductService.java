@@ -101,6 +101,7 @@ public class UnitProductService {
         checkEffectDefinitionIdsAllowed(type, request.getEffectDefinitionIds());
         LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
         checkPeriodValid(effectiveFrom, request.getEffectiveTo());
+        checkSaleUnitQuantityDivides(request.getMaxPurchaseQuantity(), request.getSaleUnitQuantity());
 
         UnitProduct unitProduct = UnitProduct.builder()
                 .type(type)
@@ -109,6 +110,7 @@ public class UnitProductService {
                 .category(parseCategory(request.getCategory()))
                 .exclusivityGroup(request.getExclusivityGroup())
                 .maxPurchaseQuantity(request.getMaxPurchaseQuantity())
+                .saleUnitQuantity(request.getSaleUnitQuantity())
                 .platformUsageFee(request.getPlatformUsageFee())
                 .build();
         unitProductRepository.save(unitProduct);
@@ -151,13 +153,15 @@ public class UnitProductService {
         UnitProduct unitProduct = unitProductRepository.findById(unitProductId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
         checkEffectDefinitionIdsAllowed(unitProduct.getType(), request.getEffectDefinitionIds());
+        checkSaleUnitQuantityDivides(request.getMaxPurchaseQuantity(), request.getSaleUnitQuantity());
 
         String detail = "unitProductId=" + unitProductId
                 + ", name: " + unitProduct.getName() + " -> " + request.getName();
 
         unitProduct.updateInfo(
                 request.getName(), request.getDescription(), parseCategory(request.getCategory()),
-                request.getExclusivityGroup(), request.getMaxPurchaseQuantity(), request.getPlatformUsageFee()
+                request.getExclusivityGroup(), request.getMaxPurchaseQuantity(), request.getSaleUnitQuantity(),
+                request.getPlatformUsageFee()
         );
         recordProductHistory(unitProduct);
 
@@ -468,6 +472,21 @@ public class UnitProductService {
         return requested != null ? requested : InternationalizationDefaults.today();
     }
 
+    /**
+     * 최대 구매 수량을 지정했다면 판매 단위 수량의 배수여야 한다 — 아니면 "가득 채워 살 수
+     * 있는" 상한이 안 돼서 관리자 실수로 보인다(예: 단위 10인데 상한 25면 고객은 20까지만
+     * 채울 수 있다). 둘 다 생략(null)이면 검사하지 않는다 — saleUnitQuantity 생략은
+     * {@code UnitProduct}가 1(제약 없음)로 정규화하므로 어떤 maxPurchaseQuantity와도 항상 맞는다.
+     */
+    private void checkSaleUnitQuantityDivides(Integer maxPurchaseQuantity, Integer saleUnitQuantity) {
+        if (maxPurchaseQuantity == null || saleUnitQuantity == null) {
+            return;
+        }
+        if (maxPurchaseQuantity % saleUnitQuantity != 0) {
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_MAX_QUANTITY_NOT_MULTIPLE_OF_SALE_UNIT);
+        }
+    }
+
     private void checkPeriodValid(LocalDate effectiveFrom, LocalDate effectiveTo) {
         if (effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
             throw new ApplicationException(CeremonyErrorCode.DISCOUNT_PERIOD_INVALID);
@@ -540,6 +559,7 @@ public class UnitProductService {
                 unitProduct.getCategory().name(),
                 unitProduct.getExclusivityGroup(),
                 unitProduct.getMaxPurchaseQuantity(),
+                unitProduct.getSaleUnitQuantity(),
                 unitProduct.isPlatformUsageFee(),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
@@ -568,6 +588,7 @@ public class UnitProductService {
                 history.getCategory().name(),
                 history.getExclusivityGroup(),
                 history.getMaxPurchaseQuantity(),
+                history.getSaleUnitQuantity(),
                 history.isPlatformUsageFee(),
                 history.getCreatedBy(),
                 history.getCreatedAt()

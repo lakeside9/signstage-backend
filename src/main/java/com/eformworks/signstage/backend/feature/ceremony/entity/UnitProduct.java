@@ -80,6 +80,26 @@ public class UnitProduct extends BaseEntity {
     private Integer maxPurchaseQuantity;
 
     /**
+     * 판매 단위 수량 — 추가구매는 이 값의 배수로만 할 수 있다(기본값 1 = 낱개 구매, 제약 없음).
+     * "템플릿 문서 10개를 1묶음 10,000원에 판다"처럼 묶음 판매를 표현한다(2026-09-14 사용자
+     * 요청). 판매가({@link ProductPriceInfo#getSalePrice()})는 여전히 "개당" 단가다 — 10개
+     * 묶음이면 판매가를 1,000원으로 등록하고 이 필드에 10을 넣는다. 배수 검증만 담당하고
+     * 금액 계산식({@code listAmount = salePrice × quantity})은 전혀 바꾸지 않는다 — 어차피
+     * quantity가 항상 이 값의 배수로 들어오므로 결과 금액은 자연히 묶음 가격의 배수가 된다.
+     * 이렇게 판매가를 개당 단가로 유지하는 이유는 {@code quantity}가 과금뿐 아니라 실제 한도
+     * (예: {@code TEMPLATES} 타입의 "템플릿 몇 개 만들 수 있는가")로도 그대로 쓰이기 때문이다 —
+     * 판매가를 묶음 가격으로 재정의하면 견적/환불/구매취소 로직 전체가 "이 스냅샷이 개당인지
+     * 묶음당인지"를 새로 구분해야 해서 영향 범위가 훨씬 커진다.
+     *
+     * <p>토글형({@link UnitProductType#isToggle()})은 {@link #maxPurchaseQuantity}와 같은
+     * 이유로 이 필드도 항상 1로 정규화한다(생성자/{@link #updateInfo} 양쪽). 플랜 기본 포함
+     * 수량({@code BillingPlanUnitProduct.includedQuantity})은 이 제약을 받지 않는다 — 추가구매
+     * 에만 적용된다({@code CeremonyService#checkPurchaseQuantity}).
+     */
+    @Column(name = "sale_unit_quantity", nullable = false)
+    private Integer saleUnitQuantity = 1;
+
+    /**
      * 카탈로그 목록 화면의 표시 순서(2026-09-10, 사용자 요청 — {@code Signer}/{@code Template}/
      * {@code CeremonyEvent}와 같은 displayOrder 일괄 재정렬 패턴). 위/아래 이동 버튼이 전체
      * 목록을 다시 인덱싱해 저장한다({@code UnitProductService#updateDisplayOrders}). 동률이면
@@ -106,7 +126,7 @@ public class UnitProduct extends BaseEntity {
     @Builder
     private UnitProduct(
             UnitProductType type, String name, String description, UnitProductCategory category,
-            String exclusivityGroup, Integer maxPurchaseQuantity, Boolean platformUsageFee
+            String exclusivityGroup, Integer maxPurchaseQuantity, Integer saleUnitQuantity, Boolean platformUsageFee
     ) {
         this.type = type;
         this.name = name;
@@ -116,7 +136,9 @@ public class UnitProduct extends BaseEntity {
         // type이 null인 빌더 호출(테스트 픽스처가 id만 필요해 다른 필드를 생략하는 경우 등)이
         // 있어 null-safe하게 판정한다 — type이 실제로 정해지는 실서비스 경로(createUnitProduct)
         // 에서는 항상 non-null이다.
-        this.maxPurchaseQuantity = (type != null && type.isToggle()) ? null : maxPurchaseQuantity;
+        boolean toggle = type != null && type.isToggle();
+        this.maxPurchaseQuantity = toggle ? null : maxPurchaseQuantity;
+        this.saleUnitQuantity = toggle || saleUnitQuantity == null ? 1 : saleUnitQuantity;
         this.platformUsageFee = platformUsageFee != null ? platformUsageFee : (category != null && category.isSystemUsageFee());
     }
 
@@ -127,13 +149,15 @@ public class UnitProduct extends BaseEntity {
      */
     public void updateInfo(
             String name, String description, UnitProductCategory category, String exclusivityGroup,
-            Integer maxPurchaseQuantity, boolean platformUsageFee
+            Integer maxPurchaseQuantity, Integer saleUnitQuantity, boolean platformUsageFee
     ) {
         this.name = name;
         this.description = description;
         this.category = category;
         this.exclusivityGroup = exclusivityGroup;
-        this.maxPurchaseQuantity = this.type.isToggle() ? null : maxPurchaseQuantity;
+        boolean toggle = this.type.isToggle();
+        this.maxPurchaseQuantity = toggle ? null : maxPurchaseQuantity;
+        this.saleUnitQuantity = toggle || saleUnitQuantity == null ? 1 : saleUnitQuantity;
         this.platformUsageFee = platformUsageFee;
     }
 

@@ -67,6 +67,16 @@ public final class UnitProductDto {
             private Integer maxPurchaseQuantity;
 
             /**
+             * 판매 단위 수량 — 추가구매는 이 값의 배수로만 허용된다. 생략하면(null) 1(제약 없음,
+             * 낱개 구매). 예: 템플릿 문서를 "10개 1묶음 10,000원"에 팔려면 판매가를 1,000원
+             * (개당)으로 등록하고 이 값을 10으로 지정한다(2026-09-14 사용자 요청). 토글형은
+             * 이 값을 보내도 무시된다({@code UnitProductType#isToggle} 참고, {@code maxPurchaseQuantity}와
+             * 같은 이유).
+             */
+            @Min(1)
+            private Integer saleUnitQuantity;
+
+            /**
              * 플랫폼 이용료 대상인지 — 생략하면(null) 카테고리로부터 자동 계산한다
              * (ESSENTIAL/APPLICATION=true, EQUIPMENT/PERSONNEL=false). 명시하면 그 값을
              * 우선한다(2026-09-12 사용자 요청 — 분류체계 명시화, signstage-docs
@@ -139,6 +149,13 @@ public final class UnitProductDto {
              */
             @Min(1)
             private Integer maxPurchaseQuantity;
+
+            /**
+             * 판매 단위 수량 — 추가구매는 이 값의 배수로만 허용된다. null이면 1(제약 없음).
+             * 토글형은 이 값을 보내도 무시된다({@link CreateUnitProduct}와 같은 이유).
+             */
+            @Min(1)
+            private Integer saleUnitQuantity;
 
             /**
              * 플랫폼 이용료 대상인지 — 수정 화면은 항상 값을 보낸다(생략 불가, 이미 등록된
@@ -230,6 +247,8 @@ public final class UnitProductDto {
             private final String exclusivityGroup;
             /** 한 행사에서 추가구매로 누적 살 수 있는 최대 수량. null이면 무제한. 토글형은 항상 null(타입 자체가 최대 1로 고정). */
             private final Integer maxPurchaseQuantity;
+            /** 추가구매가 허용되는 수량 단위(배수). 1이면 제약 없음(낱개 구매). 토글형은 항상 1. */
+            private final Integer saleUnitQuantity;
             /**
              * 플랫폼 이용료 대상인지 — 카테고리와 별개인 명시적 분류다(2026-09-12, signstage-docs
              * business/onsite-support-negotiation-and-billing-classification-review.md 3.1절
@@ -274,6 +293,7 @@ public final class UnitProductDto {
             private final String category;
             private final String exclusivityGroup;
             private final Integer maxPurchaseQuantity;
+            private final Integer saleUnitQuantity;
             private final boolean platformUsageFee;
             private final Long createdBy;
             private final LocalDateTime createdAt;

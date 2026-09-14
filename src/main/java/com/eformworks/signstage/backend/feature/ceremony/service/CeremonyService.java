@@ -669,7 +669,8 @@ public class CeremonyService {
     }
 
     /**
-     * 담기/수량 수정/구매 확정 세 지점이 공유하는 수량 상한 검사 — 서로 배타적인 두 상한을 본다.
+     * 담기/수량 수정/구매 확정 세 지점이 공유하는 수량 검사 — 토글형 상한, 판매 단위 배수,
+     * 최대 구매 수량 세 가지를 본다.
      *
      * <p><b>1. 토글형</b>({@link UnitProductType#isToggle()}, 지금은 EVENT_EFFECT_BUNDLE만)은
      * 수량으로 여러 개를 담는 게 아니라 행사당 1회만 "가졌다/안 가졌다"로 다룬다(2026-09-11
@@ -678,7 +679,12 @@ public class CeremonyService {
      * UnitProduct#getMaxPurchaseQuantity()}는 아예 보지 않는다({@code UnitProduct} 생성자/
      * {@code updateInfo}가 토글형이면 항상 null로 정규화해두므로 사실 봐도 null이다).
      *
-     * <p><b>2. 그 외 타입</b>은 카탈로그에 설정된 {@code maxPurchaseQuantity}(nullable=무제한) —
+     * <p><b>2. 판매 단위 수량</b>({@link UnitProduct#getSaleUnitQuantity()}, 기본값 1=제약
+     * 없음)의 배수가 아닌 {@code resultingQuantity}는 거부한다(2026-09-14 사용자 요청 —
+     * "템플릿 문서 10개를 1묶음 10,000원에 팔고 싶다"). 판매가는 여전히 개당 단가라 이 검사
+     * 외에는 금액 계산에 아무 영향이 없다 — quantity가 항상 배수로 들어오도록 강제만 한다.
+     *
+     * <p><b>3. 그 외 수량 상한</b>은 카탈로그에 설정된 {@code maxPurchaseQuantity}(nullable=무제한) —
      * "이 행사에서 지금까지 담은/구매(PENDING+APPROVED) 수량 합"이 이 값을 넘으면 거부한다
      * (2026-09-12 사용자 요청 — "단위 상품을 구매할 수 있는 최대 수량을 관리하려고 합니다").
      * 플랜에 기본 포함된 수량은 이 합계에 넣지 않는다 — 추가구매로 "더 살 수 있는 양"만 상한을
@@ -706,6 +712,10 @@ public class CeremonyService {
                 throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_ALREADY_PURCHASED);
             }
             return;
+        }
+
+        if (resultingQuantity % unitProduct.getSaleUnitQuantity() != 0) {
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_SALE_UNIT_QUANTITY_INVALID);
         }
 
         Integer maxQuantity = unitProduct.getMaxPurchaseQuantity();
@@ -797,6 +807,7 @@ public class CeremonyService {
                             unitProduct.getCategory().name(),
                             unitProduct.getExclusivityGroup(),
                             unitProduct.getMaxPurchaseQuantity(),
+                            unitProduct.getSaleUnitQuantity(),
                             unitProduct.isPlatformUsageFee(),
                             line != null ? line.getCurrencyCode() : effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                             effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),
@@ -1805,6 +1816,7 @@ public class CeremonyService {
                 unitProduct.getCategory().name(),
                 unitProduct.getExclusivityGroup(),
                 unitProduct.getMaxPurchaseQuantity(),
+                unitProduct.getSaleUnitQuantity(),
                 unitProduct.isPlatformUsageFee(),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getSupplyPrice()).orElse(null),

@@ -215,7 +215,7 @@ class UnitProductServiceTest {
                 .willReturn(java.util.List.of(definition1, definition2));
 
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
-                "EVENT_EFFECT_BUNDLE", "3종 묶음", null, "APPLICATION", null, null, null, "KRW",
+                "EVENT_EFFECT_BUNDLE", "3종 묶음", null, "APPLICATION", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
                 null, null, java.util.List.of(10L, 20L)
         );
@@ -229,7 +229,7 @@ class UnitProductServiceTest {
     @DisplayName("생성 — EVENT_EFFECT_BUNDLE이 아닌데 effectDefinitionIds가 있으면 거부한다")
     void createUnitProduct_rejectsEffectDefinitionIdsForNonBundleType() {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
-                "SIGNERS", "서명자", null, "ESSENTIAL", null, null, null, "KRW",
+                "SIGNERS", "서명자", null, "ESSENTIAL", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
                 null, null, java.util.List.of(10L)
         );
@@ -249,7 +249,7 @@ class UnitProductServiceTest {
                 .willReturn(java.util.List.of());
 
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
-                "EVENT_EFFECT_BUNDLE", "3종 묶음", null, "APPLICATION", null, null, null, "KRW",
+                "EVENT_EFFECT_BUNDLE", "3종 묶음", null, "APPLICATION", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
                 null, null, java.util.List.of(10L)
         );
@@ -260,11 +260,44 @@ class UnitProductServiceTest {
                 .isEqualTo(CeremonyErrorCode.EFFECT_DEFINITION_NOT_FOUND);
     }
 
+    /**
+     * 2026-09-14 사용자 요청("템플릿 문서 10개를 1묶음 10,000원에 팔고 싶다") 구현 — 판매가는
+     * 개당 단가로 유지하고 saleUnitQuantity로 구매 단위(배수)만 강제한다.
+     */
+    @Test
+    @DisplayName("생성 — saleUnitQuantity를 함께 저장한다")
+    void createUnitProduct_savesSaleUnitQuantity() {
+        UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
+                "TEMPLATES", "템플릿 문서", null, "ESSENTIAL", null, null, 10, null, "KRW",
+                java.math.BigDecimal.valueOf(500), java.math.BigDecimal.valueOf(1000), "KR_VAT_STANDARD", true,
+                null, null, null
+        );
+
+        UnitProductDto.Response.UnitProductSummary result = unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request);
+
+        assertThat(result.getSaleUnitQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("생성 — 최대 구매 수량이 판매 단위 수량의 배수가 아니면 거부한다")
+    void createUnitProduct_rejectsMaxPurchaseQuantityNotMultipleOfSaleUnit() {
+        UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
+                "TEMPLATES", "템플릿 문서", null, "ESSENTIAL", null, 25, 10, null, "KRW",
+                java.math.BigDecimal.valueOf(500), java.math.BigDecimal.valueOf(1000), "KR_VAT_STANDARD", true,
+                null, null, null
+        );
+
+        assertThatThrownBy(() -> unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_MAX_QUANTITY_NOT_MULTIPLE_OF_SALE_UNIT);
+    }
+
     @Test
     @DisplayName("생성 — 설명을 함께 저장한다")
     void createUnitProduct_savesDescription() {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
-                "SIGNERS", "서명자", "행사장 서명자 한도를 늘립니다.", "ESSENTIAL", null, null, null, "KRW",
+                "SIGNERS", "서명자", "행사장 서명자 한도를 늘립니다.", "ESSENTIAL", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
                 null, null, null
         );
@@ -278,11 +311,11 @@ class UnitProductServiceTest {
     @DisplayName("생성 — platformUsageFee를 생략하면 카테고리로부터 기본값을 계산한다")
     void createUnitProduct_platformUsageFeeOmitted_defaultsFromCategory() {
         UnitProductDto.Request.CreateUnitProduct essential = new UnitProductDto.Request.CreateUnitProduct(
-                "SIGNERS", "서명자", null, "ESSENTIAL", null, null, null, "KRW",
+                "SIGNERS", "서명자", null, "ESSENTIAL", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null
         );
         UnitProductDto.Request.CreateUnitProduct personnel = new UnitProductDto.Request.CreateUnitProduct(
-                "ONSITE_SUPPORT", "현장지원", null, "PERSONNEL", null, null, null, "KRW",
+                "ONSITE_SUPPORT", "현장지원", null, "PERSONNEL", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null
         );
 
@@ -297,7 +330,7 @@ class UnitProductServiceTest {
     @DisplayName("생성 — platformUsageFee를 명시하면 카테고리와 달라도 그 값을 그대로 쓴다")
     void createUnitProduct_platformUsageFeeExplicit_overridesCategoryDefault() {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
-                "ONSITE_SUPPORT", "현장지원(요청형·관리자 견적)", null, "PERSONNEL", null, null, true, "KRW",
+                "ONSITE_SUPPORT", "현장지원(요청형·관리자 견적)", null, "PERSONNEL", null, null, null, true, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null
         );
 
@@ -313,7 +346,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(product));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("서명자", null, "PERSONNEL", null, null, true, null);
+                new UnitProductDto.Request.UpdateUnitProduct("서명자", null, "PERSONNEL", null, null, null, true, null);
 
         UnitProductDto.Response.UnitProductSummary result =
                 unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
@@ -328,7 +361,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(product));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("서명자", "새 설명", "ESSENTIAL", null, null, true, null);
+                new UnitProductDto.Request.UpdateUnitProduct("서명자", "새 설명", "ESSENTIAL", null, null, null, true, null);
 
         UnitProductDto.Response.UnitProductSummary result =
                 unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
@@ -345,7 +378,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(bundle));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, true, null);
+                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, null, true, null);
 
         unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
 
@@ -364,7 +397,7 @@ class UnitProductServiceTest {
                 .willReturn(java.util.List.of(effectDefinition(10L)));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, true, java.util.List.of(10L));
+                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, null, true, java.util.List.of(10L));
 
         unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
 
@@ -383,7 +416,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(bundle));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, true, java.util.List.of());
+                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, null, true, java.util.List.of());
 
         unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
 

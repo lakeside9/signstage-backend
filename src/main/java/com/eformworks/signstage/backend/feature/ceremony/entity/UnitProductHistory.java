@@ -59,6 +59,10 @@ public class UnitProductHistory extends BaseEntity {
     @Column(name = "max_purchase_quantity")
     private Integer maxPurchaseQuantity;
 
+    /** {@link UnitProduct#getSaleUnitQuantity()} 스냅샷(2026-09-14 신설 필드도 이력에 포함). */
+    @Column(name = "sale_unit_quantity", nullable = false)
+    private Integer saleUnitQuantity;
+
     /** {@link UnitProduct#isPlatformUsageFee()} 스냅샷(2026-09-12 신설 필드도 이력에 포함). */
     @Column(name = "is_platform_usage_fee", nullable = false)
     private boolean platformUsageFee;
@@ -72,6 +76,7 @@ public class UnitProductHistory extends BaseEntity {
         this.category = unitProduct.getCategory();
         this.exclusivityGroup = unitProduct.getExclusivityGroup();
         this.maxPurchaseQuantity = unitProduct.getMaxPurchaseQuantity();
+        this.saleUnitQuantity = unitProduct.getSaleUnitQuantity();
         this.platformUsageFee = unitProduct.isPlatformUsageFee();
     }
 }

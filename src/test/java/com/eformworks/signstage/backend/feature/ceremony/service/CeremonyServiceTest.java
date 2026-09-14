@@ -670,6 +670,60 @@ class CeremonyServiceTest {
         verify(ceremonyUnitProductCartLineRepository).save(any());
     }
 
+    /**
+     * 2026-09-14 사용자 요청("템플릿 문서 10개를 1묶음 10,000원에 팔고 싶다") 구현 — 카탈로그에
+     * 설정한 saleUnitQuantity(판매 단위 수량)의 배수가 아닌 수량은 거부된다.
+     */
+    @Test
+    @DisplayName("장바구니 담기 — 판매 단위 수량의 배수가 아니면 거부된다")
+    void addToCart_notMultipleOfSaleUnitQuantity_rejected() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        ceremony.confirmPlan();
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        UnitProduct templates = UnitProduct.builder()
+                .type(UnitProductType.TEMPLATES).name("템플릿 문서").category(UnitProductCategory.ESSENTIAL)
+                .saleUnitQuantity(10).build();
+        ReflectionTestUtils.setField(templates, "id", 401L);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(unitProductRepository.findById(401L)).willReturn(Optional.of(templates));
+
+        // 판매 단위(10)의 배수가 아닌 7개는 거부 — maxPurchaseQuantity가 없어 그 검사까지 가지도
+        // 않으므로 구매 이력 조회 스텁은 필요 없다.
+        assertThatThrownBy(() -> ceremonyService.addToCart(ORGANIZATION_ID, 10L, CURRENT_USER_ID, new CeremonyDto.Request.AddToCart(401L, 7)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_SALE_UNIT_QUANTITY_INVALID);
+        verify(ceremonyUnitProductCartLineRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("장바구니 담기 — 판매 단위 수량의 배수면 통과한다")
+    void addToCart_multipleOfSaleUnitQuantity_succeeds() {
+        Organization organization = organization();
+        Ceremony ceremony = ceremony(organization, 10L);
+        ceremony.confirmPlan();
+        Member member = Member.builder().role(MemberRole.OWNER).build();
+        UnitProduct templates = UnitProduct.builder()
+                .type(UnitProductType.TEMPLATES).name("템플릿 문서").category(UnitProductCategory.ESSENTIAL)
+                .saleUnitQuantity(10).build();
+        ReflectionTestUtils.setField(templates, "id", 401L);
+
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(member));
+        given(unitProductRepository.findById(401L)).willReturn(Optional.of(templates));
+        given(ceremonyUnitProductCartLineRepository.findAllByCeremonyIdOrderByIdAsc(10L)).willReturn(List.of());
+
+        // 판매 단위(10)의 배수인 10개는 통과 — maxPurchaseQuantity가 없어 구매 이력 조회 없이 바로 담긴다.
+        ceremonyService.addToCart(ORGANIZATION_ID, 10L, CURRENT_USER_ID, new CeremonyDto.Request.AddToCart(401L, 10));
+
+        verify(ceremonyUnitProductCartLineRepository).save(any());
+    }
+
     @Test
     @DisplayName("장바구니 수량 수정 — 과거 구매분과 합쳐 최대 구매 수량을 넘기면 거부된다")
     void updateCartLine_maxQuantityExceeded_rejected() {
