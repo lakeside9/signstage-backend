@@ -16,6 +16,20 @@ public interface OrganizationSubscriptionRepository extends JpaRepository<Organi
             Long organizationId, List<OrganizationSubscriptionStatus> statuses
     );
 
+    /**
+     * 조직의 구독 신청 이력(페이지네이션, 2026-09-14 추가 — 같은 날 후속으로 목록형+검색+
+     * 페이지네비게이션으로 전환하면서 List 반환에서 Page 반환으로 바꿨다) — signstage-docs
+     * business/subscription-margin-screen-separation-review.md 후속. PENDING/REJECTED로
+     * 끝난 옛 신청, SUPERSEDED로 대체된 옛 계약까지 전부 포함한다. `Pageable`에 정렬을 안
+     * 주면 이 메서드 이름의 `OrderByCreatedAtDesc`가 기본 정렬로 적용된다(최신순).
+     */
+    Page<OrganizationSubscription> findAllByOrganizationIdOrderByCreatedAtDesc(Long organizationId, Pageable pageable);
+
+    /** 위와 같은 목록에 상태 필터(검색 영역의 "상태" 드롭다운)를 더한 버전. */
+    Page<OrganizationSubscription> findAllByOrganizationIdAndStatusOrderByCreatedAtDesc(
+            Long organizationId, OrganizationSubscriptionStatus status, Pageable pageable
+    );
+
     Optional<OrganizationSubscription> findByOrganizationIdAndStatus(
             Long organizationId, OrganizationSubscriptionStatus status
     );

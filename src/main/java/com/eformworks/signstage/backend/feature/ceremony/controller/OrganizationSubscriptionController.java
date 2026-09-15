@@ -3,18 +3,24 @@ package com.eformworks.signstage.backend.feature.ceremony.controller;
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
+import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.OrganizationSubscriptionDto;
+import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationSubscriptionStatus;
 import com.eformworks.signstage.backend.feature.ceremony.service.OrganizationSubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -22,6 +28,12 @@ import org.springframework.web.bind.annotation.RestController;
  * business/organization-event-discount-pricing-review.md 8장 결정(2026-09-10). 신청/중도해지
  * 요청은 OWNER만(서비스 레이어에서 검사), 현재 구독 조회는 조직 멤버 누구나 가능하다. 플랫폼
  * 관리자의 승인/반려는 {@code PlatformAdminOrganizationSubscriptionController}가 담당한다.
+ *
+ * <p>{@code findSubscriptions}(이력 목록)는 2026-09-14 후속(같은 문서 6장) — 처음엔 페이지네이션
+ * 없는 `List` 반환이었다가, 같은 날 다시 "구독 화면은 목록형태로 만들고, 검색영역/목록/페이지
+ * 네비게이션을 적용해주세요" 요청으로 관리자 `PlatformAdminOrganizationSubscriptionController
+ * #findRequests`와 같은 모양(`status` 선택 필터 + {@code Pageable} + {@code PageResponse})으로
+ * 바꿨다.
  */
 @Tag(name = "OrganizationSubscription", description = "조직 구독/계약 API")
 @RestController
@@ -77,5 +89,22 @@ public class OrganizationSubscriptionController {
         OrganizationSubscriptionDto.Response.SubscriptionSummary response =
                 organizationSubscriptionService.findCurrentSubscription(organizationId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(
+            summary = "구독 신청 이력 조회",
+            description = "PENDING/REJECTED로 끝난 옛 신청, 재계약으로 SUPERSEDED된 옛 계약까지 전부 최신순으로 "
+                    + "돌려준다. status를 생략하면 전체를 반환한다. 조직 멤버 누구나 조회할 수 있다."
+    )
+    @GetMapping
+    public ApiResponse<PageResponse<OrganizationSubscriptionDto.Response.SubscriptionSummary>> findSubscriptions(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @RequestParam(required = false) OrganizationSubscriptionStatus status,
+            @PageableDefault(size = 20) Pageable pageable
+    ) {
+        Page<OrganizationSubscriptionDto.Response.SubscriptionSummary> response =
+                organizationSubscriptionService.findSubscriptions(organizationId, currentUser.userId(), status, pageable);
+        return ApiResponse.success(PageResponse.from(response), traceIdProvider.getTraceId());
     }
 }

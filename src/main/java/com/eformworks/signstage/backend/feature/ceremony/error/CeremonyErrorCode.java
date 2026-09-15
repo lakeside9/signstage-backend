@@ -526,7 +526,7 @@ public enum CeremonyErrorCode implements ErrorCode {
      * business/onsite-support-negotiation-and-billing-classification-review.md 3.2절
      * (2026-09-12). CeremonyInquiry와 같이 Ceremony 직속이라 이 코드에 둔다.
      */
-    ONSITE_SUPPORT_REQUEST_NOT_FOUND("ONSITE_SUPPORT_REQUEST_NOT_FOUND", HttpStatus.NOT_FOUND, "현장지원 출장비 요청을 찾을 수 없습니다."),
+    ONSITE_SUPPORT_REQUEST_NOT_FOUND("ONSITE_SUPPORT_REQUEST_NOT_FOUND", HttpStatus.NOT_FOUND, "플랫폼 운영사 현장지원 요청을 찾을 수 없습니다."),
     ONSITE_SUPPORT_REQUEST_NOT_REQUESTED(
             "ONSITE_SUPPORT_REQUEST_NOT_REQUESTED",
             HttpStatus.CONFLICT,
@@ -540,7 +540,7 @@ public enum CeremonyErrorCode implements ErrorCode {
     ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND(
             "ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND",
             HttpStatus.INTERNAL_SERVER_ERROR,
-            "현장지원 출장비 요청 전용 단위 상품이 카탈로그에 등록되어 있지 않습니다. 플랫폼 관리자에게 문의해주세요."
+            "플랫폼 운영사 현장지원 요청 전용 단위 상품이 카탈로그에 등록되어 있지 않습니다. 플랫폼 관리자에게 문의해주세요."
     );
 
     private final String code;

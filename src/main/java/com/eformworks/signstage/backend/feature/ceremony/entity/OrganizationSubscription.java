@@ -14,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
@@ -82,6 +83,18 @@ public class OrganizationSubscription extends BaseEntity {
     @Column(name = "allowed_count_snapshot")
     private Integer allowedCountSnapshot;
 
+    /**
+     * 승인 시점 플랜 "구매 비용" 스냅샷(2026-09-14 추가) — 포함 단위 상품 소계에 플랜 할인을
+     * 적용한 금액. {@code CeremonyService#calculateEstimatedTotal}의 플랜 소계 계산과 같은
+     * 공식을 승인 시점 한 번만 계산해 고정한다(행사별 재계산과 달리 이 값은 다시 계산하지
+     * 않는다 — 구독 자체가 조직 단위 정액 계약이라서다).
+     */
+    @Column(name = "purchase_amount_snapshot", precision = 19, scale = 4)
+    private BigDecimal purchaseAmountSnapshot;
+
+    @Column(name = "currency_code_snapshot", length = 3)
+    private String currencyCodeSnapshot;
+
     // ---- 기간 ----
 
     /** 승인 시점(ACTIVE 전이 시점)에 채워진다. */
@@ -121,8 +134,12 @@ public class OrganizationSubscription extends BaseEntity {
         this.approvalSource = SubscriptionApprovalSource.MANUAL;
     }
 
-    /** PENDING → ACTIVE. 이 시점에 플랜 조건을 스냅샷하고 시작/종료일을 확정한다. */
-    public void approve(Long reviewedBy, LocalDate startDate, LocalDate endDate) {
+    /**
+     * PENDING → ACTIVE. 이 시점에 플랜 조건을 스냅샷하고 시작/종료일을 확정한다.
+     * {@code purchaseAmount}/{@code currencyCode}는 호출부(서비스 레이어)가 계산해 넘긴다 —
+     * 엔티티는 가격 계산 로직(단위 상품 소계·할인 적용)을 갖지 않는다는 기존 원칙을 유지한다.
+     */
+    public void approve(Long reviewedBy, LocalDate startDate, LocalDate endDate, BigDecimal purchaseAmount, String currencyCode) {
         this.status = OrganizationSubscriptionStatus.ACTIVE;
         this.reviewedBy = reviewedBy;
         this.reviewedAt = LocalDateTime.now();
@@ -130,6 +147,8 @@ public class OrganizationSubscription extends BaseEntity {
         this.subscriptionTypeSnapshot = billingPlan.getSubscriptionType();
         this.periodMonthsSnapshot = billingPlan.getSubscriptionPeriodMonths();
         this.allowedCountSnapshot = billingPlan.getSubscriptionAllowedCount();
+        this.purchaseAmountSnapshot = purchaseAmount;
+        this.currencyCodeSnapshot = currencyCode;
         this.startDate = startDate;
         this.endDate = endDate;
     }

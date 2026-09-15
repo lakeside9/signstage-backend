@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
@@ -78,6 +79,9 @@ public final class OrganizationSubscriptionDto {
             private final String subscriptionTypeSnapshot;
             private final Integer periodMonthsSnapshot;
             private final Integer allowedCountSnapshot;
+            /** "구매 비용"(플랜 소계 - 할인) 스냅샷(2026-09-14 추가) — 승인 전이면 null. */
+            private final BigDecimal purchaseAmountSnapshot;
+            private final String currencyCodeSnapshot;
             private final Integer usedCount;
             private final Integer remainingCount;
             private final LocalDate startDate;
