@@ -11,6 +11,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CustomerQuote;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CustomerQuoteLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.MarginInfo;
+import com.eformworks.signstage.backend.feature.ceremony.entity.MarginPolicySnapshot;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationMarginPolicy;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
@@ -56,6 +57,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class CustomerQuoteService {
 
     private static final String ACTION_MARGIN_POLICY_MANAGE = "ACTION_MARGIN_POLICY_MANAGE";
+    private static final LocalDate MAX_MARGIN_DATE = LocalDate.of(9999, 12, 31);
+    private static final LocalDate MIN_MARGIN_DATE = LocalDate.of(1000, 1, 1);
     private static final String ACTION_CUSTOMER_QUOTE_MANAGE = "ACTION_CUSTOMER_QUOTE_MANAGE";
 
     private final OrganizationMarginPolicyRepository organizationMarginPolicyRepository;
@@ -74,7 +77,8 @@ public class CustomerQuoteService {
 
     public CustomerQuoteDto.Response.MarginPolicy retrieveOrganizationMarginPolicy(Long organizationId, Long currentUserId) {
         checkMarginPolicyAccess(organizationId, currentUserId);
-        return organizationMarginPolicyRepository.findByOrganizationId(organizationId)
+        Organization organization = findMarginOrganization(organizationId);
+        return organizationMarginPolicyRepository.findEffective(organizationId, marginDate(organization))
                 .map(policy -> new CustomerQuoteDto.Response.MarginPolicy(
                         policy.getMargin().getMarginType().name(), policy.getMargin().getMarginValue()
                 ))
@@ -82,20 +86,79 @@ public class CustomerQuoteService {
     }
 
     @Transactional
-    public CustomerQuoteDto.Response.MarginPolicy updateOrganizationMarginPolicy(
-            Long organizationId, Long currentUserId, CustomerQuoteDto.Request.UpdateMargin request
+    public CustomerQuoteDto.Response.MarginPeriod saveOrganizationMarginPeriod(
+            Long organizationId, Long policyId, Long currentUserId, CustomerQuoteDto.Request.MarginPeriod request
     ) {
         checkMarginPolicyAccess(organizationId, currentUserId);
-        Organization organization = organizationRepository.findById(organizationId)
+        // 조직 행 잠금으로 동일 파트너에 대한 동시 등록/수정의 기간 중복을 방지한다.
+        Organization organization = organizationRepository.findByIdForMarginUpdate(organizationId)
                 .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_NOT_FOUND));
         MarginInfo margin = toMarginInfo(request.getMarginType(), request.getMarginValue());
-
-        OrganizationMarginPolicy policy = organizationMarginPolicyRepository.findByOrganizationId(organizationId)
-                .orElseGet(() -> OrganizationMarginPolicy.builder().organization(organization).margin(margin).build());
-        policy.updateMargin(margin);
+        LocalDate from = request.getEffectiveFrom();
+        LocalDate to = request.getEffectiveTo() == null ? MAX_MARGIN_DATE : request.getEffectiveTo();
+        if (from == null || from.isBefore(MIN_MARGIN_DATE) || from.isAfter(MAX_MARGIN_DATE)
+                || to.isAfter(MAX_MARGIN_DATE) || to.isBefore(from)) {
+            throw new ApplicationException(CeremonyErrorCode.MARGIN_PERIOD_INVALID);
+        }
+        OrganizationMarginPolicy policy = policyId == null
+                ? OrganizationMarginPolicy.builder().organization(organization).build()
+                : organizationMarginPolicyRepository.findByIdAndOrganizationId(policyId, organizationId)
+                    .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.MARGIN_POLICY_NOT_FOUND));
+        List<OrganizationMarginPolicy> existingPolicies = organizationMarginPolicyRepository.findAllForUpdate(organizationId);
+        boolean overlaps = existingPolicies
+                .stream().filter(other -> policyId == null || !policyId.equals(other.getId()))
+                .anyMatch(other -> !other.getEffectiveFrom().isAfter(to)
+                        && (other.getEffectiveTo() == null || !other.getEffectiveTo().isBefore(from)));
+        if (overlaps) throw new ApplicationException(CeremonyErrorCode.MARGIN_PERIOD_OVERLAP);
+        // 신규 정책은 기존 전체 정책의 마지막 종료일 이후에만 추가한다.
+        // 수정에는 적용하지 않아 기존 무기한 정책의 종료일을 조정할 수 있도록 한다.
+        if (policyId == null && existingPolicies.stream()
+                .map(existing -> existing.getEffectiveTo() == null ? MAX_MARGIN_DATE : existing.getEffectiveTo())
+                .anyMatch(end -> !from.isAfter(end))) {
+            throw new ApplicationException(CeremonyErrorCode.MARGIN_PERIOD_START_NOT_AFTER_LAST_END);
+        }
+        policy.updatePeriod(margin, from, to);
         organizationMarginPolicyRepository.save(policy);
+        return toMarginPeriod(policy, organization, marginDate(organization));
+    }
 
-        return new CustomerQuoteDto.Response.MarginPolicy(margin.getMarginType().name(), margin.getMarginValue());
+    public List<CustomerQuoteDto.Response.MarginPeriod> retrieveOrganizationMarginPeriods(Long organizationId, Long userId) {
+        checkMarginPolicyAccess(organizationId, userId);
+        Organization organization = findMarginOrganization(organizationId);
+        LocalDate today = marginDate(organization);
+        return organizationMarginPolicyRepository.findAllByOrganizationIdOrderByEffectiveFromDesc(organizationId)
+                .stream().map(policy -> toMarginPeriod(policy, organization, today)).toList();
+    }
+
+    private Organization findMarginOrganization(Long id) {
+        return organizationRepository.findById(id)
+                .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_NOT_FOUND));
+    }
+
+    private LocalDate marginDate(Organization organization) {
+        return LocalDate.now(ZoneId.of(organization.getDefaultTimeZoneId()));
+    }
+
+    private CustomerQuoteDto.Response.MarginPeriod toMarginPeriod(OrganizationMarginPolicy policy, Organization organization, LocalDate today) {
+        String status = policy.getEffectiveFrom().isAfter(today) ? "SCHEDULED"
+                : policy.getEffectiveTo() != null && policy.getEffectiveTo().isBefore(today) ? "EXPIRED" : "ACTIVE";
+        return new CustomerQuoteDto.Response.MarginPeriod(policy.getId(), policy.getMargin().getMarginType().name(),
+                policy.getMargin().getMarginValue(), policy.getEffectiveFrom(), policy.getEffectiveTo(), status,
+                organization.getBillingCurrencyCode(), organization.getDefaultTimeZoneId());
+    }
+
+    private record ResolvedMargin(MarginInfo margin, MarginPolicySnapshot snapshot) {}
+
+    private Optional<ResolvedMargin> resolveMargin(Long organizationId, Long ceremonyId) {
+        Organization organization = findMarginOrganization(organizationId);
+        LocalDate date = marginDate(organization);
+        String zone = organization.getDefaultTimeZoneId();
+        return ceremonyMarginOverrideRepository.findByCeremonyId(ceremonyId)
+                .map(override -> new ResolvedMargin(override.getMargin(), new MarginPolicySnapshot(
+                        "CEREMONY_OVERRIDE", override.getId(), null, null, date, zone)))
+                .or(() -> organizationMarginPolicyRepository.findEffective(organizationId, date)
+                        .map(policy -> new ResolvedMargin(policy.getMargin(), new MarginPolicySnapshot(
+                                "ORGANIZATION_DEFAULT", policy.getId(), policy.getEffectiveFrom(), policy.getEffectiveTo(), date, zone))));
     }
 
     private void checkMarginPolicyAccess(Long organizationId, Long currentUserId) {
@@ -113,17 +176,10 @@ public class CustomerQuoteService {
         Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
 
-        Optional<CeremonyMarginOverride> override = ceremonyMarginOverrideRepository.findByCeremonyId(ceremony.getId());
-        if (override.isPresent()) {
-            MarginInfo margin = override.get().getMargin();
-            return new CustomerQuoteDto.Response.EffectiveMargin(margin.getMarginType().name(), margin.getMarginValue(), "CEREMONY_OVERRIDE");
-        }
-        Optional<OrganizationMarginPolicy> policy = organizationMarginPolicyRepository.findByOrganizationId(organizationId);
-        if (policy.isPresent()) {
-            MarginInfo margin = policy.get().getMargin();
-            return new CustomerQuoteDto.Response.EffectiveMargin(margin.getMarginType().name(), margin.getMarginValue(), "ORGANIZATION_DEFAULT");
-        }
-        return new CustomerQuoteDto.Response.EffectiveMargin(null, null, "NONE");
+        return resolveMargin(organizationId, ceremony.getId())
+                .map(resolved -> new CustomerQuoteDto.Response.EffectiveMargin(resolved.margin().getMarginType().name(),
+                        resolved.margin().getMarginValue(), resolved.snapshot().getSource()))
+                .orElseGet(() -> new CustomerQuoteDto.Response.EffectiveMargin(null, null, "NONE"));
     }
 
     @Transactional
@@ -172,7 +228,7 @@ public class CustomerQuoteService {
      * 계산 로직을 따로 두면 나중에 한쪽만 고쳐 숫자가 어긋날 위험이 있어 하나로 합쳤다.
      */
     private record QuoteComputation(
-            Ceremony ceremony, int nextVersion, MarginInfo margin,
+            Ceremony ceremony, int nextVersion, MarginInfo margin, MarginPolicySnapshot marginPolicySnapshot,
             BigDecimal systemUsageCostAmount, BigDecimal systemUsageMarginAmount, BigDecimal systemUsageCustomerAmount,
             List<EquipmentPersonnelLineAmount> equipmentPersonnelLineAmounts, BigDecimal equipmentPersonnelTotal,
             BigDecimal totalCustomerAmount
@@ -197,10 +253,9 @@ public class CustomerQuoteService {
         ceremonyService.checkCeremonyPlanConfirmed(ceremony);
         CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
 
-        MarginInfo margin = ceremonyMarginOverrideRepository.findByCeremonyId(ceremony.getId())
-                .map(CeremonyMarginOverride::getMargin)
-                .or(() -> organizationMarginPolicyRepository.findByOrganizationId(organizationId).map(OrganizationMarginPolicy::getMargin))
+        ResolvedMargin resolved = resolveMargin(organizationId, ceremony.getId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.MARGIN_NOT_SET));
+        MarginInfo margin = resolved.margin();
 
         CeremonyService.QuoteCalculation calculation = ceremonyService.buildQuoteCalculation(ceremony);
         BigDecimal systemUsageCostAmount = calculation.lines().stream()
@@ -287,7 +342,7 @@ public class CustomerQuoteService {
 
         int nextVersion = customerQuoteRepository.findMaxVersion(ceremonyId) + 1;
         return new QuoteComputation(
-                ceremony, nextVersion, margin, systemUsageCostAmount, systemUsageMarginAmount, systemUsageCustomerAmount,
+                ceremony, nextVersion, margin, resolved.snapshot(), systemUsageCostAmount, systemUsageMarginAmount, systemUsageCustomerAmount,
                 equipmentPersonnelLineAmounts, equipmentPersonnelTotal, totalCustomerAmount
         );
     }
@@ -319,7 +374,8 @@ public class CustomerQuoteService {
                 computation.totalCustomerAmount(),
                 LocalDateTime.now(),
                 null,
-                null
+                null,
+                computation.marginPolicySnapshot()
         );
         List<CustomerQuoteDto.Response.QuoteLineSummary> lines = new ArrayList<>();
         lines.add(new CustomerQuoteDto.Response.QuoteLineSummary(
@@ -350,6 +406,7 @@ public class CustomerQuoteService {
                 .currencyRoundingMode(ceremony.getCurrencyRoundingMode())
                 .systemUsageCostAmount(computation.systemUsageCostAmount())
                 .margin(computation.margin())
+                .marginPolicySnapshot(computation.marginPolicySnapshot())
                 .systemUsageMarginAmount(computation.systemUsageMarginAmount())
                 .systemUsageCustomerAmount(computation.systemUsageCustomerAmount())
                 .equipmentPersonnelCustomerAmount(computation.equipmentPersonnelTotal())
@@ -466,7 +523,8 @@ public class CustomerQuoteService {
                 quote.getTotalCustomerAmount(),
                 quote.getPricingCalculatedAt(),
                 createdByLoginId,
-                quote.getCreatedAt()
+                quote.getCreatedAt(),
+                quote.getMarginPolicySnapshot()
         );
     }
 }

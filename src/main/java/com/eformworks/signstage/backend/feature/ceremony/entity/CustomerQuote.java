@@ -73,6 +73,9 @@ public class CustomerQuote {
     @Embedded
     private MarginInfo margin;
 
+    @Embedded
+    private MarginPolicySnapshot marginPolicySnapshot;
+
     @Column(name = "system_usage_margin_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal systemUsageMarginAmount;
 
@@ -108,6 +111,7 @@ public class CustomerQuote {
             String currencyRoundingMode,
             BigDecimal systemUsageCostAmount,
             MarginInfo margin,
+            MarginPolicySnapshot marginPolicySnapshot,
             BigDecimal systemUsageMarginAmount,
             BigDecimal systemUsageCustomerAmount,
             BigDecimal equipmentPersonnelCustomerAmount,
@@ -121,6 +125,7 @@ public class CustomerQuote {
         this.currencyRoundingMode = currencyRoundingMode;
         this.systemUsageCostAmount = systemUsageCostAmount;
         this.margin = margin;
+        this.marginPolicySnapshot = marginPolicySnapshot;
         this.systemUsageMarginAmount = systemUsageMarginAmount;
         this.systemUsageCustomerAmount = systemUsageCustomerAmount;
         this.equipmentPersonnelCustomerAmount = equipmentPersonnelCustomerAmount;

@@ -481,6 +481,11 @@ public enum CeremonyErrorCode implements ErrorCode {
      * 파트너→실고객 고객 견적서(signstage-docs
      * business/partner-customer-quote-design-review.md, 2026-09-11 구현)의 오류 코드.
      */
+    MARGIN_PERIOD_INVALID("CEREMONY_MARGIN_PERIOD_INVALID", HttpStatus.BAD_REQUEST, "시작일을 입력하고 1000-01-01~9999-12-31 범위로 지정해주세요. 종료일은 시작일보다 빠를 수 없으며 생략 시 9999-12-31입니다."),
+    MARGIN_PERIOD_OVERLAP("CEREMONY_MARGIN_PERIOD_OVERLAP", HttpStatus.CONFLICT, "동일 파트너의 마진 적용 기간은 중복될 수 없습니다. 기존 정책의 종료일을 먼저 조정해주세요."),
+    MARGIN_PERIOD_START_NOT_AFTER_LAST_END("CEREMONY_MARGIN_PERIOD_START_NOT_AFTER_LAST_END", HttpStatus.CONFLICT,
+            "새 정책의 시작일은 기존 정책의 가장 늦은 종료일보다 뒤여야 합니다. 기존 종료일이 9999-12-31이면 먼저 종료일을 조정해주세요."),
+    MARGIN_POLICY_NOT_FOUND("CEREMONY_MARGIN_POLICY_NOT_FOUND", HttpStatus.NOT_FOUND, "마진 정책을 찾을 수 없습니다."),
     MARGIN_VALUE_INVALID(
             "CEREMONY_MARGIN_VALUE_INVALID",
             HttpStatus.BAD_REQUEST,

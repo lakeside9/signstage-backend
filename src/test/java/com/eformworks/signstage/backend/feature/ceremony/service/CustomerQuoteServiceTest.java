@@ -31,6 +31,9 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductR
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
+import com.eformworks.signstage.backend.feature.organization.entity.Organization;
+import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyMarginOverride;
 import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
@@ -113,13 +116,249 @@ class CustomerQuoteServiceTest {
         given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
         given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
                 .willReturn(Member.builder().role(MemberRole.OWNER).build());
-        given(organizationMarginPolicyRepository.findByOrganizationId(ORGANIZATION_ID))
+        given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(
+                com.eformworks.signstage.backend.feature.organization.entity.Organization.builder().build()));
+        given(organizationMarginPolicyRepository.findEffective(eq(ORGANIZATION_ID), any(LocalDate.class)))
                 .willReturn(Optional.of(OrganizationMarginPolicy.builder()
                         .margin(new MarginInfo(DiscountType.PERCENT, BigDecimal.TEN)).build()));
         given(ceremonyService.buildQuoteCalculation(ceremony))
                 .willReturn(new CeremonyService.QuoteCalculation(
                         BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of()
                 ));
+    }
+
+    private Organization stubPeriodAccess() {
+        Organization organization = Organization.builder().defaultTimeZoneId("Asia/Seoul").build();
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(Member.builder().role(MemberRole.OWNER).build()));
+        given(organizationRepository.findByIdForMarginUpdate(ORGANIZATION_ID)).willReturn(Optional.of(organization));
+        return organization;
+    }
+
+    private CustomerQuoteDto.Request.MarginPeriod periodRequest(LocalDate from, LocalDate to) {
+        return new CustomerQuoteDto.Request.MarginPeriod("PERCENT", BigDecimal.ZERO, from, to);
+    }
+
+    @Test
+    void marginPeriod_acceptsZeroAndSameDay() {
+        stubPeriodAccess();
+        LocalDate date = LocalDate.of(2026, 9, 22);
+        var result = customerQuoteService.saveOrganizationMarginPeriod(ORGANIZATION_ID, null, CURRENT_USER_ID, periodRequest(date, date));
+        assertThat(result.getMarginValue()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(result.getEffectiveFrom()).isEqualTo(date);
+        assertThat(result.getEffectiveTo()).isEqualTo(date);
+        verify(organizationRepository).findByIdForMarginUpdate(ORGANIZATION_ID);
+        verify(organizationMarginPolicyRepository).findAllForUpdate(ORGANIZATION_ID);
+    }
+
+    @Test
+    void marginPeriod_rejectsInvertedDates() {
+        stubPeriodAccess();
+        LocalDate date = LocalDate.of(2026, 9, 22);
+        assertThatThrownBy(() -> customerQuoteService.saveOrganizationMarginPeriod(
+                ORGANIZATION_ID, null, CURRENT_USER_ID, periodRequest(date, date.minusDays(1))))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode()).isEqualTo(CeremonyErrorCode.MARGIN_PERIOD_INVALID);
+        verify(organizationMarginPolicyRepository, never()).save(any());
+    }
+
+    @Test
+    void marginPeriod_omittedEndDefaultsToDatabaseMaximum() {
+        stubPeriodAccess();
+        var result = customerQuoteService.saveOrganizationMarginPeriod(ORGANIZATION_ID, null, CURRENT_USER_ID,
+                periodRequest(LocalDate.of(2026, 9, 22), null));
+        assertThat(result.getEffectiveTo()).isEqualTo(LocalDate.of(9999, 12, 31));
+        ArgumentCaptor<OrganizationMarginPolicy> saved = ArgumentCaptor.forClass(OrganizationMarginPolicy.class);
+        verify(organizationMarginPolicyRepository).save(saved.capture());
+        assertThat(saved.getValue().getEffectiveTo()).isEqualTo(LocalDate.of(9999, 12, 31));
+    }
+
+    @Test
+    void marginPeriod_rejectsDatesOutsideDatabaseRange() {
+        stubPeriodAccess();
+        for (var request : List.of(
+                periodRequest(LocalDate.of(2026, 1, 1), LocalDate.of(10000, 1, 1)),
+                periodRequest(LocalDate.of(999, 12, 31), null))) {
+            assertThatThrownBy(() -> customerQuoteService.saveOrganizationMarginPeriod(
+                    ORGANIZATION_ID, null, CURRENT_USER_ID, request))
+                    .isInstanceOf(ApplicationException.class)
+                    .extracting(ex -> ((ApplicationException) ex).getErrorCode()).isEqualTo(CeremonyErrorCode.MARGIN_PERIOD_INVALID);
+        }
+        verify(organizationMarginPolicyRepository, never()).save(any());
+    }
+
+    @Test
+    void marginPeriod_rejectsInclusiveBoundaryOverlapButAllowsNextDay() {
+        Organization organization = stubPeriodAccess();
+        LocalDate date = LocalDate.of(2026, 9, 22);
+        given(organizationMarginPolicyRepository.findAllForUpdate(ORGANIZATION_ID)).willReturn(List.of(
+                OrganizationMarginPolicy.builder().organization(organization).effectiveFrom(date.minusDays(10)).effectiveTo(date).build()));
+        assertThatThrownBy(() -> customerQuoteService.saveOrganizationMarginPeriod(
+                ORGANIZATION_ID, null, CURRENT_USER_ID, periodRequest(date, date.plusDays(10))))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode()).isEqualTo(CeremonyErrorCode.MARGIN_PERIOD_OVERLAP);
+        customerQuoteService.saveOrganizationMarginPeriod(ORGANIZATION_ID, null, CURRENT_USER_ID,
+                periodRequest(date.plusDays(1), date.plusDays(10)));
+        verify(organizationMarginPolicyRepository).save(any());
+    }
+
+    @Test
+    void marginPeriod_legacyOpenEndMustBeClosedBeforeAdding() {
+        Organization organization = stubPeriodAccess();
+        LocalDate date = LocalDate.of(2026, 9, 22);
+        OrganizationMarginPolicy legacy = OrganizationMarginPolicy.builder().organization(organization)
+                .effectiveFrom(date.minusDays(10)).margin(new MarginInfo(DiscountType.PERCENT, BigDecimal.TEN)).build();
+        ReflectionTestUtils.setField(legacy, "id", 7L);
+        given(organizationMarginPolicyRepository.findAllForUpdate(ORGANIZATION_ID)).willReturn(List.of(legacy));
+        assertThatThrownBy(() -> customerQuoteService.saveOrganizationMarginPeriod(
+                ORGANIZATION_ID, null, CURRENT_USER_ID, periodRequest(date, date.plusDays(10))))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode()).isEqualTo(CeremonyErrorCode.MARGIN_PERIOD_OVERLAP);
+        given(organizationMarginPolicyRepository.findByIdAndOrganizationId(7L, ORGANIZATION_ID)).willReturn(Optional.of(legacy));
+        customerQuoteService.saveOrganizationMarginPeriod(ORGANIZATION_ID, 7L, CURRENT_USER_ID,
+                periodRequest(date.minusDays(10), date.minusDays(1)));
+        customerQuoteService.saveOrganizationMarginPeriod(ORGANIZATION_ID, null, CURRENT_USER_ID,
+                periodRequest(date, date.plusDays(10)));
+        assertThat(legacy.getEffectiveTo()).isEqualTo(date.minusDays(1));
+    }
+
+    @Test
+    void marginPeriod_cannotEditAnotherOrganizationsPolicy() {
+        stubPeriodAccess();
+        LocalDate date = LocalDate.of(2026, 9, 22);
+        assertThatThrownBy(() -> customerQuoteService.saveOrganizationMarginPeriod(
+                ORGANIZATION_ID, 99L, CURRENT_USER_ID, periodRequest(date, date)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode()).isEqualTo(CeremonyErrorCode.MARGIN_POLICY_NOT_FOUND);
+        verify(organizationMarginPolicyRepository, never()).save(any());
+    }
+
+    @Test
+    void marginPeriod_rejectsEarlierAndGapPeriodsEvenWithoutOverlap() {
+        stubPeriodAccess();
+        given(organizationMarginPolicyRepository.findAllForUpdate(ORGANIZATION_ID)).willReturn(List.of(
+                policy(2L, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30)),
+                policy(1L, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30))));
+        for (int month : List.of(8, 10)) {
+            assertThatThrownBy(() -> customerQuoteService.saveOrganizationMarginPeriod(ORGANIZATION_ID, null, CURRENT_USER_ID,
+                    periodRequest(LocalDate.of(2026, month, 1), LocalDate.of(2026, month, 31))))
+                    .isInstanceOf(ApplicationException.class)
+                    .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                    .isEqualTo(CeremonyErrorCode.MARGIN_PERIOD_START_NOT_AFTER_LAST_END);
+        }
+        verify(organizationMarginPolicyRepository, never()).save(any());
+        customerQuoteService.saveOrganizationMarginPeriod(ORGANIZATION_ID, null, CURRENT_USER_ID,
+                periodRequest(LocalDate.of(2026, 12, 1), null));
+        verify(organizationMarginPolicyRepository).save(any());
+    }
+
+    @Test
+    void marginPeriod_editEarlierPolicyStillAllowed() {
+        stubPeriodAccess();
+        OrganizationMarginPolicy earlier = policy(1L, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
+        given(organizationMarginPolicyRepository.findByIdAndOrganizationId(1L, ORGANIZATION_ID)).willReturn(Optional.of(earlier));
+        given(organizationMarginPolicyRepository.findAllForUpdate(ORGANIZATION_ID)).willReturn(List.of(earlier,
+                policy(2L, LocalDate.of(2026, 10, 1), LocalDate.of(9999, 12, 31))));
+        customerQuoteService.saveOrganizationMarginPeriod(ORGANIZATION_ID, 1L, CURRENT_USER_ID,
+                periodRequest(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 29)));
+        assertThat(earlier.getEffectiveTo()).isEqualTo(LocalDate.of(2026, 9, 29));
+    }
+
+    @Test
+    void marginPeriod_requiresActiveMembership() {
+        assertThatThrownBy(() -> customerQuoteService.retrieveOrganizationMarginPeriods(2L, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(com.eformworks.signstage.backend.core.error.CommonErrorCode.ACCESS_DENIED);
+        verify(organizationMarginPolicyRepository, never()).findAllByOrganizationIdOrderByEffectiveFromDesc(any());
+    }
+
+    @Test
+    void marginPeriod_statusIncludesBothBoundaries() {
+        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(Member.builder().role(MemberRole.OWNER).build()));
+        given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(
+                Organization.builder().defaultTimeZoneId("Asia/Seoul").build()));
+        given(organizationMarginPolicyRepository.findAllByOrganizationIdOrderByEffectiveFromDesc(ORGANIZATION_ID)).willReturn(
+                List.of(policy(1L, today.plusDays(1), today.plusDays(2)), policy(2L, today, today),
+                        policy(3L, today.minusDays(2), today.minusDays(1))));
+        assertThat(customerQuoteService.retrieveOrganizationMarginPeriods(ORGANIZATION_ID, CURRENT_USER_ID))
+                .extracting(CustomerQuoteDto.Response.MarginPeriod::getStatus).containsExactly("SCHEDULED", "ACTIVE", "EXPIRED");
+    }
+
+    private OrganizationMarginPolicy policy(Long id, LocalDate from, LocalDate to) {
+        OrganizationMarginPolicy policy = OrganizationMarginPolicy.builder().effectiveFrom(from).effectiveTo(to)
+                .margin(new MarginInfo(DiscountType.PERCENT, BigDecimal.ZERO)).build();
+        ReflectionTestUtils.setField(policy, "id", id);
+        return policy;
+    }
+
+    @Test
+    void generateQuote_snapshotsZeroPercentPolicyAndSurvivesPolicyEdits() {
+        Ceremony ceremony = ceremony();
+        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+                .willReturn(Member.builder().role(MemberRole.OWNER).build());
+        LocalDate today = LocalDate.now(java.time.ZoneId.of("Pacific/Kiritimati"));
+        given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(
+                Organization.builder().defaultTimeZoneId("Pacific/Kiritimati").build()));
+        OrganizationMarginPolicy policy = policy(12L, today, today.plusDays(30));
+        given(organizationMarginPolicyRepository.findEffective(eq(ORGANIZATION_ID), any(LocalDate.class)))
+                .willReturn(Optional.of(policy));
+        CeremonyService.QuoteLineDetail line = org.mockito.Mockito.mock(CeremonyService.QuoteLineDetail.class);
+        given(line.platformUsageFee()).willReturn(true);
+        given(line.netAmount()).willReturn(BigDecimal.valueOf(10000));
+        given(ceremonyService.buildQuoteCalculation(ceremony)).willReturn(new CeremonyService.QuoteCalculation(
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of(line)));
+        java.util.concurrent.atomic.AtomicReference<CustomerQuote> saved = new java.util.concurrent.atomic.AtomicReference<>();
+        given(customerQuoteRepository.save(any())).willAnswer(invocation -> {
+            CustomerQuote quote = invocation.getArgument(0);
+            ReflectionTestUtils.setField(quote, "id", 20L);
+            saved.set(quote);
+            return quote;
+        });
+        given(customerQuoteRepository.findByIdAndCeremonyId(20L, CEREMONY_ID)).willAnswer(invocation -> Optional.of(saved.get()));
+        var result = customerQuoteService.generateCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID,
+                new CustomerQuoteDto.Request.GenerateQuote(List.of()));
+        assertThat(result.getSummary().getSystemUsageCustomerAmount()).isEqualByComparingTo("10000");
+        assertThat(result.getSummary().getSystemUsageMarginAmount()).isEqualByComparingTo("0");
+        assertThat(result.getSummary().getMarginPolicySnapshot().getSourceId()).isEqualTo(12L);
+        assertThat(result.getSummary().getMarginPolicySnapshot().getAppliedOn()).isEqualTo(today);
+        assertThat(result.getSummary().getMarginPolicySnapshot().getTimeZoneId()).isEqualTo("Pacific/Kiritimati");
+        verify(organizationMarginPolicyRepository).findEffective(ORGANIZATION_ID, today);
+        policy.updatePeriod(new MarginInfo(DiscountType.FIXED_AMOUNT, BigDecimal.valueOf(50000)), today, today);
+        var historical = customerQuoteService.findCustomerQuoteDetail(ORGANIZATION_ID, CEREMONY_ID, 20L, CURRENT_USER_ID).getSummary();
+        assertThat(historical.getMarginValue()).isEqualByComparingTo("0");
+        assertThat(historical.getMarginPolicySnapshot().getEffectiveTo()).isEqualTo(today.plusDays(30));
+        assertThat(historical.getTotalCustomerAmount()).isEqualByComparingTo("10000");
+    }
+
+    @Test
+    void effectiveMargin_overrideTakesPrecedenceEvenAtZero() {
+        Ceremony ceremony = ceremony();
+        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID)).willReturn(Member.builder().role(MemberRole.OWNER).build());
+        given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(Organization.builder().build()));
+        given(ceremonyMarginOverrideRepository.findByCeremonyId(CEREMONY_ID)).willReturn(Optional.of(
+                CeremonyMarginOverride.builder().ceremony(ceremony).margin(new MarginInfo(DiscountType.PERCENT, BigDecimal.ZERO)).build()));
+        var result = customerQuoteService.retrieveEffectiveMargin(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID);
+        assertThat(result.getSource()).isEqualTo("CEREMONY_OVERRIDE");
+        assertThat(result.getMarginValue()).isEqualByComparingTo("0");
+        verify(organizationMarginPolicyRepository, never()).findEffective(any(), any());
+    }
+
+    @Test
+    void quoteWithoutEffectiveMarginIsRejected() {
+        Ceremony ceremony = ceremony();
+        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID)).willReturn(Member.builder().role(MemberRole.OWNER).build());
+        given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(Organization.builder().build()));
+        assertThatThrownBy(() -> customerQuoteService.generateCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID,
+                new CustomerQuoteDto.Request.GenerateQuote(List.of())))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode()).isEqualTo(CeremonyErrorCode.MARGIN_NOT_SET);
+        verify(customerQuoteRepository, never()).save(any());
     }
 
     @Test

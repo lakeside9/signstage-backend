@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.ceremony.dto;
 
+import com.eformworks.signstage.backend.feature.ceremony.entity.MarginPolicySnapshot;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -7,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -27,7 +29,16 @@ public final class CustomerQuoteDto {
         private Request() {
         }
 
-        /** 조직 기본 마진/행사별 마진 override 설정 공용 — PERCENT|FIXED_AMOUNT. */
+        @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+        public static class MarginPeriod {
+            @NotNull private String marginType;
+            @NotNull private BigDecimal marginValue;
+            @NotNull private LocalDate effectiveFrom;
+            /** 생략 시 MySQL DATE 최댓값인 9999-12-31 적용. */
+            private LocalDate effectiveTo;
+        }
+
+        /** 행사별 마진 override 설정 — PERCENT|FIXED_AMOUNT. */
         @Getter
         @Setter
         @NoArgsConstructor
@@ -98,6 +109,18 @@ public final class CustomerQuoteDto {
         private Response() {
         }
 
+        @Getter @AllArgsConstructor
+        public static class MarginPeriod {
+            private final Long id;
+            private final String marginType;
+            private final BigDecimal marginValue;
+            private final LocalDate effectiveFrom;
+            private final LocalDate effectiveTo;
+            private final String status;
+            private final String currencyCode;
+            private final String timeZoneId;
+        }
+
         /** marginType/marginValue가 둘 다 null이면 "설정되지 않음"이다. */
         @Getter
         @AllArgsConstructor
@@ -135,6 +158,7 @@ public final class CustomerQuoteDto {
             private final LocalDateTime pricingCalculatedAt;
             private final String createdByLoginId;
             private final LocalDateTime createdAt;
+            private final MarginPolicySnapshot marginPolicySnapshot;
         }
 
         @Getter
