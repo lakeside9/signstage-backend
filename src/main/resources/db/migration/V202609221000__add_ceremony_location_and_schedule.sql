@@ -1,0 +1,4 @@
+ALTER TABLE ceremonies
+    ADD COLUMN location VARCHAR(500) NULL,
+    ADD COLUMN starts_at DATETIME(6) NULL,
+    ADD COLUMN ends_at DATETIME(6) NULL;

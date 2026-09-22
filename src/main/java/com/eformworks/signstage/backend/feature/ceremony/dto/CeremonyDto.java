@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -60,6 +61,11 @@ public final class CeremonyDto {
 
             @Email
             private String contactEmail;
+
+            @Size(max = 500)
+            private String location;
+            private LocalDateTime startsAt;
+            private LocalDateTime endsAt;
         }
 
         /**
@@ -89,6 +95,11 @@ public final class CeremonyDto {
 
             @Email
             private String contactEmail;
+
+            @Size(max = 500)
+            private String location;
+            private LocalDateTime startsAt;
+            private LocalDateTime endsAt;
         }
 
         /**
@@ -194,6 +205,9 @@ public final class CeremonyDto {
             private final BigDecimal finalDiscountValue;
             private final Long createdBy;
             private final LocalDateTime createdAt;
+            private final String location;
+            private final LocalDateTime startsAt;
+            private final LocalDateTime endsAt;
         }
 
         /** 구매 요청 한 줄 — 단위 상품 하나 + 수량 + 구매 시점 스냅샷(할인 없음). */

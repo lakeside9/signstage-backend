@@ -1,7 +1,9 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
+import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
+import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
@@ -18,6 +20,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.Currency;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -96,6 +99,25 @@ public class Ceremony extends BaseEntity {
     /** 생성 시에는 받지 않고 행사 수정 화면에서만 채운다 — 그래서 nullable이다. */
     @Column(length = 1000)
     private String description;
+
+    @Column(length = 500)
+    private String location;
+
+    /** 행사 시간대(timeZoneId) 기준의 현지 일시. */
+    @Column(name = "starts_at")
+    private LocalDateTime startsAt;
+
+    @Column(name = "ends_at")
+    private LocalDateTime endsAt;
+
+    public void updateSchedule(String location, LocalDateTime startsAt, LocalDateTime endsAt) {
+        if (startsAt != null && endsAt != null && endsAt.isBefore(startsAt)) {
+            throw new ApplicationException(CeremonyErrorCode.INVALID_SCHEDULE);
+        }
+        this.location = location == null || location.isBlank() ? null : location.trim();
+        this.startsAt = startsAt;
+        this.endsAt = endsAt;
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

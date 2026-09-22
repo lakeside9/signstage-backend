@@ -275,7 +275,9 @@ class CeremonyServiceTest {
 
         CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(
                 null, "행사1", "설명입니다", "주관기관", "주관부서",
-                "담당자", "과장", "010-1234-5678", "contact@example.com"
+                "담당자", "과장", "010-1234-5678", "contact@example.com",
+                "서울 행사장", java.time.LocalDateTime.of(2026, 10, 1, 10, 0),
+                java.time.LocalDateTime.of(2026, 10, 1, 12, 0)
         );
 
         CeremonyDto.Response.CeremonySummary result = ceremonyService.createCeremony(ORGANIZATION_ID, CURRENT_USER_ID, request);
@@ -288,6 +290,9 @@ class CeremonyServiceTest {
         assertThat(result.getContactTitle()).isEqualTo("과장");
         assertThat(result.getContactPhone()).isEqualTo("010-1234-5678");
         assertThat(result.getContactEmail()).isEqualTo("contact@example.com");
+        assertThat(result.getLocation()).isEqualTo("서울 행사장");
+        assertThat(result.getStartsAt()).isEqualTo(request.getStartsAt());
+        assertThat(result.getEndsAt()).isEqualTo(request.getEndsAt());
     }
 
     @Test
@@ -316,7 +321,7 @@ class CeremonyServiceTest {
         given(organizationDiscountService.resolveBillingPlanDiscount(eq(organization), eq(101L), any(), any(), any(LocalDate.class)))
                 .willReturn(overrideDiscount);
 
-        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1", null, null, null, null, null, null, null);
+        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1", null, null, null, null, null, null, null, null, null, null);
 
         // when
         ceremonyService.createCeremony(ORGANIZATION_ID, CURRENT_USER_ID, request);
@@ -360,7 +365,7 @@ class CeremonyServiceTest {
         given(organizationDiscountService.resolveBillingPlanDiscount(eq(organization), eq(101L), any(), any(), any(LocalDate.class)))
                 .willReturn(new OrganizationDiscountService.EffectiveDiscount(DiscountType.FIXED_AMOUNT, BigDecimal.ZERO));
 
-        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1", null, null, null, null, null, null, null);
+        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(101L, "행사1", null, null, null, null, null, null, null, null, null, null);
 
         // 실제로는 @Transactional이라 ceremonyRepository.save 자체는 먼저 불리고 예외로 롤백된다 —
         // 여기서는 순수하게 "예외가 나는가"만 확인한다.
@@ -981,7 +986,7 @@ class CeremonyServiceTest {
         User creator = User.builder().loginId("u1").name("사용자").build();
         given(userRepository.findById(CURRENT_USER_ID)).willReturn(Optional.of(creator));
 
-        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(null, "행사", null, null, null, null, null, null, null);
+        CeremonyDto.Request.CreateCeremony request = new CeremonyDto.Request.CreateCeremony(null, "행사", null, null, null, null, null, null, null, null, null, null);
 
         CeremonyDto.Response.CeremonySummary result = ceremonyService.createCeremony(ORGANIZATION_ID, CURRENT_USER_ID, request);
 

@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
  */
 public enum CeremonyErrorCode implements ErrorCode {
 
+    INVALID_SCHEDULE("CEREMONY_INVALID_SCHEDULE", HttpStatus.BAD_REQUEST, "종료일시는 시작일시보다 빠를 수 없습니다."),
+
     BILLING_PLAN_NOT_FOUND("CEREMONY_BILLING_PLAN_NOT_FOUND", HttpStatus.NOT_FOUND, "과금 플랜을 찾을 수 없습니다."),
     BILLING_PLAN_IN_USE(
             "CEREMONY_BILLING_PLAN_IN_USE",

@@ -174,6 +174,7 @@ public class CeremonyService {
                 .contactPhone(request.getContactPhone())
                 .contactEmail(request.getContactEmail())
                 .build();
+        ceremony.updateSchedule(request.getLocation(), request.getStartsAt(), request.getEndsAt());
         ceremonyRepository.save(ceremony);
         if (plan != null) {
             recordPlanHistory(ceremony, plan, planPeriod, asOfDate);
@@ -309,6 +310,7 @@ public class CeremonyService {
                 request.getContactPhone(),
                 request.getContactEmail()
         );
+        ceremony.updateSchedule(request.getLocation(), request.getStartsAt(), request.getEndsAt());
         return toSummary(ceremony);
     }
 
@@ -1880,7 +1882,10 @@ public class CeremonyService {
                 ceremony.getFinalDiscount().getDiscountType().name(),
                 ceremony.getFinalDiscount().getDiscountValue(),
                 ceremony.getCreatedBy(),
-                ceremony.getCreatedAt()
+                ceremony.getCreatedAt(),
+                ceremony.getLocation(),
+                ceremony.getStartsAt(),
+                ceremony.getEndsAt()
         );
     }
 
