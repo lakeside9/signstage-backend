@@ -6,7 +6,6 @@ import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest
 import com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
-import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
@@ -134,7 +133,7 @@ public class TemplateService {
 
     /**
      * 문서 양식 목록의 위/아래 이동 버튼이 호출한다 — 전체 배열을 원하는 순서로 다시 인덱싱해
-     * 통째로 보낸다. 잠금(isTemplateLockedByStartedEvent) 여부와 무관하게 항상 허용한다.
+     * 통째로 보낸다. 잠금(isTemplateInUse) 여부와 무관하게 항상 허용한다.
      */
     @Transactional
     public List<TemplateDto.Response.TemplateSummary> updateTemplateDisplayOrders(
@@ -345,6 +344,21 @@ public class TemplateService {
         return toSummary(template);
     }
 
+    /** 연결/설정 완료 여부와 관계없이 이름만 변경하며 조직 관리 권한은 유지한다. */
+    @Transactional
+    public TemplateDto.Response.TemplateSummary updateTemplateTitle(
+            Long organizationId, Long ceremonyId, Long templateId, Long currentUserId,
+            TemplateDto.Request.UpdateTitle request
+    ) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+        Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        template.rename(request.getTitle().strip());
+        return toSummary(template);
+    }
+
     /** 제목/문서유형만 바꾼다. PDF 파일 자체는 여기서 바꾸지 않는다(서명란 좌표가 깨지기 때문). */
     @Transactional
     public TemplateDto.Response.TemplateSummary updateTemplate(
@@ -360,33 +374,14 @@ public class TemplateService {
         ceremonyService.checkCeremonyEditable(ceremony);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
-        if (isTemplateLockedByStartedEvent(templateId)) {
+        if (isTemplateInUse(templateId)) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_LOCKED_BY_EVENT);
         }
         template.updateInfo(request.getTitle(), parseDocumentRole(request.getDocumentRole()));
         return toSummary(template);
     }
 
-    /**
-     * 이 문서 양식이 시작(STARTED)됐거나 종료(FINISHED)된 하위 행사에 매핑돼 있으면 잠긴
-     * 것으로 본다 — 제목/문서 역할이 바뀌면 이미 진행 중인 현장 운영·결과물과 어긋나기
-     * 때문이다. 서명란 자체의 잠금({@link #completeTemplate}, {@code TEMPLATE_LOCKED})과는
-     * 별개 조건이다.
-     */
-    private boolean isTemplateLockedByStartedEvent(Long templateId) {
-        return ceremonyTemplateRepository.findAllByTemplateId(templateId).stream()
-                .map(ceremonyTemplate -> ceremonyTemplate.getCeremonyEvent().getStatus())
-                .anyMatch(status -> status == CeremonyEventStatus.STARTED
-                        || status == CeremonyEventStatus.FINISHED
-                        || status == CeremonyEventStatus.FORCE_FINISHED);
-    }
-
-    /**
-     * 하위 행사(CeremonyEvent)에 매핑돼 있는지 — {@link #deleteTemplate}의 차단 조건이자
-     * {@link #toSummary}가 목록 화면의 삭제 버튼 노출 여부(deletable)를 계산하는 데도
-     * 재사용한다. 상태(STARTED/FINISHED)를 가리지 않는다 — DRAFT/READY 이벤트에 매핑돼 있어도
-     * FK가 깨지므로 삭제할 수 없다({@link #isTemplateLockedByStartedEvent}와는 별개 조건).
-     */
+    /** 행사 상태와 관계없이 연결된 양식은 일반 수정과 삭제를 막는다. */
     private boolean isTemplateInUse(Long templateId) {
         return ceremonyTemplateRepository.existsByTemplateId(templateId);
     }
@@ -557,7 +552,7 @@ public class TemplateService {
                 template.getStatus().name(),
                 template.getDisplayOrder(),
                 fieldCount,
-                isTemplateLockedByStartedEvent(template.getId()),
+                isTemplateInUse(template.getId()),
                 !isTemplateInUse(template.getId()),
                 template.getCreatedAt()
         );

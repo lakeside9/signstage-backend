@@ -11,6 +11,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import java.util.HashSet;
 import java.util.List;
@@ -30,6 +31,7 @@ public class TemplateFieldService {
 
     private final TemplateFieldRepository templateFieldRepository;
     private final TemplateRepository templateRepository;
+    private final CeremonyTemplateRepository ceremonyTemplateRepository;
     private final CeremonyService ceremonyService;
     private final SignerService signerService;
 
@@ -186,6 +188,9 @@ public class TemplateFieldService {
     }
 
     private void checkNotLocked(Template template) {
+        if (ceremonyTemplateRepository.existsByTemplateId(template.getId())) {
+            throw new ApplicationException(CeremonyErrorCode.TEMPLATE_LOCKED_BY_EVENT);
+        }
         if (template.getStatus() == TemplateStatus.COMPLETED) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_LOCKED);
         }

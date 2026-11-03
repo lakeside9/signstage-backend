@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -20,6 +21,16 @@ public final class TemplateDto {
     public static final class Request {
 
         private Request() {
+        }
+
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateTitle {
+            @NotBlank
+            @Size(max = 255)
+            private String title;
         }
 
         /** 제목/문서유형만 바꾼다. PDF 파일은 여기서 바꾸지 않는다(서명란 좌표가 깨지기 때문). */
@@ -56,7 +67,7 @@ public final class TemplateDto {
             private final Integer displayOrder;
             /** 서명란(TemplateField) 개수 — status 계산과 목록 화면 "서명란" 컬럼에 쓴다. */
             private final long fieldCount;
-            /** 시작/종료된 하위 행사에 매핑돼 수정이 막힌 문서 양식인지 — true면 화면에서 수정 버튼을 비활성화한다. */
+            /** 하위 행사에 매핑돼 수정이 막힌 문서 양식인지 — true면 화면에서 수정 버튼을 비활성화한다. */
             private final boolean locked;
             /** 하위 행사에 매핑돼 있어 삭제할 수 없는 문서 양식이면 false — 화면에서 삭제 버튼을 숨긴다. */
             private final boolean deletable;

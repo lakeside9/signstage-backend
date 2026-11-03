@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -152,6 +153,19 @@ public class TemplateController {
         TemplateDto.Response.TemplateSummary response =
                 templateService.completeTemplate(organizationId, ceremonyId, templateId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "문서 양식 이름 변경")
+    @PatchMapping("/{templateId}/title")
+    public ApiResponse<TemplateDto.Response.TemplateSummary> updateTemplateTitle(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long ceremonyId,
+            @PathVariable Long templateId,
+            @Valid @RequestBody TemplateDto.Request.UpdateTitle request
+    ) {
+        return ApiResponse.success(templateService.updateTemplateTitle(
+                organizationId, ceremonyId, templateId, currentUser.userId(), request), traceIdProvider.getTraceId());
     }
 
     @Operation(

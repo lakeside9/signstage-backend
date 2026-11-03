@@ -152,7 +152,7 @@ public enum CeremonyErrorCode implements ErrorCode {
     TEMPLATE_LOCKED_BY_EVENT(
             "CEREMONY_TEMPLATE_LOCKED_BY_EVENT",
             HttpStatus.CONFLICT,
-            "시작되었거나 종료된 하위 행사에 매핑된 문서 양식은 수정할 수 없습니다."
+            "하위 행사에 매핑된 문서 양식은 수정할 수 없습니다."
     ),
     TEMPLATE_LOCKED(
             "CEREMONY_TEMPLATE_LOCKED",

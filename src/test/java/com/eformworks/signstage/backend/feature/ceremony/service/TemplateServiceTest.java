@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -62,6 +63,80 @@ class TemplateServiceTest {
     private static final Long CEREMONY_ID = 10L;
     private static final Long TEMPLATE_ID = 101L;
     private static final Long CURRENT_USER_ID = 1L;
+
+    @Test
+    void mappedTemplateIsLockedAndRejectsUpdateAndDelete() {
+        Template template = prepareTemplate();
+        given(ceremonyTemplateRepository.existsByTemplateId(TEMPLATE_ID)).willReturn(true);
+        assertThat(templateService.retrieveTemplate(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID).isLocked()).isTrue();
+        assertThatThrownBy(() -> templateService.updateTemplate(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID,
+                new com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto.Request.UpdateTemplate("changed", "CONTRACT")))
+                .isInstanceOf(com.eformworks.signstage.backend.core.error.ApplicationException.class);
+        assertThatThrownBy(() -> templateService.deleteTemplate(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID))
+                .isInstanceOf(com.eformworks.signstage.backend.core.error.ApplicationException.class);
+        assertThat(template.getTitle()).isEqualTo("original");
+        org.mockito.Mockito.verify(templateRepository, org.mockito.Mockito.never()).delete(any(Template.class));
+    }
+
+    @Test
+    void renameCompletedMappedTemplatePreservesOtherPropertiesAndChecksAccess() {
+        Template template = prepareTemplate();
+        template.complete();
+        given(ceremonyTemplateRepository.existsByTemplateId(TEMPLATE_ID)).willReturn(true);
+        var response = templateService.updateTemplateTitle(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID,
+                new com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto.Request.UpdateTitle(" renamed "));
+        assertThat(response.getTitle()).isEqualTo("renamed");
+        assertThat(response.isLocked()).isTrue();
+        assertThat(response.isDeletable()).isFalse();
+        assertThat(template.getDocumentRole()).isEqualTo(TemplateDocumentRole.EXHIBITION);
+        assertThat(template.getStatus()).isEqualTo(com.eformworks.signstage.backend.feature.ceremony.entity.TemplateStatus.COMPLETED);
+        assertThat(template.getStorageKey()).isEqualTo("original.pdf");
+        verify(ceremonyService).checkCeremonyManageAccess(org.mockito.ArgumentMatchers.eq(template.getCeremony()), any(), org.mockito.ArgumentMatchers.eq(CURRENT_USER_ID));
+        verify(ceremonyService).checkCeremonyEditable(template.getCeremony());
+        org.mockito.Mockito.verifyNoInteractions(documentStoragePort);
+    }
+
+    @Test
+    void unmappedTemplateIsNotLocked() {
+        prepareTemplate();
+        var response = templateService.retrieveTemplate(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID);
+        assertThat(response.isLocked()).isFalse();
+        assertThat(response.isDeletable()).isTrue();
+    }
+
+    @Test
+    void mappedTemplateRejectsFieldChanges() {
+        prepareTemplate();
+        given(ceremonyTemplateRepository.existsByTemplateId(TEMPLATE_ID)).willReturn(true);
+        TemplateFieldService fields = new TemplateFieldService(templateFieldRepository, templateRepository,
+                ceremonyTemplateRepository, ceremonyService, mock(SignerService.class));
+        assertThatThrownBy(() -> fields.createTemplateField(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID, null))
+                .isInstanceOf(com.eformworks.signstage.backend.core.error.ApplicationException.class);
+        org.mockito.Mockito.verifyNoInteractions(templateFieldRepository);
+    }
+
+    @Test
+    void renameRejectsInvalidTitleRequest() {
+        try (var factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            var validator = factory.getValidator();
+            for (String title : new String[]{"", "   ", "a".repeat(256)}) {
+                assertThat(validator.validate(new com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto.Request.UpdateTitle(title))).isNotEmpty();
+            }
+        }
+    }
+
+    private Template prepareTemplate() {
+        Ceremony ceremony = Ceremony.builder().title("ceremony").build();
+        ReflectionTestUtils.setField(ceremony, "id", CEREMONY_ID);
+        Template template = Template.builder().ceremony(ceremony).title("original")
+                .documentRole(TemplateDocumentRole.EXHIBITION).storageKey("original.pdf")
+                .originalFilename("original.pdf").storedFilename("stored.pdf").build();
+        ReflectionTestUtils.setField(template, "id", TEMPLATE_ID);
+        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID)).willReturn(Member.builder().role(MemberRole.OWNER).build());
+        given(templateRepository.findById(TEMPLATE_ID)).willReturn(Optional.of(template));
+        return template;
+    }
 
     @Test
     @DisplayName("문서 복제 시 서명란에 매핑된 signer 정보까지 그대로 복제된다")
