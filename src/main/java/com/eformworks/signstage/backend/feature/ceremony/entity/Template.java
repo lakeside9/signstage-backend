@@ -29,6 +29,13 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Template extends BaseEntity {
 
+    @Column(nullable = false)
+    private boolean enabled = true;
+
+    public void updateEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

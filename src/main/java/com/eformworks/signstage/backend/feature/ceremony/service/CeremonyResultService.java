@@ -197,7 +197,7 @@ public class CeremonyResultService {
         try {
             Resource originalResource = documentStoragePort.loadAsResource(template.getStorageKey());
             originalBytes = originalResource.getInputStream().readAllBytes();
-            renderedBytes = SignatureOverlayRenderer.render(originalBytes, fieldStrokesList);
+            renderedBytes = SignatureOverlayRenderer.render(originalBytes, fieldStrokesList, mapping.getDocumentRole().name());
         } catch (IOException | StorageException e) {
             throw new ApplicationException(CeremonyErrorCode.RESULT_GENERATION_FAILED, e);
         }

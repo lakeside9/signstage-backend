@@ -10,6 +10,9 @@ import org.springframework.http.HttpStatus;
  */
 public enum CeremonyErrorCode implements ErrorCode {
 
+    TEMPLATE_DISABLED("CEREMONY_TEMPLATE_DISABLED", HttpStatus.BAD_REQUEST, "사용 안함으로 설정된 문서 양식입니다."),
+    SIGNER_DISABLED("CEREMONY_SIGNER_DISABLED", HttpStatus.BAD_REQUEST, "사용 안함 서명자는 새로 배치하거나 행사에 연결할 수 없습니다."),
+
     INVALID_SCHEDULE("CEREMONY_INVALID_SCHEDULE", HttpStatus.BAD_REQUEST, "종료일시는 시작일시보다 빠를 수 없습니다."),
 
     BILLING_PLAN_NOT_FOUND("CEREMONY_BILLING_PLAN_NOT_FOUND", HttpStatus.NOT_FOUND, "과금 플랜을 찾을 수 없습니다."),

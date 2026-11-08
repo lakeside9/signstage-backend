@@ -43,6 +43,15 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class TemplateController {
 
+    @org.springframework.web.bind.annotation.PatchMapping("/{templateId}/enabled")
+    public ApiResponse<TemplateDto.Response.TemplateSummary> updateEnabled(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId, @PathVariable Long ceremonyId, @PathVariable Long templateId,
+            @Valid @RequestBody com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest request) {
+        return ApiResponse.success(templateService.updateEnabled(organizationId, ceremonyId, templateId,
+                currentUser.userId(), request), traceIdProvider.getTraceId());
+    }
+
     private final TemplateService templateService;
     private final TraceIdProvider traceIdProvider;
 
@@ -69,10 +78,12 @@ public class TemplateController {
     public ApiResponse<List<TemplateDto.Response.TemplateSummary>> findTemplates(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long organizationId,
-            @PathVariable Long ceremonyId
+            @PathVariable Long ceremonyId,
+            @RequestParam(required = false) Boolean enabled
     ) {
         List<TemplateDto.Response.TemplateSummary> response =
                 templateService.findTemplates(organizationId, ceremonyId, currentUser.userId());
+        if (enabled != null) response = response.stream().filter(item -> item.isEnabled() == enabled).toList();
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

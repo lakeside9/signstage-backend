@@ -65,6 +65,20 @@ class TemplateServiceTest {
     private static final Long CURRENT_USER_ID = 1L;
 
     @Test
+    void toggleCompletedMappedTemplatePreservesContents() {
+        Template template = prepareTemplate();
+        template.complete();
+        given(ceremonyTemplateRepository.existsByTemplateId(TEMPLATE_ID)).willReturn(true);
+        var disabled = templateService.updateEnabled(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID,
+                new com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest(false));
+        assertThat(disabled.isEnabled()).isFalse();
+        assertThat(disabled.isLocked()).isTrue();
+        assertThat(templateService.updateEnabled(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID,
+                new com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest(true)).isEnabled()).isTrue();
+        assertThat(template.getStorageKey()).isEqualTo("original.pdf");
+    }
+
+    @Test
     void mappedTemplateIsLockedAndRejectsUpdateAndDelete() {
         Template template = prepareTemplate();
         given(ceremonyTemplateRepository.existsByTemplateId(TEMPLATE_ID)).willReturn(true);

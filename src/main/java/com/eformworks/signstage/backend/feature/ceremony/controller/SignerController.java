@@ -38,6 +38,15 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class SignerController {
 
+    @org.springframework.web.bind.annotation.PatchMapping("/{signerId}/enabled")
+    public ApiResponse<SignerDto.Response.SignerSummary> updateEnabled(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId, @PathVariable Long ceremonyId, @PathVariable Long signerId,
+            @Valid @RequestBody com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest request) {
+        return ApiResponse.success(signerService.updateEnabled(organizationId, ceremonyId, signerId,
+                currentUser.userId(), request), traceIdProvider.getTraceId());
+    }
+
     private final SignerService signerService;
     private final TraceIdProvider traceIdProvider;
 

@@ -21,12 +21,16 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
  */
 public final class SignatureOverlayRenderer {
 
-    private static final float LINE_WIDTH = 1.5f;
+
 
     private SignatureOverlayRenderer() {
     }
 
     public static byte[] render(byte[] originalPdfBytes, List<FieldStrokes> fieldStrokesList) throws IOException {
+        return render(originalPdfBytes, fieldStrokesList, "CONTRACT");
+    }
+
+    public static byte[] render(byte[] originalPdfBytes, List<FieldStrokes> fieldStrokesList, String documentRole) throws IOException {
         try (PDDocument document = Loader.loadPDF(originalPdfBytes)) {
             for (FieldStrokes fieldStrokes : fieldStrokesList) {
                 if (fieldStrokes.strokes().isEmpty()) {
@@ -35,7 +39,7 @@ public final class SignatureOverlayRenderer {
                 if (fieldStrokes.pageIndex() < 0 || fieldStrokes.pageIndex() >= document.getNumberOfPages()) {
                     continue;
                 }
-                drawFieldStrokes(document, document.getPage(fieldStrokes.pageIndex()), fieldStrokes);
+                drawFieldStrokes(document, document.getPage(fieldStrokes.pageIndex()), fieldStrokes, documentRole);
             }
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -44,7 +48,7 @@ public final class SignatureOverlayRenderer {
         }
     }
 
-    private static void drawFieldStrokes(PDDocument document, PDPage page, FieldStrokes fieldStrokes) throws IOException {
+    private static void drawFieldStrokes(PDDocument document, PDPage page, FieldStrokes fieldStrokes, String documentRole) throws IOException {
         PDRectangle box = page.getMediaBox();
         float pageWidth = box.getWidth();
         float pageHeight = box.getHeight();
@@ -59,7 +63,9 @@ public final class SignatureOverlayRenderer {
         try (PDPageContentStream contentStream = new PDPageContentStream(
                 document, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
             contentStream.setStrokingColor(0, 0, 0);
-            contentStream.setLineWidth(LINE_WIDTH);
+            contentStream.setLineWidth(SignaturePdfWidth.resolve(page, documentRole, 2.0));
+            contentStream.setLineCapStyle(1);
+            contentStream.setLineJoinStyle(1);
 
             for (List<double[]> stroke : fieldStrokes.strokes()) {
                 if (stroke.size() < 2) {

@@ -51,6 +51,18 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class SignerService {
 
+    @Transactional
+    public SignerDto.Response.SignerSummary updateEnabled(Long organizationId, Long ceremonyId, Long signerId,
+            Long currentUserId, com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest request) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member member = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, member, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+        Signer item = findSignerInCeremonyOrThrow(ceremonyId, signerId);
+        item.updateEnabled(request.getEnabled());
+        return toSummary(item);
+    }
+
     private final SignerRepository signerRepository;
     private final TemplateFieldRepository templateFieldRepository;
     private final StrokeDataRepository strokeDataRepository;
@@ -383,7 +395,8 @@ public class SignerService {
                 signer.getDisplayOrder(),
                 isSignerLockedByStartedEvent(signer.getId()),
                 !isSignerInUse(signer.getId()),
-                signer.getCreatedAt()
+                signer.getCreatedAt(),
+                signer.isEnabled()
         );
     }
 }

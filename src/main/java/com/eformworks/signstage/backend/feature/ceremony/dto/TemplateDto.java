@@ -72,6 +72,7 @@ public final class TemplateDto {
             /** 하위 행사에 매핑돼 있어 삭제할 수 없는 문서 양식이면 false — 화면에서 삭제 버튼을 숨긴다. */
             private final boolean deletable;
             private final LocalDateTime createdAt;
+            private final boolean enabled;
         }
 
         /**

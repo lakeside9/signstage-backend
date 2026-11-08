@@ -144,6 +144,28 @@ class CeremonyEventServiceTest {
                 .willReturn(Member.builder().role(MemberRole.OWNER).build());
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void mapTemplateRejectsDisabledTemplateOrSigner(boolean disabledTemplate) {
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony);
+        Template template = template(101L, ceremony, TemplateDocumentRole.CONTRACT);
+        template.complete();
+        template.updateEnabled(!disabledTemplate);
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(templateRepository.findById(101L)).willReturn(Optional.of(template));
+        if (!disabledTemplate) {
+            Signer signer = Signer.builder().ceremony(ceremony).name("disabled").build();
+            signer.updateEnabled(false);
+            given(templateFieldRepository.findAllByTemplateId(101L))
+                    .willReturn(List.of(TemplateField.builder().template(template).signer(signer).build()));
+        }
+        assertThatThrownBy(() -> eventService.mapTemplate(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID,
+                new CeremonyEventDto.Request.MapTemplate(101L, "CONTRACT"))).isInstanceOf(ApplicationException.class);
+        verify(ceremonyTemplateRepository, never()).save(any());
+    }
+
     @Test
     @DisplayName("서명란 배치가 완료(COMPLETED)되지 않은 문서는 행사 문서매핑에 저장할 수 없다")
     void mapTemplate_incompleteTemplate_fail() {

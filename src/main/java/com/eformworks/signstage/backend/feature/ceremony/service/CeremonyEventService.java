@@ -351,6 +351,11 @@ public class CeremonyEventService {
         if (!template.getCeremony().getId().equals(ceremonyId)) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_NOT_IN_CEREMONY);
         }
+        if (!template.isEnabled()) throw new ApplicationException(CeremonyErrorCode.TEMPLATE_DISABLED);
+        templateFieldRepository.findAllByTemplateId(template.getId()).stream()
+                .map(TemplateField::getSigner).filter(java.util.Objects::nonNull).forEach(signer -> {
+                    if (!signer.isEnabled()) throw new ApplicationException(CeremonyErrorCode.SIGNER_DISABLED);
+                });
         if (template.getStatus() != TemplateStatus.COMPLETED) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_NOT_COMPLETED);
         }

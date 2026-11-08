@@ -54,6 +54,18 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class TemplateService {
 
+    @Transactional
+    public TemplateDto.Response.TemplateSummary updateEnabled(Long organizationId, Long ceremonyId, Long templateId,
+            Long currentUserId, com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest request) {
+        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member member = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyService.checkCeremonyManageAccess(ceremony, member, currentUserId);
+        ceremonyService.checkCeremonyEditable(ceremony);
+        Template item = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        item.updateEnabled(request.getEnabled());
+        return toSummary(item);
+    }
+
     private final TemplateRepository templateRepository;
     private final TemplateFieldRepository templateFieldRepository;
     private final CeremonyTemplateRepository ceremonyTemplateRepository;
@@ -441,6 +453,10 @@ public class TemplateService {
         }
 
         Template original = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
+        templateFieldRepository.findAllByTemplateId(templateId).stream()
+                .map(TemplateField::getSigner).filter(java.util.Objects::nonNull).forEach(signer -> {
+                    if (!signer.isEnabled()) throw new ApplicationException(CeremonyErrorCode.SIGNER_DISABLED);
+                });
 
         byte[] content;
         try {
@@ -554,7 +570,8 @@ public class TemplateService {
                 fieldCount,
                 isTemplateInUse(template.getId()),
                 !isTemplateInUse(template.getId()),
-                template.getCreatedAt()
+                template.getCreatedAt(),
+                template.isEnabled()
         );
     }
 

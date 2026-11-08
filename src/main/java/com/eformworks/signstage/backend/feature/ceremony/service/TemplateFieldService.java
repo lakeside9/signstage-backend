@@ -54,6 +54,7 @@ public class TemplateFieldService {
                 ? null
                 : signerService.findSignerInCeremonyOrThrow(ceremonyId, request.getSignerId());
 
+        checkSignerEnabled(signer, false);
         TemplateField field = TemplateField.builder()
                 .template(template)
                 .signer(signer)
@@ -103,6 +104,16 @@ public class TemplateFieldService {
             }
         }
 
+        java.util.Map<Long, Long> retained = templateFieldRepository.findAllByTemplateId(templateId).stream()
+                .filter(field -> field.getSigner() != null)
+                .collect(java.util.stream.Collectors.groupingBy(field -> field.getSigner().getId(), java.util.stream.Collectors.counting()));
+        for (var field : requestedFields) {
+            if (field.getSignerId() == null) continue;
+            Signer signer = signerService.findSignerInCeremonyOrThrow(ceremonyId, field.getSignerId());
+            long remaining = retained.getOrDefault(signer.getId(), 0L);
+            checkSignerEnabled(signer, remaining > 0);
+            if (remaining > 0) retained.put(signer.getId(), remaining - 1);
+        }
         templateFieldRepository.deleteAllByTemplateId(templateId);
         List<TemplateField> saved = requestedFields.stream()
                 .map(field -> TemplateField.builder()
@@ -164,6 +175,7 @@ public class TemplateFieldService {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
 
+        sourceFields.forEach(field -> checkSignerEnabled(field.getSigner(), false));
         templateFieldRepository.deleteAllByTemplateId(templateId);
         List<TemplateField> cloned = sourceFields.stream()
                 .map(field -> TemplateField.builder()
@@ -185,6 +197,12 @@ public class TemplateFieldService {
         templateFieldRepository.saveAll(cloned);
 
         return cloned.stream().map(this::toSummary).toList();
+    }
+
+    private void checkSignerEnabled(Signer signer, boolean retained) {
+        if (signer != null && !signer.isEnabled() && !retained) {
+            throw new ApplicationException(CeremonyErrorCode.SIGNER_DISABLED);
+        }
     }
 
     private void checkNotLocked(Template template) {
