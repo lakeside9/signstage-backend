@@ -59,6 +59,16 @@ class CeremonyEventSignerStateServiceTest {
     }
 
     @Test
+    void resetForStart_clearsExistingCompletionState() {
+        CeremonyEventSignerState existing = CeremonyEventSignerState.builder().event(event()).signer(signer()).build();
+        existing.markCompleted(100L);
+        given(ceremonyEventSignerStateRepository.findAllByIdEventId(EVENT_ID)).willReturn(List.of(existing));
+        service.resetForStart(EVENT_ID);
+        assertThat(existing.getSignatureStatus()).isEqualTo(SignatureStatus.PENDING);
+        assertThat(existing.getLastCompletionLogId()).isNull();
+    }
+
+    @Test
     @DisplayName("상태 행이 없으면 새로 만들어 완료 처리한다")
     void markCompleted_newState_createsAndCompletes() {
         given(ceremonyEventSignerStateRepository.findByIdEventIdAndIdSignerId(EVENT_ID, SIGNER_ID))

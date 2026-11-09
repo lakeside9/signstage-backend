@@ -26,6 +26,8 @@ public interface StrokeDataRepository extends JpaRepository<StrokeData, Long> {
      */
     List<StrokeData> findAllByCeremonyEventId(Long ceremonyEventId);
 
+    void deleteAllByCeremonyEventId(Long ceremonyEventId);
+
     /** SIGNATURE_CLEAR — 서명자 본인이 서명란 하나를 지우고 다시 그릴 때. */
     void deleteAllByCeremonyEventIdAndSignerIdAndTemplateFieldId(
             Long ceremonyEventId,

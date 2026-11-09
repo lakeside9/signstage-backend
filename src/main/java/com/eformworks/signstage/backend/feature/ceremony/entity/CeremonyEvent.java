@@ -132,6 +132,10 @@ public class CeremonyEvent extends BaseEntity {
         this.status = CeremonyEventStatus.READY;
     }
 
+    public void resetAutomaticCelebration() {
+        this.autoCelebrationTriggeredAt = null;
+    }
+
     public void transitionToStarted() {
         this.status = CeremonyEventStatus.STARTED;
         this.actualStartAt = LocalDateTime.now();

@@ -58,6 +58,12 @@ public class CeremonyEventSignerStateService {
         }
     }
 
+    @Transactional
+    public void resetForStart(Long eventId) {
+        ceremonyEventSignerStateRepository.findAllByIdEventId(eventId)
+                .forEach(CeremonyEventSignerState::markPending);
+    }
+
     public boolean isSignerComplete(Long eventId, Long signerId) {
         return ceremonyEventSignerStateRepository.findByIdEventIdAndIdSignerId(eventId, signerId)
                 .map(state -> state.getSignatureStatus() == SignatureStatus.COMPLETED)

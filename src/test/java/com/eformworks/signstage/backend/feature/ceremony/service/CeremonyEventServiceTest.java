@@ -47,6 +47,9 @@ import org.junit.jupiter.params.provider.EnumSource;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import static org.mockito.Mockito.*;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -94,6 +97,77 @@ class CeremonyEventServiceTest {
     private static final Long CEREMONY_ID = 10L;
     private static final Long EVENT_ID = 100L;
     private static final Long CURRENT_USER_ID = 1L;
+
+    @ParameterizedTest
+    @EnumSource(CeremonyEventType.class)
+    void start_clearsBeforeStartingAndPublishesAfterCommit(CeremonyEventType type) {
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony);
+        ReflectionTestUtils.setField(event, "eventType", type);
+        event.transitionToReady();
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findByIdForUpdate(EVENT_ID)).willReturn(Optional.of(event));
+        stubStartDocuments(ceremony, event);
+        Signer signer = signer(1L, ceremony, "서명자");
+        given(signerRepository.findAllByCeremonyId(CEREMONY_ID)).willReturn(List.of(signer));
+        doAnswer(invocation -> {
+            assertThat(event.getStatus()).isEqualTo(CeremonyEventStatus.READY);
+            return null;
+        }).when(strokeDataRepository).deleteAllByCeremonyEventId(EVENT_ID);
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            eventService.transitionToStart(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID);
+            assertThat(event.getStatus()).isEqualTo(CeremonyEventStatus.STARTED);
+            verify(ceremonyEventSignerStateService).resetForStart(EVENT_ID);
+            verifyNoInteractions(ceremonyRealtimeNotifier);
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+            var order = inOrder(ceremonyRealtimeNotifier);
+            order.verify(ceremonyRealtimeNotifier).notifySignatureReplaced(EVENT_ID, 1L, "서명자");
+            order.verify(ceremonyRealtimeNotifier).notifyStatusChanged(EVENT_ID, CeremonyEventStatus.READY, CeremonyEventStatus.STARTED);
+            assertThatThrownBy(() -> eventService.transitionToStart(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
+                    .isInstanceOf(ApplicationException.class);
+            verify(strokeDataRepository, times(1)).deleteAllByCeremonyEventId(EVENT_ID);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CeremonyEventStatus.class, names = {"DRAFT", "STARTED", "FINISHED", "FORCE_FINISHED"})
+    void start_nonReadyDoesNotClear(CeremonyEventStatus status) {
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony);
+        ReflectionTestUtils.setField(event, "status", status);
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findByIdForUpdate(EVENT_ID)).willReturn(Optional.of(event));
+        assertThatThrownBy(() -> eventService.transitionToStart(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class);
+        verifyNoInteractions(strokeDataRepository, ceremonyEventSignerStateService, ceremonyRealtimeNotifier);
+        assertThat(event.getStatus()).isEqualTo(status);
+    }
+
+    @Test
+    void start_resetFailureDoesNotStartOrNotify() {
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony);
+        event.transitionToReady();
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findByIdForUpdate(EVENT_ID)).willReturn(Optional.of(event));
+        stubStartDocuments(ceremony, event);
+        doThrow(new IllegalStateException("reset failed")).when(strokeDataRepository).deleteAllByCeremonyEventId(EVENT_ID);
+        assertThatThrownBy(() -> eventService.transitionToStart(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
+                .hasMessage("reset failed");
+        assertThat(event.getStatus()).isEqualTo(CeremonyEventStatus.READY);
+        verifyNoInteractions(ceremonyEventSignerStateService, ceremonyRealtimeNotifier, ceremonyEventLogRepository);
+    }
+
+    private void stubStartDocuments(Ceremony ceremony, CeremonyEvent event) {
+        for (TemplateDocumentRole role : List.of(TemplateDocumentRole.CONTRACT, TemplateDocumentRole.EXHIBITION)) {
+            Template template = template(role == TemplateDocumentRole.CONTRACT ? 101L : 102L, ceremony, role);
+            given(ceremonyTemplateRepository.findAllByCeremonyEventIdAndDocumentRole(EVENT_ID, role))
+                    .willReturn(List.of(CeremonyTemplate.builder().ceremonyEvent(event).template(template).documentRole(role).build()));
+        }
+    }
 
     private Ceremony ceremony(Long id) {
         Ceremony ceremony = Ceremony.builder().title("행사").build();
@@ -452,7 +526,7 @@ class CeremonyEventServiceTest {
                 .ceremonyEvent(event).template(exhibitionTemplate).documentRole(TemplateDocumentRole.EXHIBITION).build();
 
         stubAccess(ceremony);
-        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyEventRepository.findByIdForUpdate(EVENT_ID)).willReturn(Optional.of(event));
         given(ceremonyTemplateRepository.findAllByCeremonyEventIdAndDocumentRole(EVENT_ID, TemplateDocumentRole.CONTRACT))
                 .willReturn(List.of(contractMapping));
         given(ceremonyTemplateRepository.findAllByCeremonyEventIdAndDocumentRole(EVENT_ID, TemplateDocumentRole.EXHIBITION))
@@ -480,7 +554,7 @@ class CeremonyEventServiceTest {
         ReflectionTestUtils.setField(event, "status", status);
 
         stubAccess(ceremony);
-        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyEventRepository.findByIdForUpdate(EVENT_ID)).willReturn(Optional.of(event));
 
         // when & then
         assertThatThrownBy(() -> eventService.resetAllSignatures(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
@@ -502,7 +576,7 @@ class CeremonyEventServiceTest {
         ReflectionTestUtils.setField(event, "status", status);
 
         stubAccess(ceremony);
-        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyEventRepository.findByIdForUpdate(EVENT_ID)).willReturn(Optional.of(event));
 
         // when & then
         assertThatThrownBy(() -> eventService.resetAllSignatures(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
@@ -538,7 +612,7 @@ class CeremonyEventServiceTest {
                 .ceremonyEvent(event).template(contractTemplate).documentRole(TemplateDocumentRole.CONTRACT).build();
 
         stubAccess(ceremony);
-        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyEventRepository.findByIdForUpdate(EVENT_ID)).willReturn(Optional.of(event));
         given(ceremonyTemplateRepository.findAllByCeremonyEventId(EVENT_ID)).willReturn(List.of(contractMapping));
         given(templateFieldRepository.findAllByTemplateId(101L)).willReturn(List.of(contractField));
 
@@ -563,7 +637,7 @@ class CeremonyEventServiceTest {
         ReflectionTestUtils.setField(event, "status", status);
 
         stubAccess(ceremony);
-        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyEventRepository.findByIdForUpdate(EVENT_ID)).willReturn(Optional.of(event));
 
         // when & then
         assertThatThrownBy(() -> eventService.runSignatureMappingCheck(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
@@ -585,7 +659,7 @@ class CeremonyEventServiceTest {
         ReflectionTestUtils.setField(event, "status", status);
 
         stubAccess(ceremony);
-        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyEventRepository.findByIdForUpdate(EVENT_ID)).willReturn(Optional.of(event));
 
         // when & then
         assertThatThrownBy(() -> eventService.runSignatureMappingCheck(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
@@ -616,7 +690,7 @@ class CeremonyEventServiceTest {
                 .ceremonyEvent(event).template(contractTemplate).documentRole(TemplateDocumentRole.CONTRACT).build();
 
         stubAccess(ceremony);
-        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyEventRepository.findByIdForUpdate(EVENT_ID)).willReturn(Optional.of(event));
         given(ceremonyTemplateRepository.findAllByCeremonyEventId(EVENT_ID)).willReturn(List.of(contractMapping));
         given(templateFieldRepository.findAllByTemplateId(101L)).willReturn(List.of(contractField));
         given(strokeDataRepository.existsByCeremonyEventIdAndSignerIdAndTemplateFieldId(EVENT_ID, 1L, 501L)).willReturn(true);

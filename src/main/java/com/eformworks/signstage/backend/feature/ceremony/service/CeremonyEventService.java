@@ -47,6 +47,8 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 하위 행사(CeremonyEvent, TEST/MAIN). signstage-docs
@@ -450,7 +452,7 @@ public class CeremonyEventService {
         return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
     }
 
-    /** READY→STARTED 전이. 레거시에 READY 상태 확인 외 추가 조건이 없다. */
+    /** READY 상태를 잠금 조회하고 서명을 초기화한 뒤 STARTED로 전환한다. */
     @Transactional
     public CeremonyEventDto.Response.CeremonyEventSummary transitionToStart(
             Long organizationId,
@@ -463,14 +465,28 @@ public class CeremonyEventService {
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         ceremonyService.checkCeremonyEditable(ceremony);
 
-        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        CeremonyEvent event = findEventInCeremonyForUpdateOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.READY) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_INVALID_STATUS_TRANSITION);
         }
 
+        validateReadyConditions(event);
+        strokeDataRepository.deleteAllByCeremonyEventId(eventId);
+        ceremonyEventSignerStateService.resetForStart(eventId);
+        event.resetAutomaticCelebration();
+        List<Signer> signers = signerRepository.findAllByCeremonyId(ceremonyId);
+        for (Signer signer : signers) {
+            ceremonyEventLogRepository.save(CeremonyEventLog.builder()
+                    .ceremonyEvent(event).actorType(ActorType.ADMIN).actorId(currentUserId)
+                    .eventAction(CeremonyEventAction.SIGNATURE_REPLACE).targetSigner(signer)
+                    .message("행사 시작 전 모든 서명과 배정 확인용 데이터 초기화").build());
+        }
         event.transitionToStarted();
         recordLog(event, ActorType.ADMIN, currentUserId, CeremonyEventAction.START_EVENT);
-        ceremonyRealtimeNotifier.notifyStatusChanged(event.getId(), CeremonyEventStatus.READY, CeremonyEventStatus.STARTED);
+        afterCommit(() -> {
+            signers.forEach(signer -> ceremonyRealtimeNotifier.notifySignatureReplaced(eventId, signer.getId(), signer.getName()));
+            ceremonyRealtimeNotifier.notifyStatusChanged(eventId, CeremonyEventStatus.READY, CeremonyEventStatus.STARTED);
+        });
 
         return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
     }
@@ -600,7 +616,7 @@ public class CeremonyEventService {
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         ceremonyService.checkCeremonyEditable(ceremony);
 
-        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        CeremonyEvent event = findEventInCeremonyForUpdateOrThrow(ceremonyId, eventId);
         if (!canCheckOrResetSignatures(event)) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_BULK_RESET_NOT_ALLOWED);
         }
@@ -651,7 +667,7 @@ public class CeremonyEventService {
         ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         ceremonyService.checkCeremonyEditable(ceremony);
 
-        CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
+        CeremonyEvent event = findEventInCeremonyForUpdateOrThrow(ceremonyId, eventId);
         if (!canCheckOrResetSignatures(event)) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_MAPPING_CHECK_NOT_ALLOWED);
         }
@@ -899,6 +915,28 @@ public class CeremonyEventService {
     }
 
     /** {@link CeremonyResultService}도 같은 패키지에서 공유한다(4라운드부터의 관례). */
+    private void afterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
+    }
+
+    private CeremonyEvent findEventInCeremonyForUpdateOrThrow(Long ceremonyId, Long eventId) {
+        CeremonyEvent event = ceremonyEventRepository.findByIdForUpdate(eventId)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_NOT_FOUND));
+        if (!event.getCeremony().getId().equals(ceremonyId)) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_NOT_FOUND);
+        }
+        return event;
+    }
+
     CeremonyEvent findEventInCeremonyOrThrow(Long ceremonyId, Long eventId) {
         CeremonyEvent event = ceremonyEventRepository.findById(eventId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_NOT_FOUND));
