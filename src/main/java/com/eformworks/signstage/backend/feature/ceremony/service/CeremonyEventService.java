@@ -585,10 +585,8 @@ public class CeremonyEventService {
     }
 
     /**
-     * SIGNATURE_BULK_RESET — TEST/REHEARSAL 행사에서 매핑된 모든 서명자의 서명을 한 번에
-     * 초기화한다({@link #replaceSignerSignature}를 서명자별로 반복 호출하는 것과 같은 효과).
-     * MAIN에는 허용하지 않는다 — {@link #forceFinishEvent}와 같은 이유로, 실제 협약식 서명을
-     * 관리자가 통째로 지우면 결과물/청구 근거가 어긋나기 때문이다(2026-09-02 legacy 포팅).
+     * 매핑된 모든 서명자의 서명을 초기화한다. MAIN은 DRAFT/READY에서만,
+     * TEST/REHEARSAL은 DRAFT/READY/STARTED에서 허용한다.
      */
     @Transactional
     public void resetAllSignatures(
@@ -603,8 +601,7 @@ public class CeremonyEventService {
         ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
-        if (event.getStatus() != CeremonyEventStatus.STARTED
-                || event.getEventType() == CeremonyEventType.MAIN) {
+        if (!canCheckOrResetSignatures(event)) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_BULK_RESET_NOT_ALLOWED);
         }
 
@@ -636,7 +633,7 @@ public class CeremonyEventService {
     }
 
     /**
-     * 서명매핑확인(2026-09-02 legacy 포팅) — TEST/REHEARSAL 행사에서, 매핑된 서명란마다
+     * 서명매핑확인 — 시작 전 MAIN 또는 TEST/REHEARSAL 행사에서, 매핑된 서명란마다
      * 배정된 서명자의 소속(5자까지)을 텍스트로 채워 넣어 프로젝터/서명자 화면에서
      * 필드-서명자 매핑이 맞는지 눈으로 바로 확인할 수 있게 한다. SIGNATURE_COMPLETE 로그를
      * 남기지 않아 "행사 종료" 가능 여부나 실제 서명 진행 상황에는 전혀 영향이 없다. 이미
@@ -655,8 +652,7 @@ public class CeremonyEventService {
         ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
-        if (event.getStatus() != CeremonyEventStatus.STARTED
-                || event.getEventType() == CeremonyEventType.MAIN) {
+        if (!canCheckOrResetSignatures(event)) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_MAPPING_CHECK_NOT_ALLOWED);
         }
 
@@ -683,6 +679,16 @@ public class CeremonyEventService {
                 ceremonyRealtimeNotifier.notifyStrokeSubmitted(eventId, signer.getId(), field.getId(), 1, rawData);
             }
         }
+    }
+
+    private boolean canCheckOrResetSignatures(CeremonyEvent event) {
+        boolean beforeStart = event.getStatus() == CeremonyEventStatus.DRAFT
+                || event.getStatus() == CeremonyEventStatus.READY;
+        if (event.getEventType() == CeremonyEventType.MAIN) {
+            return beforeStart;
+        }
+        return (event.getEventType() == CeremonyEventType.TEST || event.getEventType() == CeremonyEventType.REHEARSAL)
+                && (beforeStart || event.getStatus() == CeremonyEventStatus.STARTED);
     }
 
     private String mappingCheckLabel(Signer signer) {

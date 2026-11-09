@@ -41,6 +41,10 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -419,19 +423,19 @@ class CeremonyEventServiceTest {
     }
 
     /**
-     * 서명 일괄 초기화(SIGNATURE_BULK_RESET, 2026-09-02 legacy 포팅) — STARTED인 TEST/REHEARSAL
+     * 서명 일괄 초기화 — 시작 전 MAIN 또는 TEST/REHEARSAL
      * 행사에서 매핑된 모든 서명자의 서명을 한 번에 초기화한다({@link CeremonyEventService#resetAllSignatures}).
      */
-    @Test
-    @DisplayName("STARTED 상태의 리허설 행사는 매핑된 모든 서명자의 서명을 일괄 초기화할 수 있다")
-    void resetAllSignatures_startedRehearsalEvent_success() {
+    @ParameterizedTest
+    @CsvSource({"TEST,DRAFT", "TEST,READY", "TEST,STARTED", "REHEARSAL,DRAFT", "REHEARSAL,READY", "REHEARSAL,STARTED", "MAIN,DRAFT", "MAIN,READY"})
+    @DisplayName("시작 전 본행사와 테스트/리허설 행사는 매핑된 모든 서명자의 서명을 일괄 초기화할 수 있다")
+    void resetAllSignatures_startedRehearsalEvent_success(CeremonyEventType eventType, CeremonyEventStatus status) {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
         CeremonyEvent event = CeremonyEvent.builder()
-                .ceremony(ceremony).name("리허설").eventType(CeremonyEventType.REHEARSAL).accessKey("access-key").build();
+                .ceremony(ceremony).name("리허설").eventType(eventType).accessKey("access-key").build();
         ReflectionTestUtils.setField(event, "id", EVENT_ID);
-        event.transitionToReady();
-        event.transitionToStarted();
+        ReflectionTestUtils.setField(event, "status", status);
 
         Signer signer = signer(1L, ceremony, "서명자1");
         Template contractTemplate = template(101L, ceremony, TemplateDocumentRole.CONTRACT);
@@ -461,18 +465,19 @@ class CeremonyEventServiceTest {
         eventService.resetAllSignatures(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID);
 
         // then
+        assertThat(event.getStatus()).isEqualTo(status);
         verify(strokeDataRepository).deleteAllByCeremonyEventIdAndSignerId(EVENT_ID, 1L);
         verify(ceremonyRealtimeNotifier).notifySignatureReplaced(EVENT_ID, 1L, "서명자1");
     }
 
-    @Test
-    @DisplayName("본행사(MAIN)는 서명을 일괄 초기화할 수 없다")
-    void resetAllSignatures_mainEvent_fail() {
+    @ParameterizedTest
+    @EnumSource(value = CeremonyEventStatus.class, names = {"STARTED", "FINISHED", "FORCE_FINISHED"})
+    @DisplayName("시작 이후 본행사(MAIN)는 서명을 일괄 초기화할 수 없다")
+    void resetAllSignatures_mainEvent_fail(CeremonyEventStatus status) {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
         CeremonyEvent event = event(EVENT_ID, ceremony); // eventType == MAIN
-        event.transitionToReady();
-        event.transitionToStarted();
+        ReflectionTestUtils.setField(event, "status", status);
 
         stubAccess(ceremony);
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
@@ -485,14 +490,16 @@ class CeremonyEventServiceTest {
         verify(strokeDataRepository, never()).deleteAllByCeremonyEventIdAndSignerId(any(), any());
     }
 
-    @Test
-    @DisplayName("진행 중(STARTED)이 아닌 행사는 서명을 일괄 초기화할 수 없다")
-    void resetAllSignatures_notStarted_fail() {
+    @ParameterizedTest
+    @EnumSource(value = CeremonyEventStatus.class, names = {"FINISHED", "FORCE_FINISHED"})
+    @DisplayName("종료된 행사는 서명을 일괄 초기화할 수 없다")
+    void resetAllSignatures_notStarted_fail(CeremonyEventStatus status) {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
         CeremonyEvent event = CeremonyEvent.builder()
                 .ceremony(ceremony).name("리허설").eventType(CeremonyEventType.REHEARSAL).accessKey("access-key").build();
-        ReflectionTestUtils.setField(event, "id", EVENT_ID); // DRAFT
+        ReflectionTestUtils.setField(event, "id", EVENT_ID);
+        ReflectionTestUtils.setField(event, "status", status);
 
         stubAccess(ceremony);
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
@@ -506,19 +513,19 @@ class CeremonyEventServiceTest {
     }
 
     /**
-     * 서명매핑확인(2026-09-02 legacy 포팅) — STARTED인 TEST/REHEARSAL 행사에서 매핑된 서명란마다
+     * 서명매핑확인 — 시작 전 MAIN 또는 TEST/REHEARSAL 행사에서 매핑된 서명란마다
      * 소속명 5자 텍스트를 채워 넣는다({@link CeremonyEventService#runSignatureMappingCheck}).
      */
-    @Test
-    @DisplayName("STARTED 상태의 테스트 행사는 매핑된 서명란마다 소속명 5자 텍스트를 채워 넣는다")
-    void runSignatureMappingCheck_startedTestEvent_success() {
+    @ParameterizedTest
+    @CsvSource({"TEST,DRAFT", "TEST,READY", "TEST,STARTED", "REHEARSAL,DRAFT", "REHEARSAL,READY", "REHEARSAL,STARTED", "MAIN,DRAFT", "MAIN,READY"})
+    @DisplayName("시작 전 본행사와 테스트/리허설 행사는 매핑된 서명란마다 소속명 5자 텍스트를 채워 넣는다")
+    void runSignatureMappingCheck_startedTestEvent_success(CeremonyEventType eventType, CeremonyEventStatus status) {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
         CeremonyEvent event = CeremonyEvent.builder()
-                .ceremony(ceremony).name("테스트").eventType(CeremonyEventType.TEST).accessKey("access-key").build();
+                .ceremony(ceremony).name("테스트").eventType(eventType).accessKey("access-key").build();
         ReflectionTestUtils.setField(event, "id", EVENT_ID);
-        event.transitionToReady();
-        event.transitionToStarted();
+        ReflectionTestUtils.setField(event, "status", status);
 
         Signer signer = Signer.builder().ceremony(ceremony).name("서명자1").affiliation("경기도청소속기관").accessKey("signer-1").build();
         ReflectionTestUtils.setField(signer, "id", 1L);
@@ -539,20 +546,21 @@ class CeremonyEventServiceTest {
         eventService.runSignatureMappingCheck(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID);
 
         // then
+        assertThat(event.getStatus()).isEqualTo(status);
         ArgumentCaptor<StrokeData> captor = ArgumentCaptor.forClass(StrokeData.class);
         verify(strokeDataRepository).save(captor.capture());
         assertThat(captor.getValue().getRawData()).isEqualTo("{\"text\":\"경기도청소\"}");
         verify(ceremonyRealtimeNotifier).notifyStrokeSubmitted(eq(EVENT_ID), eq(1L), eq(501L), eq(1), eq("{\"text\":\"경기도청소\"}"));
     }
 
-    @Test
-    @DisplayName("서명매핑확인 - 본행사(MAIN)는 실행할 수 없다")
-    void runSignatureMappingCheck_mainEvent_fail() {
+    @ParameterizedTest
+    @EnumSource(value = CeremonyEventStatus.class, names = {"STARTED", "FINISHED", "FORCE_FINISHED"})
+    @DisplayName("서명매핑확인 - 시작 이후 본행사(MAIN)는 실행할 수 없다")
+    void runSignatureMappingCheck_mainEvent_fail(CeremonyEventStatus status) {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
         CeremonyEvent event = event(EVENT_ID, ceremony); // eventType == MAIN
-        event.transitionToReady();
-        event.transitionToStarted();
+        ReflectionTestUtils.setField(event, "status", status);
 
         stubAccess(ceremony);
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
@@ -565,14 +573,16 @@ class CeremonyEventServiceTest {
         verify(strokeDataRepository, never()).save(any());
     }
 
-    @Test
-    @DisplayName("서명매핑확인 - 진행 중(STARTED)이 아닌 행사는 실행할 수 없다")
-    void runSignatureMappingCheck_notStarted_fail() {
+    @ParameterizedTest
+    @EnumSource(value = CeremonyEventStatus.class, names = {"FINISHED", "FORCE_FINISHED"})
+    @DisplayName("서명매핑확인 - 종료된 행사는 실행할 수 없다")
+    void runSignatureMappingCheck_notStarted_fail(CeremonyEventStatus status) {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
         CeremonyEvent event = CeremonyEvent.builder()
                 .ceremony(ceremony).name("테스트").eventType(CeremonyEventType.TEST).accessKey("access-key").build();
-        ReflectionTestUtils.setField(event, "id", EVENT_ID); // DRAFT
+        ReflectionTestUtils.setField(event, "id", EVENT_ID);
+        ReflectionTestUtils.setField(event, "status", status);
 
         stubAccess(ceremony);
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
