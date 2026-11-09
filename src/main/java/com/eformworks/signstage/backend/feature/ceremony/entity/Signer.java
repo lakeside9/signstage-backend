@@ -27,7 +27,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Signer extends BaseEntity {
 
-    @Column(nullable = false)
+    @Column(name = "is_enabled", nullable = false)
     private boolean enabled = true;
 
     public void updateEnabled(boolean enabled) {
