@@ -27,6 +27,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemp
 import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import com.eformworks.signstage.backend.feature.ceremony.support.SignatureOverlayRenderer;
+import com.eformworks.signstage.backend.feature.ceremony.util.EventPdfWatermark;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.integration.storage.StorageKeyPrefix;
 import com.eformworks.signstage.backend.integration.storage.common.error.StorageException;
@@ -199,6 +200,7 @@ public class CeremonyResultService {
             Resource originalResource = documentStoragePort.loadAsResource(template.getStorageKey());
             originalBytes = originalResource.getInputStream().readAllBytes();
             renderedBytes = SignatureOverlayRenderer.render(originalBytes, fieldStrokesList, mapping.getDocumentRole().name());
+            renderedBytes = EventPdfWatermark.apply(renderedBytes, event.getEventType().name());
         } catch (IOException | StorageException e) {
             throw new ApplicationException(CeremonyErrorCode.RESULT_GENERATION_FAILED, e);
         }
