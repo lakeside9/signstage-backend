@@ -47,7 +47,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 행사 결과 PDF(CeremonyResult). {@code FINISHED} 상태의 하위 행사에서만, 이벤트당 1회
+ * 행사 결과 PDF(CeremonyResult). {@code FINISHED} 또는 {@code FORCE_FINISHED} 상태의 하위 행사에서만, 이벤트당 1회
  * 생성한다. 렌더링은 {@link SignatureOverlayRenderer}(PDFBox 직접 그리기,
  * signstage-docs business/ceremony-feature-migration-review.md §5.1 결정)가 한다.
  *
@@ -89,7 +89,8 @@ public class CeremonyResultService {
         ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = ceremonyEventService.findEventInCeremonyOrThrow(ceremonyId, eventId);
-        if (event.getStatus() != CeremonyEventStatus.FINISHED) {
+        if (event.getStatus() != CeremonyEventStatus.FINISHED
+                && event.getStatus() != CeremonyEventStatus.FORCE_FINISHED) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_NOT_FINISHED);
         }
         if (ceremonyResultRepository.existsByCeremonyEventId(eventId)) {

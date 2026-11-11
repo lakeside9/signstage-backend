@@ -434,15 +434,16 @@ class CeremonyEventServiceTest {
 
     /**
      * 강제종료(FORCE_FINISHED, 2026-08-27 legacy 포팅) — 서명 완료 여부와 무관하게 STARTED인
-     * TEST/REHEARSAL 행사만 끝낼 수 있고 MAIN은 거부한다({@link CeremonyEventService#forceFinishEvent}).
+     * TEST/REHEARSAL/MAIN 행사를 끝낼 수 있다({@link CeremonyEventService#forceFinishEvent}).
      */
-    @Test
-    @DisplayName("STARTED 상태의 TEST 행사는 서명 완료 여부와 무관하게 강제종료할 수 있다")
-    void forceFinishEvent_startedTestEvent_success() {
+    @ParameterizedTest
+    @EnumSource(CeremonyEventType.class)
+    @DisplayName("모든 유형의 STARTED 행사는 서명 완료 여부와 무관하게 강제종료할 수 있다")
+    void forceFinishEvent_startedEvent_success(CeremonyEventType eventType) {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
         CeremonyEvent event = CeremonyEvent.builder()
-                .ceremony(ceremony).name("리허설").eventType(CeremonyEventType.TEST).accessKey("access-key").build();
+                .ceremony(ceremony).name("리허설").eventType(eventType).accessKey("access-key").build();
         ReflectionTestUtils.setField(event, "id", EVENT_ID);
         event.transitionToReady();
         event.transitionToStarted();
@@ -458,33 +459,16 @@ class CeremonyEventServiceTest {
         assertThat(result.getStatus()).isEqualTo("FORCE_FINISHED");
     }
 
-    @Test
-    @DisplayName("본행사(MAIN)는 강제종료할 수 없다")
-    void forceFinishEvent_mainEvent_fail() {
-        // given
-        Ceremony ceremony = ceremony(CEREMONY_ID);
-        CeremonyEvent event = event(EVENT_ID, ceremony); // eventType == MAIN
-        event.transitionToReady();
-        event.transitionToStarted();
-
-        stubAccess(ceremony);
-        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
-
-        // when & then
-        assertThatThrownBy(() -> eventService.forceFinishEvent(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID))
-                .isInstanceOf(ApplicationException.class)
-                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
-                .isEqualTo(CeremonyErrorCode.EVENT_FORCE_FINISH_NOT_ALLOWED);
-    }
-
-    @Test
+    @ParameterizedTest
+    @EnumSource(value = CeremonyEventStatus.class, names = {"DRAFT", "READY", "FINISHED", "FORCE_FINISHED"})
     @DisplayName("진행 중(STARTED)이 아닌 행사는 강제종료할 수 없다")
-    void forceFinishEvent_notStarted_fail() {
+    void forceFinishEvent_notStarted_fail(CeremonyEventStatus status) {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
         CeremonyEvent event = CeremonyEvent.builder()
                 .ceremony(ceremony).name("리허설").eventType(CeremonyEventType.TEST).accessKey("access-key").build();
-        ReflectionTestUtils.setField(event, "id", EVENT_ID); // DRAFT
+        ReflectionTestUtils.setField(event, "id", EVENT_ID);
+        ReflectionTestUtils.setField(event, "status", status);
 
         stubAccess(ceremony);
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));

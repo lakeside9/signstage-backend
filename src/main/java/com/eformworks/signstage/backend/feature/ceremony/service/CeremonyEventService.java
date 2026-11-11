@@ -525,8 +525,7 @@ public class CeremonyEventService {
     /**
      * STARTED→FORCE_FINISHED 전이(2026-08-27 legacy 포팅). 서명 완료 여부와 무관하게 관리자가
      * 강제로 끝낸다 — 리허설 도중 중단처럼 {@link #transitionToFinish}의 전원 완료 조건을 만족할
-     * 필요가 없는 상황을 위한 것이다. TEST/REHEARSAL에만 허용하고 MAIN은 거부한다 — 정식
-     * 본행사를 서명 미완료 상태로 끝내면 결과물/청구 근거가 어긋나기 때문이다.
+     * 필요가 없는 상황을 위한 것이다. TEST/REHEARSAL/MAIN 모두 허용한다.
      */
     @Transactional
     public CeremonyEventDto.Response.CeremonyEventSummary forceFinishEvent(
@@ -541,8 +540,7 @@ public class CeremonyEventService {
         ceremonyService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
-        if (event.getStatus() != CeremonyEventStatus.STARTED
-                || event.getEventType() == CeremonyEventType.MAIN) {
+        if (event.getStatus() != CeremonyEventStatus.STARTED) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_FORCE_FINISH_NOT_ALLOWED);
         }
 

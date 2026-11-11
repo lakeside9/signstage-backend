@@ -222,7 +222,7 @@ public enum CeremonyErrorCode implements ErrorCode {
     EVENT_NOT_FINISHED(
             "CEREMONY_EVENT_NOT_FINISHED",
             HttpStatus.CONFLICT,
-            "종료(FINISHED)된 하위 행사만 결과물을 생성할 수 있습니다."
+            "종료(FINISHED) 또는 강제종료(FORCE_FINISHED)된 하위 행사만 결과물을 생성할 수 있습니다."
     ),
     RESULTS_ALREADY_GENERATED(
             "CEREMONY_RESULTS_ALREADY_GENERATED",
@@ -313,7 +313,7 @@ public enum CeremonyErrorCode implements ErrorCode {
     EVENT_FORCE_FINISH_NOT_ALLOWED(
             "CEREMONY_EVENT_FORCE_FINISH_NOT_ALLOWED",
             HttpStatus.CONFLICT,
-            "진행 중(STARTED)인 테스트 또는 리허설 행사만 강제종료할 수 있습니다."
+            "진행 중(STARTED)인 행사만 강제종료할 수 있습니다."
     ),
     EVENT_BULK_RESET_NOT_ALLOWED(
             "CEREMONY_EVENT_BULK_RESET_NOT_ALLOWED",
