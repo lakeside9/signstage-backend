@@ -169,6 +169,7 @@ public final class CeremonyEventDto {
 
             private final Long signerId;
             private final boolean completed;
+            private final int connectionCount;
         }
     }
 }

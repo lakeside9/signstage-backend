@@ -74,6 +74,7 @@ public class CeremonyEventService {
     private final StrokeDataRepository strokeDataRepository;
     private final SignerRepository signerRepository;
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
+    private final SignerPresenceService signerPresenceService;
     private final CeremonyService ceremonyService;
     private final CeremonyEventEffectSettingService ceremonyEventEffectSettingService;
     private final CeremonyEventSignerStateService ceremonyEventSignerStateService;
@@ -825,7 +826,8 @@ public class CeremonyEventService {
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         return collectFinishRequiredSignerIds(event).stream()
                 .map(signerId -> new CeremonyEventDto.Response.SignerCompletionStatus(
-                        signerId, ceremonyEventSignerStateService.isSignerComplete(eventId, signerId)
+                        signerId, ceremonyEventSignerStateService.isSignerComplete(eventId, signerId),
+                        signerPresenceService.getConnectionCount(eventId, signerId)
                 ))
                 .toList();
     }

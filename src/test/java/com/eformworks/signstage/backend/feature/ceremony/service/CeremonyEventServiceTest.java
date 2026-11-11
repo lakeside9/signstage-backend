@@ -84,6 +84,8 @@ class CeremonyEventServiceTest {
     @Mock
     private CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
     @Mock
+    private SignerPresenceService signerPresenceService;
+    @Mock
     private CeremonyService ceremonyService;
     @Mock
     private CeremonyEventEffectSettingService ceremonyEventEffectSettingService;

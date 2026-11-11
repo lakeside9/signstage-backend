@@ -30,6 +30,10 @@ public class CeremonyRealtimeNotifier {
 
     private final SimpMessagingTemplate messagingTemplate;
 
+    public void notifySignerPresence(Long eventId, Long signerId, int connectionCount) {
+        send(eventId, "SIGNER_PRESENCE_CHANGED", Map.of("signerId", signerId, "connectionCount", connectionCount));
+    }
+
     public void notifyStatusChanged(Long eventId, CeremonyEventStatus previousStatus, CeremonyEventStatus newStatus) {
         send(eventId, "EVENT_STATUS_CHANGED", Map.of(
                 "previousStatus", previousStatus.name(),
