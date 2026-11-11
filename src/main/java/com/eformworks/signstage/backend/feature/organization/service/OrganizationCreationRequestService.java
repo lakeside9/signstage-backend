@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 일반 사용자의 조직 생성 요청 제출/취소/조회를 구현한다. signstage-docs
  * business/organization-creation-approval-review.md의 결정 사항을 그대로 따른다 — 조직은
- * 이 요청이 승인돼야 만들어진다(승인/반려는 {@code feature.platformadmin}에서 다룬다).
+ * 이 요청이 승인돼야 만들어진다(승인/반려는 {@link PlatformAdminOrganizationRequestService}에서 다룬다).
  */
 @Service
 @RequiredArgsConstructor

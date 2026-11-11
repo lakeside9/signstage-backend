@@ -1,6 +1,8 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import com.eformworks.signstage.backend.core.money.DiscountType;
+import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -21,7 +23,7 @@ import org.hibernate.annotations.Immutable;
 
 /**
  * Ceremony의 플랜 변경 이력. append-only다 — 수정/삭제 메서드를 두지 않는다. Ceremony 생성 시
- * (최초 플랜 선택)와 {@code CeremonyService#changePlan} 호출 시(DRAFT 상태에서만 가능)마다
+ * (최초 플랜 선택)와 {@code CeremonyPlanService#updatePlan} 호출 시(DRAFT 상태에서만 가능)마다
  * 한 행씩 쌓인다 — signstage-docs business/ceremony-plan-confirmation-review.md 3.4절.
  *
  * <p>"지금 유효한 플랜"은 여전히 {@link Ceremony#getBillingPlan()}이 가리킨다. 이 테이블은
@@ -34,7 +36,7 @@ import org.hibernate.annotations.Immutable;
  * business/billing-catalog-unit-product-model-redesign-review.md 결정, 2026-09-10) 옛
  * {@code planSupplyPrice}/{@code planSalePrice}/{@code taxCode} 필드가 없다 — "그때 그 플랜의
  * 가격"은 이제 {@link CeremonyPlanHistoryUnitProduct} 스냅샷들로부터
- * {@code CeremonyService#calculateEstimatedTotal}이 다시 계산한다. 이 엔티티엔 그 계산에
+ * {@code CeremonyQuoteService#calculateEstimatedTotal}이 다시 계산한다. 이 엔티티엔 그 계산에
  * 적용할 플랜 자체 할인(카탈로그 기본값 또는 조직×플랜 오버라이드)만 남는다.
  */
 @Entity
@@ -68,9 +70,9 @@ public class CeremonyPlanHistory extends BaseEntity {
 
     /**
      * 카탈로그 기본 할인({@code catalogDiscountType}/{@code catalogDiscountValue})은 호출부
-     * ({@code CeremonyService#recordPlanHistory})가 그 순간 유효한
-     * {@link BillingPlanDiscountPeriod}를 {@code findEffective}로 조회해 넘긴다 — 이 엔티티는
-     * DB 조회를 하지 않는다. 조직×플랜 오버라이드가 있으면({@link OrganizationBillingPlanDiscount},
+     * ({@code CeremonyPlanService#recordPlanHistory})가 그 순간 유효한
+     * {@code BillingPlanDiscountPeriod}를 {@code findEffective}로 조회해 넘긴다 — 이 엔티티는
+     * DB 조회를 하지 않는다. 조직×플랜 오버라이드가 있으면({@code OrganizationBillingPlanDiscount},
      * {@code OrganizationDiscountService#resolveBillingPlanDiscount}) {@code discountType}/
      * {@code discountValue}에 그 값을 대신 넘긴다 — null이면(오버라이드 없음) 카탈로그 값으로
      * 그대로 떨어진다.

@@ -12,7 +12,7 @@ public interface CeremonyUnitProductPurchaseRepository
     List<CeremonyUnitProductPurchase> findAllByCeremonyIdOrderByCreatedAtDesc(Long ceremonyId);
 
     /**
-     * 행사 삭제 가능 여부 판정에 쓴다({@code CeremonyService#deleteCeremony}) — 대기중이거나
+     * 행사 삭제 가능 여부 판정에 쓴다({@code CeremonyDeletionService#deleteCeremony}) — 대기중이거나
      * 승인된 요청이 있으면 삭제를 막는다. 반려(REJECTED)는 막지 않는다 — 이미 종결된 이력일
      * 뿐이라 재요청 허용 판정({@code existsByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn})
      * 에서도 같은 이유로 제외한다.

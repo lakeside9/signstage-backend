@@ -50,7 +50,7 @@ public class CeremonyEffectRuntimeService {
     private final CeremonyEventSignerStateService ceremonyEventSignerStateService;
     private final CeremonyEventService ceremonyEventService;
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
-    private final CeremonyService ceremonyService;
+    private final CeremonyAccessService ceremonyAccessService;
 
     /**
      * 이 프로젝트에 분산 rate limit 인프라(Redis 등)가 없어 단일 인스턴스 전제로 메모리에
@@ -125,10 +125,10 @@ public class CeremonyEffectRuntimeService {
             Long organizationId, Long ceremonyId, Long eventId, Long currentUserId,
             String targetType, String triggerType, boolean runtimeEnabled
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.STARTED) {
@@ -170,10 +170,10 @@ public class CeremonyEffectRuntimeService {
     public void triggerManualCelebration(
             Long organizationId, Long ceremonyId, Long eventId, Long currentUserId, String targetType, String triggerType
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.STARTED) {

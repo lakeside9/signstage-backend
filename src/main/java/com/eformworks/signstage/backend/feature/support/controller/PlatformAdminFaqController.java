@@ -4,7 +4,7 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
-import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
+import com.eformworks.signstage.backend.core.web.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.support.dto.FaqDto;
 import com.eformworks.signstage.backend.feature.support.service.FaqService;
 import io.swagger.v3.oas.annotations.Operation;

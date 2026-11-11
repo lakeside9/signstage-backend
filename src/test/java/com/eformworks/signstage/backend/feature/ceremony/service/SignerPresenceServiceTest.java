@@ -12,14 +12,14 @@ class SignerPresenceServiceTest {
         service.register("a", "sub", 1L, 10L);
         service.register("a", "sub", 1L, 10L);
         service.register("b", "sub", 1L, 10L);
-        assertThat(service.getConnectionCount(1L, 10L)).isEqualTo(2);
+        assertThat(service.countConnections(1L, 10L)).isEqualTo(2);
         service.unsubscribe("a", "unrelated");
-        assertThat(service.getConnectionCount(1L, 10L)).isEqualTo(2);
+        assertThat(service.countConnections(1L, 10L)).isEqualTo(2);
         service.unsubscribe("a", "sub");
-        assertThat(service.getConnectionCount(1L, 10L)).isEqualTo(1);
+        assertThat(service.countConnections(1L, 10L)).isEqualTo(1);
         service.disconnect("b");
         service.disconnect("b");
-        assertThat(service.getConnectionCount(1L, 10L)).isZero();
+        assertThat(service.countConnections(1L, 10L)).isZero();
         var order = inOrder(notifier);
         order.verify(notifier).notifySignerPresence(1L, 10L, 1);
         order.verify(notifier).notifySignerPresence(1L, 10L, 2);
@@ -34,8 +34,8 @@ class SignerPresenceServiceTest {
         service.register("a", "sub", 1L, 10L);
         service.register("b", "sub", 2L, 10L);
         service.register("c", "sub", 1L, 11L);
-        assertThat(service.getConnectionCount(1L, 10L)).isEqualTo(1);
-        assertThat(service.getConnectionCount(2L, 10L)).isEqualTo(1);
-        assertThat(service.getConnectionCount(1L, 12L)).isZero();
+        assertThat(service.countConnections(1L, 10L)).isEqualTo(1);
+        assertThat(service.countConnections(2L, 10L)).isEqualTo(1);
+        assertThat(service.countConnections(1L, 12L)).isZero();
     }
 }

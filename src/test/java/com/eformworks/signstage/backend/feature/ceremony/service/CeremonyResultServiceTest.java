@@ -1,10 +1,19 @@
 package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
-import com.eformworks.signstage.backend.feature.ceremony.entity.*;
+import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventAction;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.port.DocumentStoragePort;
-import com.eformworks.signstage.backend.feature.ceremony.repository.*;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyResultRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -27,7 +36,7 @@ class CeremonyResultServiceTest {
     @Mock StrokeDataRepository strokeDataRepository;
     @Mock CeremonyEventLogRepository ceremonyEventLogRepository;
     @Mock DocumentStoragePort documentStoragePort;
-    @Mock CeremonyService ceremonyService;
+    @Mock CeremonyAccessService ceremonyAccessService;
     @Mock CeremonyEventService ceremonyEventService;
     @InjectMocks CeremonyResultService resultService;
 
@@ -37,7 +46,7 @@ class CeremonyResultServiceTest {
                 .ceremony(ceremony).name("행사").eventType(type).accessKey("key").build();
         ReflectionTestUtils.setField(event, "id", 3L);
         ReflectionTestUtils.setField(event, "status", status);
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(1L, 2L)).willReturn(ceremony);
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(1L, 2L)).willReturn(ceremony);
         given(ceremonyEventService.findEventInCeremonyOrThrow(2L, 3L)).willReturn(event);
         return event;
     }

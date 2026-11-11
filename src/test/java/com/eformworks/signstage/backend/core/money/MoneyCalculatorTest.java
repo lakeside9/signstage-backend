@@ -2,7 +2,6 @@ package com.eformworks.signstage.backend.core.money;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import org.junit.jupiter.api.Test;

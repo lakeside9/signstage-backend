@@ -16,18 +16,20 @@ import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CustomerQuoteDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CustomerQuote;
-import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
+import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.MarginInfo;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationMarginPolicy;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductCategory;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCategory;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.model.QuoteCalculation;
+import com.eformworks.signstage.backend.feature.ceremony.model.QuoteLineDetail;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyMarginOverrideRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CustomerQuoteLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CustomerQuoteRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationMarginPolicyRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
+import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
@@ -72,7 +74,7 @@ class CustomerQuoteServiceTest {
     @Mock
     private CustomerQuoteLineRepository customerQuoteLineRepository;
     @Mock
-    private UnitProductRepository unitProductRepository;
+    private BillingCatalogQueryService billingCatalogQueryService;
     @Mock
     private OrganizationRepository organizationRepository;
     @Mock
@@ -80,7 +82,11 @@ class CustomerQuoteServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private CeremonyService ceremonyService;
+    private CeremonyAccessService ceremonyAccessService;
+    @Mock
+    private CeremonyCatalogService ceremonyCatalogService;
+    @Mock
+    private CeremonyQuoteService ceremonyQuoteService;
     @Spy
     private MoneyCalculator moneyCalculator = new MoneyCalculator();
     @Mock
@@ -113,16 +119,16 @@ class CustomerQuoteServiceTest {
     }
 
     private void stubCommon(Ceremony ceremony) {
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
-        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
                 .willReturn(Member.builder().role(MemberRole.OWNER).build());
         given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(
                 com.eformworks.signstage.backend.feature.organization.entity.Organization.builder().build()));
         given(organizationMarginPolicyRepository.findEffective(eq(ORGANIZATION_ID), any(LocalDate.class)))
                 .willReturn(Optional.of(OrganizationMarginPolicy.builder()
                         .margin(new MarginInfo(DiscountType.PERCENT, BigDecimal.TEN)).build()));
-        given(ceremonyService.buildQuoteCalculation(ceremony))
-                .willReturn(new CeremonyService.QuoteCalculation(
+        given(ceremonyQuoteService.buildQuoteCalculation(ceremony))
+                .willReturn(new QuoteCalculation(
                         BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of()
                 ));
     }
@@ -297,8 +303,8 @@ class CustomerQuoteServiceTest {
     @Test
     void generateQuote_snapshotsZeroPercentPolicyAndSurvivesPolicyEdits() {
         Ceremony ceremony = ceremony();
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
-        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
                 .willReturn(Member.builder().role(MemberRole.OWNER).build());
         LocalDate today = LocalDate.now(java.time.ZoneId.of("Pacific/Kiritimati"));
         given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(
@@ -306,10 +312,10 @@ class CustomerQuoteServiceTest {
         OrganizationMarginPolicy policy = policy(12L, today, today.plusDays(30));
         given(organizationMarginPolicyRepository.findEffective(eq(ORGANIZATION_ID), any(LocalDate.class)))
                 .willReturn(Optional.of(policy));
-        CeremonyService.QuoteLineDetail line = org.mockito.Mockito.mock(CeremonyService.QuoteLineDetail.class);
+        QuoteLineDetail line = org.mockito.Mockito.mock(QuoteLineDetail.class);
         given(line.platformUsageFee()).willReturn(true);
         given(line.netAmount()).willReturn(BigDecimal.valueOf(10000));
-        given(ceremonyService.buildQuoteCalculation(ceremony)).willReturn(new CeremonyService.QuoteCalculation(
+        given(ceremonyQuoteService.buildQuoteCalculation(ceremony)).willReturn(new QuoteCalculation(
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of(line)));
         java.util.concurrent.atomic.AtomicReference<CustomerQuote> saved = new java.util.concurrent.atomic.AtomicReference<>();
         given(customerQuoteRepository.save(any())).willAnswer(invocation -> {
@@ -337,8 +343,8 @@ class CustomerQuoteServiceTest {
     @Test
     void effectiveMargin_overrideTakesPrecedenceEvenAtZero() {
         Ceremony ceremony = ceremony();
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
-        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID)).willReturn(Member.builder().role(MemberRole.OWNER).build());
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID)).willReturn(Member.builder().role(MemberRole.OWNER).build());
         given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(Organization.builder().build()));
         given(ceremonyMarginOverrideRepository.findByCeremonyId(CEREMONY_ID)).willReturn(Optional.of(
                 CeremonyMarginOverride.builder().ceremony(ceremony).margin(new MarginInfo(DiscountType.PERCENT, BigDecimal.ZERO)).build()));
@@ -351,8 +357,8 @@ class CustomerQuoteServiceTest {
     @Test
     void quoteWithoutEffectiveMarginIsRejected() {
         Ceremony ceremony = ceremony();
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
-        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID)).willReturn(Member.builder().role(MemberRole.OWNER).build());
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID)).willReturn(Member.builder().role(MemberRole.OWNER).build());
         given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(Organization.builder().build()));
         assertThatThrownBy(() -> customerQuoteService.generateCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID,
                 new CustomerQuoteDto.Request.GenerateQuote(List.of())))
@@ -367,9 +373,9 @@ class CustomerQuoteServiceTest {
         Ceremony ceremony = ceremony();
         stubCommon(ceremony);
         UnitProduct tablet = unitProduct(901L, "태블릿", UnitProductCategory.EQUIPMENT, null);
-        given(unitProductRepository.findById(901L)).willReturn(Optional.of(tablet));
+        given(billingCatalogQueryService.findUnitProductOrThrow(901L)).willReturn(tablet);
         willThrow(new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_INACTIVE))
-                .given(ceremonyService).resolveSellableUnitProductPeriod(eq(tablet), any(LocalDate.class));
+                .given(ceremonyCatalogService).resolveSellableUnitProductPeriod(eq(tablet), any(LocalDate.class));
 
         CustomerQuoteDto.Request.GenerateQuote request = new CustomerQuoteDto.Request.GenerateQuote(
                 List.of(new CustomerQuoteDto.Request.EquipmentPersonnelLine(901L, "태블릿", 1, BigDecimal.valueOf(10000)))
@@ -389,10 +395,10 @@ class CustomerQuoteServiceTest {
         stubCommon(ceremony);
         UnitProduct near = unitProduct(902L, "근거리 현장지원", UnitProductCategory.PERSONNEL, "ONSITE_SUPPORT_TIER");
         UnitProduct far = unitProduct(903L, "원거리 현장지원", UnitProductCategory.PERSONNEL, "ONSITE_SUPPORT_TIER");
-        given(unitProductRepository.findById(902L)).willReturn(Optional.of(near));
-        given(unitProductRepository.findById(903L)).willReturn(Optional.of(far));
+        given(billingCatalogQueryService.findUnitProductOrThrow(902L)).willReturn(near);
+        given(billingCatalogQueryService.findUnitProductOrThrow(903L)).willReturn(far);
         willThrow(new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_GROUP_CONFLICT))
-                .given(ceremonyService).checkExclusivityGroups(List.of(near, far));
+                .given(ceremonyCatalogService).checkExclusivityGroups(List.of(near, far));
 
         CustomerQuoteDto.Request.GenerateQuote request = new CustomerQuoteDto.Request.GenerateQuote(List.of(
                 new CustomerQuoteDto.Request.EquipmentPersonnelLine(902L, "근거리 현장지원", 1, BigDecimal.valueOf(50000)),
@@ -412,7 +418,7 @@ class CustomerQuoteServiceTest {
         Ceremony ceremony = ceremony();
         stubCommon(ceremony);
         UnitProduct tablet = unitProduct(901L, "태블릿", UnitProductCategory.EQUIPMENT, null);
-        given(unitProductRepository.findById(901L)).willReturn(Optional.of(tablet));
+        given(billingCatalogQueryService.findUnitProductOrThrow(901L)).willReturn(tablet);
         given(customerQuoteRepository.findMaxVersion(CEREMONY_ID)).willReturn(0);
         given(customerQuoteRepository.findByIdAndCeremonyId(any(), eq(CEREMONY_ID)))
                 .willAnswer(invocation -> Optional.of(
@@ -437,9 +443,9 @@ class CustomerQuoteServiceTest {
 
         assertThat(result).isNotNull();
         ArgumentCaptor<List<UnitProduct>> captor = ArgumentCaptor.forClass(List.class);
-        verify(ceremonyService).checkExclusivityGroups(captor.capture());
+        verify(ceremonyCatalogService).checkExclusivityGroups(captor.capture());
         assertThat(captor.getValue()).containsExactly(tablet);
-        verify(ceremonyService).resolveSellableUnitProductPeriod(eq(tablet), any(LocalDate.class));
+        verify(ceremonyCatalogService).resolveSellableUnitProductPeriod(eq(tablet), any(LocalDate.class));
         verify(customerQuoteRepository).save(any());
     }
 
@@ -471,10 +477,10 @@ class CustomerQuoteServiceTest {
                 customerQuoteService.generateCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request);
 
         assertThat(result).isNotNull();
-        verify(unitProductRepository, never()).findById(any());
-        verify(ceremonyService, never()).resolveSellableUnitProductPeriod(any(), any(LocalDate.class));
+        verify(billingCatalogQueryService, never()).findUnitProductOrThrow(any());
+        verify(ceremonyCatalogService, never()).resolveSellableUnitProductPeriod(any(), any(LocalDate.class));
         ArgumentCaptor<List<UnitProduct>> captor = ArgumentCaptor.forClass(List.class);
-        verify(ceremonyService).checkExclusivityGroups(captor.capture());
+        verify(ceremonyCatalogService).checkExclusivityGroups(captor.capture());
         assertThat(captor.getValue()).isEmpty();
         verify(customerQuoteRepository).save(any());
     }
@@ -508,8 +514,8 @@ class CustomerQuoteServiceTest {
     @DisplayName("견적서 삭제 — 줄을 먼저 지우고 헤더를 지운다")
     void deleteCustomerQuote_deletesLinesThenHeader() {
         Ceremony ceremony = ceremony();
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
-        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
                 .willReturn(Member.builder().role(MemberRole.OWNER).build());
         CustomerQuote quote = CustomerQuote.builder()
                 .ceremony(ceremony).version(1)
@@ -533,8 +539,8 @@ class CustomerQuoteServiceTest {
     @Test
     @DisplayName("견적서 삭제 — 없는 견적서면 거부된다")
     void deleteCustomerQuote_notFound_rejected() {
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony());
-        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony());
+        given(ceremonyAccessService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
                 .willReturn(Member.builder().role(MemberRole.OWNER).build());
         given(customerQuoteRepository.findByIdAndCeremonyId(999L, CEREMONY_ID)).willReturn(Optional.empty());
 

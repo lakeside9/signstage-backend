@@ -2,9 +2,9 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
-import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
+import com.eformworks.signstage.backend.core.web.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.SignerDto;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
@@ -43,8 +43,8 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 서명자(Signer). {@code Ceremony} 직속이라 같은 행사의 TEST/MAIN 하위 행사가 명단을
  * 공유한다(signstage-docs business/ceremony-feature-migration-review.md 4.3절).
- * 조직/행사 접근 검사와 유효 한도 계산은 {@link CeremonyService}의 package-private
- * 헬퍼를 재사용한다.
+ * 조직/행사 접근 검사({@link CeremonyAccessService})와 유효 한도 계산({@link CeremonyCatalogService})은
+ * package-private 헬퍼를 재사용한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -53,11 +53,11 @@ public class SignerService {
 
     @Transactional
     public SignerDto.Response.SignerSummary updateEnabled(Long organizationId, Long ceremonyId, Long signerId,
-            Long currentUserId, com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest request) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member member = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, member, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+            Long currentUserId, com.eformworks.signstage.backend.core.web.UpdateEnabledRequest request) {
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member member = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, member, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
         Signer item = findSignerInCeremonyOrThrow(ceremonyId, signerId);
         item.updateEnabled(request.getEnabled());
         return toSummary(item);
@@ -68,7 +68,8 @@ public class SignerService {
     private final StrokeDataRepository strokeDataRepository;
     private final CeremonyEventLogRepository ceremonyEventLogRepository;
     private final CeremonyTemplateRepository ceremonyTemplateRepository;
-    private final CeremonyService ceremonyService;
+    private final CeremonyAccessService ceremonyAccessService;
+    private final CeremonyCatalogService ceremonyCatalogService;
 
     @Transactional
     public SignerDto.Response.SignerSummary createSigner(
@@ -77,13 +78,13 @@ public class SignerService {
             Long currentUserId,
             SignerDto.Request.CreateSigner request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
-        ceremonyService.checkCeremonyPlanConfirmed(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
+        ceremonyAccessService.checkCeremonyPlanConfirmed(ceremony);
 
-        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.SIGNERS);
+        int effectiveLimit = ceremonyCatalogService.calculateEffectiveCapacity(ceremony, UnitProductType.SIGNERS);
         long currentCount = signerRepository.countByCeremonyId(ceremonyId);
         if (currentCount >= effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_SIGNER_LIMIT_EXCEEDED);
@@ -108,9 +109,9 @@ public class SignerService {
      * 달라지지 않지만, {@link #findSigners}와 같은 읽기 접근 검사는 그대로 적용한다.
      */
     public byte[] generateExcelTemplate(Long organizationId, Long ceremonyId, Long currentUserId) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("서명자");
@@ -150,11 +151,11 @@ public class SignerService {
             Long currentUserId,
             MultipartFile file
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
-        ceremonyService.checkCeremonyPlanConfirmed(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
+        ceremonyAccessService.checkCeremonyPlanConfirmed(ceremony);
         checkExcelExtension(file.getOriginalFilename());
 
         long currentCount = signerRepository.countByCeremonyId(ceremonyId);
@@ -182,7 +183,7 @@ public class SignerService {
             throw new ApplicationException(CeremonyErrorCode.SIGNER_EXCEL_NO_VALID_ROWS);
         }
 
-        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.SIGNERS);
+        int effectiveLimit = ceremonyCatalogService.calculateEffectiveCapacity(ceremony, UnitProductType.SIGNERS);
         if (currentCount + toCreate.size() > effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_SIGNER_LIMIT_EXCEEDED);
         }
@@ -237,9 +238,9 @@ public class SignerService {
     }
 
     public List<SignerDto.Response.SignerSummary> findSigners(Long organizationId, Long ceremonyId, Long currentUserId) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         return signerRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(ceremonyId).stream()
                 .map(this::toSummary)
@@ -258,10 +259,10 @@ public class SignerService {
             Long currentUserId,
             DisplayOrderRequest.UpdateDisplayOrders request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Map<Long, Signer> signersById = signerRepository
                 .findAllById(request.getItems().stream().map(DisplayOrderRequest.Item::getId).toList())
@@ -285,9 +286,9 @@ public class SignerService {
             Long signerId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         return toSummary(findSignerInCeremonyOrThrow(ceremonyId, signerId));
     }
@@ -301,10 +302,10 @@ public class SignerService {
             Long currentUserId,
             SignerDto.Request.UpdateSigner request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Signer signer = findSignerInCeremonyOrThrow(ceremonyId, signerId);
         if (isSignerLockedByStartedEvent(signerId)) {
@@ -341,10 +342,10 @@ public class SignerService {
      */
     @Transactional
     public void deleteSigner(Long organizationId, Long ceremonyId, Long signerId, Long currentUserId) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Signer signer = findSignerInCeremonyOrThrow(ceremonyId, signerId);
         if (isSignerInUse(signerId)) {

@@ -17,6 +17,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.model.DownloadedFile;
 import com.eformworks.signstage.backend.feature.ceremony.model.FieldStrokes;
 import com.eformworks.signstage.backend.feature.ceremony.model.StoredFile;
 import com.eformworks.signstage.backend.feature.ceremony.port.DocumentStoragePort;
@@ -27,7 +28,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemp
 import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
 import com.eformworks.signstage.backend.feature.ceremony.support.SignatureOverlayRenderer;
-import com.eformworks.signstage.backend.feature.ceremony.util.EventPdfWatermark;
+import com.eformworks.signstage.backend.feature.ceremony.support.EventPdfWatermark;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.integration.storage.StorageKeyPrefix;
 import com.eformworks.signstage.backend.integration.storage.common.error.StorageException;
@@ -72,7 +73,7 @@ public class CeremonyResultService {
     private final StrokeDataRepository strokeDataRepository;
     private final CeremonyEventLogRepository ceremonyEventLogRepository;
     private final DocumentStoragePort documentStoragePort;
-    private final CeremonyService ceremonyService;
+    private final CeremonyAccessService ceremonyAccessService;
     private final CeremonyEventService ceremonyEventService;
 
     @Transactional
@@ -82,12 +83,12 @@ public class CeremonyResultService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         // 이 체크는 방금 여기서 완료로 전이시키는 호출 자체를 막지 않는다 — Ceremony는 이 시점엔
         // 아직 IN_PROGRESS이고, 완료 전이는 결과 생성이 전부 성공한 뒤에만 일어난다.
-        ceremonyService.checkCeremonyEditable(ceremony);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = ceremonyEventService.findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.FINISHED
@@ -153,24 +154,24 @@ public class CeremonyResultService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         ceremonyEventService.findEventInCeremonyOrThrow(ceremonyId, eventId);
         return ceremonyResultRepository.findAllByCeremonyEventId(eventId).stream().map(this::toSummary).toList();
     }
 
-    public DownloadedResult downloadResultFile(
+    public DownloadedFile downloadResultFile(
             Long organizationId,
             Long ceremonyId,
             Long eventId,
             Long resultId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         ceremonyEventService.findEventInCeremonyOrThrow(ceremonyId, eventId);
         CeremonyResult result = ceremonyResultRepository.findById(resultId)
@@ -185,7 +186,7 @@ public class CeremonyResultService {
         } catch (StorageException e) {
             throw new ApplicationException(CeremonyErrorCode.RESULT_GENERATION_FAILED, e);
         }
-        return new DownloadedResult(resource, result.getOriginalFilename());
+        return new DownloadedFile(resource, result.getOriginalFilename());
     }
 
     private CeremonyResult generateResultForTemplate(CeremonyEvent event, CeremonyTemplate mapping, StrokeContext strokeContext) {
@@ -318,9 +319,5 @@ public class CeremonyResultService {
                 result.getChecksum(),
                 result.getCreatedAt()
         );
-    }
-
-    /** 컨트롤러가 {@code Content-Disposition} 헤더를 만드는 데 필요한 파일명을 함께 돌려준다. */
-    public record DownloadedResult(Resource resource, String originalFilename) {
     }
 }

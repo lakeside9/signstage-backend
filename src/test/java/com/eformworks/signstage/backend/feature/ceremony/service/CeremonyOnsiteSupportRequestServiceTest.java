@@ -14,22 +14,22 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOnsiteSupportRequest;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OnsiteSupportRequestStatus;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductCategory;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductPricePeriod;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCategory;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductPricePeriod;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOnsiteSupportRequestRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
+import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
-import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminOnsiteSupportRequestDto;
-import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.ceremony.dto.PlatformAdminOnsiteSupportRequestDto;
+import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -58,9 +58,11 @@ class CeremonyOnsiteSupportRequestServiceTest {
     @Mock
     private CeremonyUnitProductPurchaseLineRepository ceremonyUnitProductPurchaseLineRepository;
     @Mock
-    private UnitProductRepository unitProductRepository;
+    private BillingCatalogQueryService billingCatalogQueryService;
     @Mock
-    private CeremonyService ceremonyService;
+    private CeremonyAccessService ceremonyAccessService;
+    @Mock
+    private CeremonyCatalogService ceremonyCatalogService;
     @Mock
     private UserRepository userRepository;
     @Mock
@@ -78,8 +80,8 @@ class CeremonyOnsiteSupportRequestServiceTest {
     void setUp() {
         service = new CeremonyOnsiteSupportRequestService(
                 ceremonyOnsiteSupportRequestRepository, ceremonyUnitProductPurchaseRepository,
-                ceremonyUnitProductPurchaseLineRepository, unitProductRepository, ceremonyService,
-                userRepository, rolePermissionService, platformAdminAuditLogRecorder
+                ceremonyUnitProductPurchaseLineRepository, ceremonyAccessService, ceremonyCatalogService,
+                userRepository, billingCatalogQueryService, rolePermissionService, platformAdminAuditLogRecorder
         );
 
         Organization organization = Organization.builder().name("파트너사").code("PARTNER").build();
@@ -93,10 +95,10 @@ class CeremonyOnsiteSupportRequestServiceTest {
                 .category(UnitProductCategory.PERSONNEL).platformUsageFee(true).build();
         ReflectionTestUtils.setField(anchor, "id", 900L);
 
-        lenient().when(ceremonyService.findCeremonyInOrganizationOrThrow(10L, 100L)).thenReturn(ceremony);
-        lenient().when(ceremonyService.findActiveMemberOrThrow(10L, 1L)).thenReturn(actingMember);
-        lenient().doNothing().when(ceremonyService).checkCeremonyManageAccess(ceremony, actingMember, 1L);
-        lenient().doNothing().when(ceremonyService).checkCeremonyReadAccess(ceremony, actingMember, 1L);
+        lenient().when(ceremonyAccessService.findCeremonyInOrganizationOrThrow(10L, 100L)).thenReturn(ceremony);
+        lenient().when(ceremonyAccessService.findActiveMemberOrThrow(10L, 1L)).thenReturn(actingMember);
+        lenient().doNothing().when(ceremonyAccessService).checkCeremonyManageAccess(ceremony, actingMember, 1L);
+        lenient().doNothing().when(ceremonyAccessService).checkCeremonyReadAccess(ceremony, actingMember, 1L);
     }
 
     private CeremonyOnsiteSupportRequest quotedRequest() {
@@ -122,7 +124,7 @@ class CeremonyOnsiteSupportRequestServiceTest {
         );
 
         assertThat(response.getStatus()).isEqualTo(OnsiteSupportRequestStatus.REQUESTED.name());
-        verify(ceremonyService).checkCeremonyManageAccess(ceremony, actingMember, 1L);
+        verify(ceremonyAccessService).checkCeremonyManageAccess(ceremony, actingMember, 1L);
     }
 
     @Test
@@ -138,7 +140,7 @@ class CeremonyOnsiteSupportRequestServiceTest {
         ))
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
-                .isEqualTo(CeremonyErrorCode.ONSITE_SUPPORT_REQUEST_NOT_REQUESTED);
+                .isEqualTo(CeremonyErrorCode.CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_REQUESTED);
     }
 
     @Test
@@ -160,12 +162,12 @@ class CeremonyOnsiteSupportRequestServiceTest {
     void acceptRequest_createsPurchaseWithQuotedAmountAndApproves() {
         CeremonyOnsiteSupportRequest request = quotedRequest();
         given(ceremonyOnsiteSupportRequestRepository.findById(500L)).willReturn(Optional.of(request));
-        given(unitProductRepository.findFirstByTypeOrderByIdAsc(UnitProductType.ONSITE_SUPPORT_REQUEST))
+        given(billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT_REQUEST))
                 .willReturn(Optional.of(anchor));
         UnitProductPricePeriod period = UnitProductPricePeriod.builder()
                 .unitProduct(anchor).currencyCode("KRW").salePrice(BigDecimal.ZERO).taxCode("KR_VAT_STANDARD")
                 .effectiveFrom(LocalDate.now()).build();
-        given(ceremonyService.resolveSellableUnitProductPeriod(anchor, LocalDate.now(java.time.ZoneId.of(ceremony.getTimeZoneId()))))
+        given(ceremonyCatalogService.resolveSellableUnitProductPeriod(anchor, LocalDate.now(java.time.ZoneId.of(ceremony.getTimeZoneId()))))
                 .willReturn(period);
         given(ceremonyUnitProductPurchaseRepository.save(any())).willAnswer(invocation -> {
             CeremonyUnitProductPurchase saved = invocation.getArgument(0);
@@ -193,7 +195,7 @@ class CeremonyOnsiteSupportRequestServiceTest {
         assertThatThrownBy(() -> service.acceptRequest(10L, 100L, 500L, 1L))
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
-                .isEqualTo(CeremonyErrorCode.ONSITE_SUPPORT_REQUEST_NOT_QUOTED);
+                .isEqualTo(CeremonyErrorCode.CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_QUOTED);
     }
 
     @Test

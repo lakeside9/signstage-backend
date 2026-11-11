@@ -3,7 +3,7 @@ package com.eformworks.signstage.backend.feature.ceremony.controller;
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
-import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
+import com.eformworks.signstage.backend.core.web.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.SignerDto;
 import com.eformworks.signstage.backend.feature.ceremony.service.SignerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,7 +42,7 @@ public class SignerController {
     public ApiResponse<SignerDto.Response.SignerSummary> updateEnabled(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long organizationId, @PathVariable Long ceremonyId, @PathVariable Long signerId,
-            @Valid @RequestBody com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest request) {
+            @Valid @RequestBody com.eformworks.signstage.backend.core.web.UpdateEnabledRequest request) {
         return ApiResponse.success(signerService.updateEnabled(organizationId, ceremonyId, signerId,
                 currentUser.userId(), request), traceIdProvider.getTraceId());
     }

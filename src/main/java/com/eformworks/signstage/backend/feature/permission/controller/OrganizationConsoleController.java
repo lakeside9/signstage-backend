@@ -33,15 +33,15 @@ public class OrganizationConsoleController {
 
     @Operation(summary = "내 역할 기준 메뉴 트리 조회", description = "role_permissions에서 허용되지 않은 메뉴는 응답에서 빠진다.")
     @GetMapping("/menus")
-    public ApiResponse<List<MenuDto.Response.MenuNode>> getMyMenuTree(@AuthenticationPrincipal CurrentUser currentUser) {
+    public ApiResponse<List<MenuDto.Response.MenuNode>> retrieveMyMenuTree(@AuthenticationPrincipal CurrentUser currentUser) {
         return ApiResponse.success(
-                organizationConsoleService.getMyMenuTree(currentUser.userId()), traceIdProvider.getTraceId());
+                organizationConsoleService.retrieveMyMenuTree(currentUser.userId()), traceIdProvider.getTraceId());
     }
 
     @Operation(summary = "내 허용 권한키 목록", description = "프런트 hasPermission(key)가 참조하는 집합이다(10장).")
     @GetMapping("/permissions")
-    public ApiResponse<PermissionDto.Response.MyPermissions> getMyPermissions(@AuthenticationPrincipal CurrentUser currentUser) {
-        List<String> keys = organizationConsoleService.getMyPermissionKeys(currentUser.userId()).stream().sorted().toList();
+    public ApiResponse<PermissionDto.Response.MyPermissions> retrieveMyPermissions(@AuthenticationPrincipal CurrentUser currentUser) {
+        List<String> keys = organizationConsoleService.retrieveMyPermissionKeys(currentUser.userId()).stream().sorted().toList();
         String roleValue = organizationConsoleService.resolveMyRole(currentUser.userId())
                 .map(Enum::name)
                 .orElse(null);

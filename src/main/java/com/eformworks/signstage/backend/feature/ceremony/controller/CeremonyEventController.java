@@ -7,8 +7,9 @@ import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventEffectSettingDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyResultDto;
-import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
+import com.eformworks.signstage.backend.core.web.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
+import com.eformworks.signstage.backend.feature.ceremony.model.DownloadedFile;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyEffectRuntimeService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyEventEffectSettingService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyEventService;
@@ -470,7 +471,7 @@ public class CeremonyEventController {
             @PathVariable Long eventId,
             @PathVariable Long resultId
     ) {
-        CeremonyResultService.DownloadedResult downloaded = ceremonyResultService
+        DownloadedFile downloaded = ceremonyResultService
                 .downloadResultFile(organizationId, ceremonyId, eventId, resultId, currentUser.userId());
 
         String encodedFilename = URLEncoder.encode(downloaded.originalFilename(), StandardCharsets.UTF_8);

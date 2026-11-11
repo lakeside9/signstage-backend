@@ -18,7 +18,7 @@ import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
-import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -266,8 +266,8 @@ class CeremonyEffectDefinitionServiceTest {
 
     /** {@code findAllByEffectDefinitionId} mocking 전용 — {@code unitProduct.id}만 있으면 충분하다. */
     private com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption mappingTo(Long unitProductId) {
-        com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct unitProduct =
-                com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct.builder().build();
+        com.eformworks.signstage.backend.feature.billing.entity.UnitProduct unitProduct =
+                com.eformworks.signstage.backend.feature.billing.entity.UnitProduct.builder().build();
         ReflectionTestUtils.setField(unitProduct, "id", unitProductId);
         return com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEffectDefinitionOption.builder()
                 .unitProduct(unitProduct)

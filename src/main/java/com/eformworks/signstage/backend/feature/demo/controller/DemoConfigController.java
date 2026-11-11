@@ -33,14 +33,14 @@ public class DemoConfigController {
     @Operation(summary = "데모 셸(iframe)이 사용할 전시/서명 URL 조회", description = "slug가 없거나 프로필이 없으면 data가 null이다.")
     @SecurityRequirements(value = {})
     @GetMapping("/config")
-    public ApiResponse<DemoConfigDto.Response.Config> getConfig(@RequestParam(required = false) String slug) {
-        return ApiResponse.success(demoConfigService.getConfig(slug), traceIdProvider.getTraceId());
+    public ApiResponse<DemoConfigDto.Response.Config> retrieveConfig(@RequestParam(required = false) String slug) {
+        return ApiResponse.success(demoConfigService.retrieveConfig(slug), traceIdProvider.getTraceId());
     }
 
     @Operation(summary = "데모 프로필 선택 목록 조회", description = "활성화(enabled)된 프로필만, slug 오름차순.")
     @SecurityRequirements(value = {})
     @GetMapping("/configs")
-    public ApiResponse<List<DemoConfigDto.Response.PublicSummary>> listPublicConfigs() {
-        return ApiResponse.success(demoConfigService.listPublicConfigs(), traceIdProvider.getTraceId());
+    public ApiResponse<List<DemoConfigDto.Response.PublicSummary>> findPublicConfigs() {
+        return ApiResponse.success(demoConfigService.findPublicConfigs(), traceIdProvider.getTraceId());
     }
 }

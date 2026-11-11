@@ -41,7 +41,7 @@ public class DemoConfigService {
     // ==================== 공개(legacy 데모 셸 계약) ====================
 
     /** slug가 없거나 프로필이 없거나 비활성/참조 행사가 데모 조직 소속이 아니면 null(에러 아님). */
-    public DemoConfigDto.Response.Config getConfig(String slug) {
+    public DemoConfigDto.Response.Config retrieveConfig(String slug) {
         if (!StringUtils.hasText(slug)) {
             return null;
         }
@@ -52,7 +52,7 @@ public class DemoConfigService {
     }
 
     /** 참조 행사를 찾을 수 없는 프로필(예: 행사가 삭제됨)은 조용히 목록에서 제외한다. */
-    public List<DemoConfigDto.Response.PublicSummary> listPublicConfigs() {
+    public List<DemoConfigDto.Response.PublicSummary> findPublicConfigs() {
         return demoConfigRepository.findAllByOrderBySlugAsc().stream()
                 .filter(DemoConfig::isEnabled)
                 .flatMap(config -> resolvePublicDemoEvent(config.getEventAccessKey())

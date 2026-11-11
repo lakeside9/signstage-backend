@@ -1,9 +1,18 @@
 package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.feature.ceremony.dto.*;
-import com.eformworks.signstage.backend.feature.ceremony.entity.*;
-import com.eformworks.signstage.backend.feature.ceremony.repository.*;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.core.web.UpdateEnabledRequest;
+import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
+import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
+import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.SignerRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import java.util.*;
@@ -17,12 +26,13 @@ class AvailabilityTest {
         ReflectionTestUtils.setField(ceremony, "id", 1L);
         Signer signer = Signer.builder().ceremony(ceremony).name("signer").accessKey("key").build();
         ReflectionTestUtils.setField(signer, "id", 2L);
-        CeremonyService access = mock(CeremonyService.class);
+        CeremonyAccessService access = mock(CeremonyAccessService.class);
         SignerRepository repo = mock(SignerRepository.class);
         when(access.findCeremonyInOrganizationOrThrow(1L, 1L)).thenReturn(ceremony);
         when(repo.findById(2L)).thenReturn(Optional.of(signer));
         SignerService service = new SignerService(repo, mock(TemplateFieldRepository.class), mock(StrokeDataRepository.class),
-                mock(CeremonyEventLogRepository.class), mock(CeremonyTemplateRepository.class), access);
+                mock(CeremonyEventLogRepository.class), mock(CeremonyTemplateRepository.class), access,
+                mock(CeremonyCatalogService.class));
         assertThat(service.updateEnabled(1L, 1L, 2L, 3L, new UpdateEnabledRequest(false)).isEnabled()).isFalse();
         assertThat(service.updateEnabled(1L, 1L, 2L, 3L, new UpdateEnabledRequest(true)).isEnabled()).isTrue();
         assertThat(signer.getAccessKey()).isEqualTo("key");
@@ -42,7 +52,7 @@ class AvailabilityTest {
         TemplateRepository templates = mock(TemplateRepository.class);
         SignerService signers = mock(SignerService.class);
         TemplateFieldService service = new TemplateFieldService(fields, templates, mock(CeremonyTemplateRepository.class),
-                mock(CeremonyService.class), signers);
+                mock(CeremonyAccessService.class), signers);
         when(templates.findById(2L)).thenReturn(Optional.of(template));
         when(signers.findSignerInCeremonyOrThrow(1L, 3L)).thenReturn(signer);
         when(fields.findAllByTemplateId(2L)).thenReturn(List.of(TemplateField.builder().template(template).signer(signer).build()));

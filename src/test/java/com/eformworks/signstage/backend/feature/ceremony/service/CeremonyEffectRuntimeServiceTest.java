@@ -62,7 +62,7 @@ class CeremonyEffectRuntimeServiceTest {
     @Mock
     private CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
     @Mock
-    private CeremonyService ceremonyService;
+    private CeremonyAccessService ceremonyAccessService;
 
     @InjectMocks
     private CeremonyEffectRuntimeService service;

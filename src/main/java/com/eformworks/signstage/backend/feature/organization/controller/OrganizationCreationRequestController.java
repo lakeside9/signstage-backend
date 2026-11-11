@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 일반 사용자가 조직 생성을 요청/취소/조회하는 API다. signstage-docs
  * business/organization-creation-approval-review.md 참고 — 조직은 이 요청이 승인돼야
- * 만들어진다. 승인/반려는 플랫폼 관리자 콘솔(feature.platformadmin)에서 다룬다.
+ * 만들어진다. 승인/반려는 플랫폼 관리자 콘솔({@code PlatformAdminOrganizationRequestController})에서 다룬다.
  */
 @Tag(name = "Organization", description = "조직 생성 요청 API")
 @RestController

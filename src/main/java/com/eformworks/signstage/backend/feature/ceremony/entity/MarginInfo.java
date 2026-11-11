@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
@@ -15,9 +16,9 @@ import lombok.NoArgsConstructor;
 /**
  * 파트너가 실고객에게 재판매할 때 시스템 사용료 원가 위에 얹는 마진 — signstage-docs
  * business/partner-customer-quote-design-review.md 5장 결정(2026-09-11), 같은 문서가 요청한
- * 대로 {@link DiscountInfo}와 같은 모양(type/value, 하한 0 이상 검증)으로 만들되 타입은
+ * 대로 {@code DiscountInfo}와 같은 모양(type/value, 하한 0 이상 검증)으로 만들되 타입은
  * 재사용({@link DiscountType} — PERCENT/FIXED_AMOUNT는 "할인"뿐 아니라 "가산"에도 그대로
- * 맞는 표현이라 새 enum을 따로 두지 않는다). {@link DiscountInfo}와 다른 점은 정률(PERCENT)에
+ * 맞는 표현이라 새 enum을 따로 두지 않는다). {@code DiscountInfo}와 다른 점은 정률(PERCENT)에
  * 상한이 없다는 것 — 마진은 원가의 몇 배를 얹어도(예: 300%) 사업적으로 유효하다.
  *
  * <p>이 값은 플랫폼이 통제하지 않는다(business/platform-partner-customer-billing-model-reference.md

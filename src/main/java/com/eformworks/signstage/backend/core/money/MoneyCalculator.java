@@ -1,8 +1,5 @@
 package com.eformworks.signstage.backend.core.money;
 
-import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountInfo;
-import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
-import com.eformworks.signstage.backend.feature.ceremony.entity.MarginInfo;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
@@ -38,25 +35,14 @@ public class MoneyCalculator {
     }
 
     /**
-     * {@link DiscountInfo} 값 객체를 그대로 받는 편의 오버로드 — signstage-docs
-     * business/billing-catalog-zero-base-schema-redesign-review.md 결정(2026-09-08, 항목 A)
-     * 이후 카탈로그 품목(플랜/선택옵션/용량추가구매)의 할인 계산 호출부는 이 형태를 쓴다.
-     */
-    public BigDecimal applyDiscount(BigDecimal amount, DiscountInfo discount, CurrencyPolicy policy) {
-        return applyDiscount(amount, discount.getDiscountType(), discount.getDiscountValue(), policy);
-    }
-
-    /**
-     * {@link com.eformworks.signstage.backend.feature.ceremony.entity.MarginInfo} 값 객체를
-     * 받아 원가 위에 마진을 더한 금액을 계산한다 — {@link #applyDiscount}의 부호 반대 버전
+     * 원가 위에 마진(정률/정액)을 더한 금액을 계산한다 — {@link #applyDiscount}의 부호 반대 버전
      * (뺄셈 대신 덧셈)이다. signstage-docs business/partner-customer-quote-design-review.md
      * 5장 결정(2026-09-11), {@code CustomerQuoteService}가 사용한다.
      */
-    public BigDecimal applyMargin(BigDecimal amount, MarginInfo margin, CurrencyPolicy policy) {
+    public BigDecimal applyMargin(BigDecimal amount, DiscountType marginType, BigDecimal marginValue, CurrencyPolicy policy) {
         requireAmount(amount);
-        BigDecimal marginValue = margin.getMarginValue();
         requireAmount(marginValue);
-        BigDecimal marginAmount = margin.getMarginType() == DiscountType.PERCENT
+        BigDecimal marginAmount = marginType == DiscountType.PERCENT
                 ? amount.multiply(marginValue, INTERMEDIATE_CONTEXT).divide(ONE_HUNDRED, INTERMEDIATE_CONTEXT)
                 : marginValue;
         return normalize(amount.add(marginAmount), policy);

@@ -22,15 +22,15 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductCategory;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCategory;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
+import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.ceremony.repository.SignerRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
@@ -56,7 +56,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * {@link CeremonyEventService}의 문서 매핑/READY 전이 검증 단위 테스트. {@code ceremonyService}는
+ * {@link CeremonyEventService}의 문서 매핑/READY 전이 검증 단위 테스트. {@code ceremonyAccessService}는
  * 조직/행사 접근 검사를 담당하는 협력 객체라 통째로 목(mock) 처리하고, 이 클래스가 실제로 갖는
  * 검증 로직(문서 COMPLETED 여부, CONTRACT/EXHIBITION 서명자 매핑 일치)만 검사한다.
  */
@@ -68,7 +68,7 @@ class CeremonyEventServiceTest {
     @Mock
     private CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
     @Mock
-    private UnitProductRepository unitProductRepository;
+    private BillingCatalogQueryService billingCatalogQueryService;
     @Mock
     private CeremonyTemplateRepository ceremonyTemplateRepository;
     @Mock
@@ -86,7 +86,9 @@ class CeremonyEventServiceTest {
     @Mock
     private SignerPresenceService signerPresenceService;
     @Mock
-    private CeremonyService ceremonyService;
+    private CeremonyAccessService ceremonyAccessService;
+    @Mock
+    private CeremonyCatalogService ceremonyCatalogService;
     @Mock
     private CeremonyEventEffectSettingService ceremonyEventEffectSettingService;
     @Mock
@@ -219,8 +221,8 @@ class CeremonyEventServiceTest {
     }
 
     private void stubAccess(Ceremony ceremony) {
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
-        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
                 .willReturn(Member.builder().role(MemberRole.OWNER).build());
     }
 
@@ -304,13 +306,13 @@ class CeremonyEventServiceTest {
 
         stubAccess(ceremony);
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
-        given(ceremonyService.retrieveApplicableUnitProductIds(ceremony)).willReturn(List.of(201L, 202L));
-        given(unitProductRepository.findAllByIdIn(List.of(201L, 202L))).willReturn(List.of(blueHighlight, redHighlight));
+        given(ceremonyCatalogService.retrieveApplicableUnitProductIds(ceremony)).willReturn(List.of(201L, 202L));
+        given(billingCatalogQueryService.findUnitProducts(List.of(201L, 202L))).willReturn(List.of(blueHighlight, redHighlight));
         // checkExclusivityGroups가 CeremonyService의 공유 헬퍼로 옮겨져(2026-09-11) 실제 배타
         // 그룹 판정 로직은 그쪽 목에 있다 — 여기서는 그 목이 호출되면 실제로 그러듯 예외를
         // 던지도록 스텁한다.
         willThrow(new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_GROUP_CONFLICT))
-                .given(ceremonyService).checkExclusivityGroups(List.of(blueHighlight, redHighlight));
+                .given(ceremonyCatalogService).checkExclusivityGroups(List.of(blueHighlight, redHighlight));
 
         CeremonyEventDto.Request.UpdateOptionalFeatures request =
                 new CeremonyEventDto.Request.UpdateOptionalFeatures(List.of(201L, 202L));
@@ -334,8 +336,8 @@ class CeremonyEventServiceTest {
 
         stubAccess(ceremony);
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
-        given(ceremonyService.retrieveApplicableUnitProductIds(ceremony)).willReturn(List.of(201L, 203L));
-        given(unitProductRepository.findAllByIdIn(List.of(201L, 203L))).willReturn(List.of(signerFieldZoom, fireworks));
+        given(ceremonyCatalogService.retrieveApplicableUnitProductIds(ceremony)).willReturn(List.of(201L, 203L));
+        given(billingCatalogQueryService.findUnitProducts(List.of(201L, 203L))).willReturn(List.of(signerFieldZoom, fireworks));
 
         CeremonyEventDto.Request.UpdateOptionalFeatures request =
                 new CeremonyEventDto.Request.UpdateOptionalFeatures(List.of(201L, 203L));
@@ -702,10 +704,10 @@ class CeremonyEventServiceTest {
         given(ceremonyEventRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(CEREMONY_ID))
                 .willReturn(List.of(second, first));
 
-        com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.UpdateDisplayOrders request =
-                new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.UpdateDisplayOrders(List.of(
-                        new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.Item(101L, 1),
-                        new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.Item(102L, 0)
+        com.eformworks.signstage.backend.core.web.DisplayOrderRequest.UpdateDisplayOrders request =
+                new com.eformworks.signstage.backend.core.web.DisplayOrderRequest.UpdateDisplayOrders(List.of(
+                        new com.eformworks.signstage.backend.core.web.DisplayOrderRequest.Item(101L, 1),
+                        new com.eformworks.signstage.backend.core.web.DisplayOrderRequest.Item(102L, 0)
                 ));
 
         // when

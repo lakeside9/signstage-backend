@@ -88,7 +88,7 @@ class MenuServiceTest {
         given(messageTranslator.translate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
                 .willAnswer(invocation -> invocation.getArgument(2));
 
-        List<MenuDto.Response.MenuNode> tree = menuService.getMenuTree(RoleAxis.PLATFORM, "PLATFORM_SUPPORT");
+        List<MenuDto.Response.MenuNode> tree = menuService.retrieveMenuTree(RoleAxis.PLATFORM, "PLATFORM_SUPPORT");
 
         assertThat(tree).extracting(MenuDto.Response.MenuNode::getMenuKey).containsExactly("MENU_DASHBOARD");
     }
@@ -104,7 +104,7 @@ class MenuServiceTest {
         given(messageTranslator.translate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
                 .willAnswer(invocation -> invocation.getArgument(2));
 
-        List<MenuDto.Response.MenuNode> tree = menuService.getMenuTree(RoleAxis.PLATFORM, "PLATFORM_SUPPORT");
+        List<MenuDto.Response.MenuNode> tree = menuService.retrieveMenuTree(RoleAxis.PLATFORM, "PLATFORM_SUPPORT");
 
         assertThat(tree).extracting(MenuDto.Response.MenuNode::getMenuKey).containsExactly("MENU_DASHBOARD");
     }
@@ -123,7 +123,7 @@ class MenuServiceTest {
         given(messageTranslator.translate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
                 .willAnswer(invocation -> invocation.getArgument(2));
 
-        List<MenuDto.Response.MenuAdminRow> rows = menuService.getAllMenus(RoleAxis.PLATFORM);
+        List<MenuDto.Response.MenuAdminRow> rows = menuService.findAllMenus(RoleAxis.PLATFORM);
 
         assertThat(rows).extracting(MenuDto.Response.MenuAdminRow::getMenuKey)
                 .containsExactly("MENU_DASHBOARD", "MENU_ACCOUNTS");

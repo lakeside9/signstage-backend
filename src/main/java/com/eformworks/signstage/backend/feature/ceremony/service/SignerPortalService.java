@@ -35,7 +35,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 /**
  * 서명자 포털. JWT를 쓰지 않는다 — {@code eventAccessKey}/{@code signerAccessKey} 소지만으로
  * 접근한다(signstage-docs business/ceremony-feature-migration-review.md 2.3/4.5절 결정).
- * 조직 스코프 검사가 필요 없는 완전히 다른 인가 모델이라 {@link CeremonyService}의 헬퍼를
+ * 조직 스코프 검사가 필요 없는 완전히 다른 인가 모델이라 {@link CeremonyAccessService}의 헬퍼를
  * 재사용하지 않고 리포지토리를 직접 쓴다.
  */
 @Service

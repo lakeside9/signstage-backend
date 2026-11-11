@@ -1,8 +1,5 @@
 package com.eformworks.signstage.backend.core.security;
 
-import com.eformworks.signstage.backend.core.error.ApplicationException;
-import com.eformworks.signstage.backend.feature.identity.error.IdentityErrorCode;
-import com.eformworks.signstage.backend.feature.identity.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.JwtException;
@@ -49,8 +46,8 @@ public class JwtProvider {
     /**
      * 플랫폼 관리자 콘솔 토큰. organizationId 클레임이 없다(signstage-docs 7.6절).
      */
-    public String createPlatformAccessToken(User user) {
-        return buildAccessToken(user, platformTokenExpiryMinutes);
+    public String createPlatformAccessToken(Long userId, String loginId, String platformRole) {
+        return buildAccessToken(userId, loginId, platformRole, platformTokenExpiryMinutes);
     }
 
     /**
@@ -58,20 +55,20 @@ public class JwtProvider {
      * 만료 시간을 길게 둔다(signstage-docs 7.3절 "관리자 토큰을 더 짧게"의 반대 방향).
      * organizationId 클레임은 아직 싣지 않는다 — 5.2절 조직 선택 흐름 구현 시 추가한다.
      */
-    public String createUserAccessToken(User user) {
-        return buildAccessToken(user, userTokenExpiryMinutes);
+    public String createUserAccessToken(Long userId, String loginId) {
+        return buildAccessToken(userId, loginId, null, userTokenExpiryMinutes);
     }
 
-    private String buildAccessToken(User user, long expiryMinutes) {
+    private String buildAccessToken(Long userId, String loginId, String platformRole, long expiryMinutes) {
         Instant now = Instant.now();
         JwtBuilder builder = Jwts.builder()
-                .subject(user.getLoginId())
-                .claim(CLAIM_USER_ID, user.getId())
+                .subject(loginId)
+                .claim(CLAIM_USER_ID, userId)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(expiryMinutes, ChronoUnit.MINUTES)));
 
-        if (user.getPlatformRole() != null) {
-            builder.claim(CLAIM_PLATFORM_ROLE, user.getPlatformRole().name());
+        if (platformRole != null) {
+            builder.claim(CLAIM_PLATFORM_ROLE, platformRole);
         }
 
         return builder.signWith(secretKey).compact();
@@ -92,11 +89,20 @@ public class JwtProvider {
                 .compact();
     }
 
+    /**
+     * 비밀번호 재설정 토큰을 검증하고 userId를 꺼낸다. 서명·만료·목적이 맞지 않으면 jjwt의
+     * {@link JwtException}을 던진다 — 업무 오류 코드로의 변환은 호출하는 feature 서비스가 맡는다
+     * (core가 feature의 ErrorCode를 알지 않도록, backend-coding-convention.md 13.8절과 같은 흐름).
+     */
     public Long parsePasswordResetToken(String token) {
-        Claims claims = parseClaims(token);
+        Claims claims = Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
 
         if (!PURPOSE_PASSWORD_RESET.equals(claims.get(CLAIM_PURPOSE, String.class))) {
-            throw new ApplicationException(IdentityErrorCode.INVALID_RESET_TOKEN);
+            throw new JwtException("비밀번호 재설정 토큰이 아닙니다.");
         }
 
         return claims.get(CLAIM_USER_ID, Long.class);
@@ -124,17 +130,5 @@ public class JwtProvider {
         }
 
         return claims;
-    }
-
-    private Claims parseClaims(String token) {
-        try {
-            return Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-        } catch (JwtException | IllegalArgumentException e) {
-            throw new ApplicationException(IdentityErrorCode.INVALID_RESET_TOKEN, e);
-        }
     }
 }

@@ -2,14 +2,15 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
-import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
+import com.eformworks.signstage.backend.core.web.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateField;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.model.DownloadedFile;
 import com.eformworks.signstage.backend.feature.ceremony.model.StoredFile;
 import com.eformworks.signstage.backend.feature.ceremony.port.DocumentStoragePort;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
@@ -56,11 +57,11 @@ public class TemplateService {
 
     @Transactional
     public TemplateDto.Response.TemplateSummary updateEnabled(Long organizationId, Long ceremonyId, Long templateId,
-            Long currentUserId, com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest request) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member member = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, member, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+            Long currentUserId, com.eformworks.signstage.backend.core.web.UpdateEnabledRequest request) {
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member member = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, member, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
         Template item = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         item.updateEnabled(request.getEnabled());
         return toSummary(item);
@@ -70,7 +71,8 @@ public class TemplateService {
     private final TemplateFieldRepository templateFieldRepository;
     private final CeremonyTemplateRepository ceremonyTemplateRepository;
     private final DocumentStoragePort documentStoragePort;
-    private final CeremonyService ceremonyService;
+    private final CeremonyAccessService ceremonyAccessService;
+    private final CeremonyCatalogService ceremonyCatalogService;
 
     /**
      * 페이지 이미지 사전 렌더링(캐시 예열) 배율. {@code MappedDocumentPreview}(프로젝터/행사제어/
@@ -88,13 +90,13 @@ public class TemplateService {
             String documentRole,
             MultipartFile file
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
-        ceremonyService.checkCeremonyPlanConfirmed(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
+        ceremonyAccessService.checkCeremonyPlanConfirmed(ceremony);
 
-        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.TEMPLATES);
+        int effectiveLimit = ceremonyCatalogService.calculateEffectiveCapacity(ceremony, UnitProductType.TEMPLATES);
         long currentCount = templateRepository.countByCeremonyId(ceremonyId);
         if (currentCount >= effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_TEMPLATE_LIMIT_EXCEEDED);
@@ -134,9 +136,9 @@ public class TemplateService {
     }
 
     public List<TemplateDto.Response.TemplateSummary> findTemplates(Long organizationId, Long ceremonyId, Long currentUserId) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         return templateRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(ceremonyId).stream()
                 .map(this::toSummary)
@@ -154,10 +156,10 @@ public class TemplateService {
             Long currentUserId,
             DisplayOrderRequest.UpdateDisplayOrders request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Map<Long, Template> templatesById = templateRepository
                 .findAllById(request.getItems().stream().map(DisplayOrderRequest.Item::getId).toList())
@@ -181,9 +183,9 @@ public class TemplateService {
             Long templateId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         return toSummary(findTemplateInCeremonyOrThrow(ceremonyId, templateId));
     }
@@ -199,9 +201,9 @@ public class TemplateService {
             Long templateId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         return buildTemplateInfo(template);
@@ -216,9 +218,9 @@ public class TemplateService {
             int pageIndex,
             float scale
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         return renderPage(template, pageIndex, scale);
@@ -343,10 +345,10 @@ public class TemplateService {
             Long templateId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         if (templateFieldRepository.countByTemplateId(templateId) == 0) {
@@ -362,10 +364,10 @@ public class TemplateService {
             Long organizationId, Long ceremonyId, Long templateId, Long currentUserId,
             TemplateDto.Request.UpdateTitle request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         template.rename(request.getTitle().strip());
         return toSummary(template);
@@ -380,10 +382,10 @@ public class TemplateService {
             Long currentUserId,
             TemplateDto.Request.UpdateTemplate request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         if (isTemplateInUse(templateId)) {
@@ -405,10 +407,10 @@ public class TemplateService {
      */
     @Transactional
     public void deleteTemplate(Long organizationId, Long ceremonyId, Long templateId, Long currentUserId) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         if (isTemplateInUse(templateId)) {
@@ -440,13 +442,13 @@ public class TemplateService {
             Long templateId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
-        ceremonyService.checkCeremonyPlanConfirmed(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
+        ceremonyAccessService.checkCeremonyPlanConfirmed(ceremony);
 
-        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.TEMPLATES);
+        int effectiveLimit = ceremonyCatalogService.calculateEffectiveCapacity(ceremony, UnitProductType.TEMPLATES);
         long currentCount = templateRepository.countByCeremonyId(ceremonyId);
         if (currentCount >= effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_TEMPLATE_LIMIT_EXCEEDED);
@@ -514,15 +516,15 @@ public class TemplateService {
         return toSummary(duplicated);
     }
 
-    public DownloadedTemplate downloadTemplateFile(
+    public DownloadedFile downloadTemplateFile(
             Long organizationId,
             Long ceremonyId,
             Long templateId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         Resource resource;
@@ -531,7 +533,7 @@ public class TemplateService {
         } catch (StorageException e) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_STORAGE_FAILED, e);
         }
-        return new DownloadedTemplate(resource, template.getOriginalFilename());
+        return new DownloadedFile(resource, template.getOriginalFilename());
     }
 
     private Template findTemplateInCeremonyOrThrow(Long ceremonyId, Long templateId) {
@@ -573,9 +575,5 @@ public class TemplateService {
                 template.getCreatedAt(),
                 template.isEnabled()
         );
-    }
-
-    /** 컨트롤러가 {@code Content-Disposition} 헤더를 만드는 데 필요한 파일명을 함께 돌려준다. */
-    public record DownloadedTemplate(Resource resource, String originalFilename) {
     }
 }

@@ -8,21 +8,21 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOnsiteSu
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OnsiteSupportRequestStatus;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductPricePeriod;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductPricePeriod;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyOnsiteSupportRequestRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
-import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminOnsiteSupportRequestDto;
-import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
-import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.ceremony.dto.PlatformAdminOnsiteSupportRequestDto;
+import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -37,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
  * business/onsite-support-negotiation-and-billing-classification-review.md 3.2절
  * (2026-09-12). 이 코드베이스에 없던 "요청 → 관리자가 값을 매김 → 요청자가 수락/거부"
  * 협상 패턴을 새로 도입한다. {@code CeremonyInquiryService}와 같이 파트너 쪽과 관리자 쪽
- * 메서드를 한 서비스에 같이 둔다 — 조직/행사 접근 검사는 {@code CeremonyService}의
+ * 메서드를 한 서비스에 같이 둔다 — 조직/행사 접근 검사는 {@link CeremonyAccessService}의
  * package-private 헬퍼를 재사용한다.
  *
  * <p>쓰기 권한: 파트너 쪽은 신규 권한키 없이 기존 {@code ACTION_CEREMONY_MANAGE}를 재사용
@@ -54,9 +54,10 @@ public class CeremonyOnsiteSupportRequestService {
     private final CeremonyOnsiteSupportRequestRepository ceremonyOnsiteSupportRequestRepository;
     private final CeremonyUnitProductPurchaseRepository ceremonyUnitProductPurchaseRepository;
     private final CeremonyUnitProductPurchaseLineRepository ceremonyUnitProductPurchaseLineRepository;
-    private final UnitProductRepository unitProductRepository;
-    private final CeremonyService ceremonyService;
+    private final CeremonyAccessService ceremonyAccessService;
+    private final CeremonyCatalogService ceremonyCatalogService;
     private final UserRepository userRepository;
+    private final BillingCatalogQueryService billingCatalogQueryService;
     private final RolePermissionService rolePermissionService;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
 
@@ -67,9 +68,9 @@ public class CeremonyOnsiteSupportRequestService {
             Long organizationId, Long ceremonyId, Long currentUserId,
             CeremonyOnsiteSupportRequestDto.Request.CreateRequest request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
 
         CeremonyOnsiteSupportRequest onsiteSupportRequest = CeremonyOnsiteSupportRequest.builder()
                 .ceremony(ceremony)
@@ -85,9 +86,9 @@ public class CeremonyOnsiteSupportRequestService {
     public List<CeremonyOnsiteSupportRequestDto.Response.RequestSummary> findRequests(
             Long organizationId, Long ceremonyId, Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         return ceremonyOnsiteSupportRequestRepository.findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
                 .map(this::toSummary)
@@ -98,13 +99,13 @@ public class CeremonyOnsiteSupportRequestService {
     public CeremonyOnsiteSupportRequestDto.Response.RequestSummary acceptRequest(
             Long organizationId, Long ceremonyId, Long requestId, Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
 
         CeremonyOnsiteSupportRequest onsiteSupportRequest = findRequestInCeremonyOrThrow(ceremonyId, requestId);
         if (onsiteSupportRequest.getStatus() != OnsiteSupportRequestStatus.QUOTED) {
-            throw new ApplicationException(CeremonyErrorCode.ONSITE_SUPPORT_REQUEST_NOT_QUOTED);
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_QUOTED);
         }
 
         CeremonyUnitProductPurchase purchase = createPurchaseFromQuote(ceremony, onsiteSupportRequest);
@@ -117,13 +118,13 @@ public class CeremonyOnsiteSupportRequestService {
     public CeremonyOnsiteSupportRequestDto.Response.RequestSummary declineRequest(
             Long organizationId, Long ceremonyId, Long requestId, Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
 
         CeremonyOnsiteSupportRequest onsiteSupportRequest = findRequestInCeremonyOrThrow(ceremonyId, requestId);
         if (onsiteSupportRequest.getStatus() != OnsiteSupportRequestStatus.QUOTED) {
-            throw new ApplicationException(CeremonyErrorCode.ONSITE_SUPPORT_REQUEST_NOT_QUOTED);
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_QUOTED);
         }
         onsiteSupportRequest.decline();
 
@@ -138,10 +139,10 @@ public class CeremonyOnsiteSupportRequestService {
      * 재사용해 견적을 매긴 관리자를 {@code reviewedBy}로 남긴다.
      */
     private CeremonyUnitProductPurchase createPurchaseFromQuote(Ceremony ceremony, CeremonyOnsiteSupportRequest onsiteSupportRequest) {
-        UnitProduct anchor = unitProductRepository.findFirstByTypeOrderByIdAsc(UnitProductType.ONSITE_SUPPORT_REQUEST)
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND));
+        UnitProduct anchor = billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT_REQUEST)
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CEREMONY_ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND));
         LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
-        UnitProductPricePeriod period = ceremonyService.resolveSellableUnitProductPeriod(anchor, asOfDate);
+        UnitProductPricePeriod period = ceremonyCatalogService.resolveSellableUnitProductPeriod(anchor, asOfDate);
 
         CeremonyUnitProductPurchase purchase = CeremonyUnitProductPurchase.builder().ceremony(ceremony).build();
         ceremonyUnitProductPurchaseRepository.save(purchase);
@@ -166,7 +167,7 @@ public class CeremonyOnsiteSupportRequestService {
 
     /**
      * 조직 横단 목록 — organizationId/ceremonyId/status/requesterKeyword 전부 선택 필터다
-     * ({@code CeremonyService#findUnitProductPurchaseRequests}와 같은 패턴). 조회는
+     * ({@code CeremonyUnitProductPurchaseApprovalService#findUnitProductPurchaseRequests}와 같은 패턴). 조회는
      * PLATFORM_SUPPORT 이상이면 누구나(SecurityConfig가 이미 게이트).
      */
     public Page<PlatformAdminOnsiteSupportRequestDto.Response.RequestSummary> findRequestsAcrossOrganizations(
@@ -183,9 +184,9 @@ public class CeremonyOnsiteSupportRequestService {
         checkAllowed(actingPlatformRole);
 
         CeremonyOnsiteSupportRequest onsiteSupportRequest = ceremonyOnsiteSupportRequestRepository.findById(requestId)
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.ONSITE_SUPPORT_REQUEST_NOT_FOUND));
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_FOUND));
         if (onsiteSupportRequest.getStatus() != OnsiteSupportRequestStatus.REQUESTED) {
-            throw new ApplicationException(CeremonyErrorCode.ONSITE_SUPPORT_REQUEST_NOT_REQUESTED);
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_REQUESTED);
         }
         onsiteSupportRequest.quote(request.getQuotedAmount(), request.getQuotedNote(), adminUserId);
 
@@ -202,9 +203,9 @@ public class CeremonyOnsiteSupportRequestService {
 
     private CeremonyOnsiteSupportRequest findRequestInCeremonyOrThrow(Long ceremonyId, Long requestId) {
         CeremonyOnsiteSupportRequest onsiteSupportRequest = ceremonyOnsiteSupportRequestRepository.findById(requestId)
-                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.ONSITE_SUPPORT_REQUEST_NOT_FOUND));
+                .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_FOUND));
         if (!onsiteSupportRequest.getCeremony().getId().equals(ceremonyId)) {
-            throw new ApplicationException(CeremonyErrorCode.ONSITE_SUPPORT_REQUEST_NOT_FOUND);
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_FOUND);
         }
         return onsiteSupportRequest;
     }

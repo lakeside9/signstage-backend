@@ -25,8 +25,8 @@ import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
-import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminCeremonyInquiryDto;
-import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.ceremony.dto.PlatformAdminCeremonyInquiryDto;
+import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -51,7 +51,7 @@ class CeremonyInquiryServiceTest {
     @Mock
     private CeremonyInquiryMessageRepository ceremonyInquiryMessageRepository;
     @Mock
-    private CeremonyService ceremonyService;
+    private CeremonyAccessService ceremonyAccessService;
     @Mock
     private UserRepository userRepository;
     @Mock
@@ -67,7 +67,7 @@ class CeremonyInquiryServiceTest {
     @BeforeEach
     void setUp() {
         ceremonyInquiryService = new CeremonyInquiryService(
-                ceremonyInquiryRepository, ceremonyInquiryMessageRepository, ceremonyService,
+                ceremonyInquiryRepository, ceremonyInquiryMessageRepository, ceremonyAccessService,
                 userRepository, rolePermissionService, platformAdminAuditLogRecorder
         );
 
@@ -79,10 +79,10 @@ class CeremonyInquiryServiceTest {
 
         actingMember = Member.builder().role(MemberRole.OWNER).build();
 
-        lenient().when(ceremonyService.findCeremonyInOrganizationOrThrow(10L, 100L)).thenReturn(ceremony);
-        lenient().when(ceremonyService.findActiveMemberOrThrow(10L, 1L)).thenReturn(actingMember);
-        lenient().doNothing().when(ceremonyService).checkCeremonyManageAccess(ceremony, actingMember, 1L);
-        lenient().doNothing().when(ceremonyService).checkCeremonyReadAccess(ceremony, actingMember, 1L);
+        lenient().when(ceremonyAccessService.findCeremonyInOrganizationOrThrow(10L, 100L)).thenReturn(ceremony);
+        lenient().when(ceremonyAccessService.findActiveMemberOrThrow(10L, 1L)).thenReturn(actingMember);
+        lenient().doNothing().when(ceremonyAccessService).checkCeremonyManageAccess(ceremony, actingMember, 1L);
+        lenient().doNothing().when(ceremonyAccessService).checkCeremonyReadAccess(ceremony, actingMember, 1L);
     }
 
     private CeremonyInquiry openInquiry() {
@@ -109,7 +109,7 @@ class CeremonyInquiryServiceTest {
         assertThat(response.getStatus()).isEqualTo(InquiryStatus.OPEN.name());
         assertThat(response.getMessages()).hasSize(1);
         assertThat(response.getMessages().get(0).getSenderType()).isEqualTo(InquirySenderType.PARTNER.name());
-        verify(ceremonyService).checkCeremonyManageAccess(ceremony, actingMember, 1L);
+        verify(ceremonyAccessService).checkCeremonyManageAccess(ceremony, actingMember, 1L);
     }
 
     @Test

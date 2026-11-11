@@ -53,7 +53,7 @@ public class MenuService {
      * 검사한다(11장, {@link RolePermissionService#setAllowed}와 같은 이유로 하드코딩만으로
      * 지킨다).
      */
-    public List<MenuDto.Response.MenuAdminRow> getAllMenus(RoleAxis console) {
+    public List<MenuDto.Response.MenuAdminRow> findAllMenus(RoleAxis console) {
         List<Menu> menus = menuRepository.findAllByConsoleOrderByDisplayOrderAsc(console);
         Map<Long, String> labels = resolveLabels(menus);
         return menus.stream()
@@ -72,7 +72,7 @@ public class MenuService {
     }
 
     /** 호출자의 역할이 허용된 메뉴만 걸러 트리로 묶어 반환한다 — 프런트가 다시 걸러낼 필요가 없다(10장). */
-    public List<MenuDto.Response.MenuNode> getMenuTree(RoleAxis console, String roleValue) {
+    public List<MenuDto.Response.MenuNode> retrieveMenuTree(RoleAxis console, String roleValue) {
         List<Menu> activeMenus = menuRepository.findAllByConsoleOrderByDisplayOrderAsc(console).stream()
                 .filter(Menu::isActive)
                 .toList();

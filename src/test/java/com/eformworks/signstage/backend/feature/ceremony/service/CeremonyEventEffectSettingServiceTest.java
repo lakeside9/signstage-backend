@@ -58,7 +58,7 @@ class CeremonyEventEffectSettingServiceTest {
     @Mock
     private CeremonyEventRepository ceremonyEventRepository;
     @Mock
-    private CeremonyService ceremonyService;
+    private CeremonyAccessService ceremonyAccessService;
 
     @InjectMocks
     private CeremonyEventEffectSettingService service;
@@ -201,7 +201,7 @@ class CeremonyEventEffectSettingServiceTest {
     @DisplayName("STARTED 이벤트는 조직 스코프 API로 효과 설정을 바꿀 수 없다")
     void updateEffectSettings_eventLocked_fail() {
         Ceremony ceremony = ceremony();
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event(CeremonyEventStatus.STARTED)));
 
         CeremonyEventEffectSettingDto.Request.UpdateEffectSelections request =
@@ -219,7 +219,7 @@ class CeremonyEventEffectSettingServiceTest {
     @DisplayName("다른 ceremony 소속 이벤트는 찾을 수 없다")
     void updateEffectSettings_eventFromDifferentCeremony_fail() {
         Ceremony ceremony = ceremony();
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
         CeremonyEvent event = event(CeremonyEventStatus.DRAFT);
         ReflectionTestUtils.setField(event.getCeremony(), "id", 999L); // 다른 ceremony 소속으로 위장
         given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));

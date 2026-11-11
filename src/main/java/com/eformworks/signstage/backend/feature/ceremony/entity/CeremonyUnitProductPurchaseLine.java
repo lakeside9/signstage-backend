@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -63,8 +64,8 @@ public class CeremonyUnitProductPurchaseLine extends BaseEntity {
 
     /**
      * {@code currencyCode}/{@code purchasedName}/{@code purchasedTaxCode}는 호출부
-     * ({@code CeremonyService#purchaseUnitProducts})가 그 순간 유효한
-     * {@link UnitProductPricePeriod}를 {@code findEffective}로 조회해 넘긴다 — 이 엔티티는
+     * ({@code CeremonyUnitProductPurchaseService#purchaseUnitProducts})가 그 순간 유효한
+     * {@code UnitProductPricePeriod}를 {@code findEffective}로 조회해 넘긴다 — 이 엔티티는
      * DB 조회를 하지 않는다.
      */
     @Builder

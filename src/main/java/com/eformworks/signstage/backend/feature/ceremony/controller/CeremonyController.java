@@ -6,9 +6,14 @@ import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CustomerQuoteDto;
-import com.eformworks.signstage.backend.feature.ceremony.dto.UnitProductDto;
+import com.eformworks.signstage.backend.feature.billing.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
+import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyCatalogService;
+import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyDeletionService;
+import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyPlanService;
+import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyQuoteService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyService;
+import com.eformworks.signstage.backend.feature.ceremony.service.CeremonyUnitProductPurchaseService;
 import com.eformworks.signstage.backend.feature.ceremony.service.CustomerQuoteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -48,6 +53,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class CeremonyController {
 
     private final CeremonyService ceremonyService;
+    private final CeremonyDeletionService ceremonyDeletionService;
+    private final CeremonyPlanService ceremonyPlanService;
+    private final CeremonyUnitProductPurchaseService ceremonyUnitProductPurchaseService;
+    private final CeremonyCatalogService ceremonyCatalogService;
+    private final CeremonyQuoteService ceremonyQuoteService;
     private final CustomerQuoteService customerQuoteService;
     private final TraceIdProvider traceIdProvider;
 
@@ -126,7 +136,7 @@ public class CeremonyController {
             @PathVariable Long organizationId,
             @PathVariable Long ceremonyId
     ) {
-        ceremonyService.deleteCeremony(organizationId, ceremonyId, currentUser.userId());
+        ceremonyDeletionService.deleteCeremony(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 
@@ -135,14 +145,14 @@ public class CeremonyController {
             description = "플랜이 확정되기 전(DRAFT)에만 가능하다. 호출할 때마다 플랜 변경 이력이 한 행씩 남는다."
     )
     @PutMapping("/{ceremonyId}/plan")
-    public ApiResponse<CeremonyDto.Response.CeremonySummary> changePlan(
+    public ApiResponse<CeremonyDto.Response.CeremonySummary> updatePlan(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long organizationId,
             @PathVariable Long ceremonyId,
             @Valid @RequestBody CeremonyDto.Request.ChangePlan request
     ) {
         CeremonyDto.Response.CeremonySummary response =
-                ceremonyService.changePlan(organizationId, ceremonyId, currentUser.userId(), request);
+                ceremonyPlanService.updatePlan(organizationId, ceremonyId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -157,7 +167,7 @@ public class CeremonyController {
             @PathVariable Long ceremonyId
     ) {
         CeremonyDto.Response.CeremonySummary response =
-                ceremonyService.clearPlan(organizationId, ceremonyId, currentUser.userId());
+                ceremonyPlanService.clearPlan(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -173,7 +183,7 @@ public class CeremonyController {
             @PathVariable Long ceremonyId
     ) {
         CeremonyDto.Response.CeremonySummary response =
-                ceremonyService.confirmPlan(organizationId, ceremonyId, currentUser.userId());
+                ceremonyPlanService.confirmPlan(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -188,7 +198,7 @@ public class CeremonyController {
             @PathVariable Long ceremonyId
     ) {
         List<CeremonyDto.Response.PlanHistorySummary> response =
-                ceremonyService.findPlanHistory(organizationId, ceremonyId, currentUser.userId());
+                ceremonyPlanService.findPlanHistory(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -203,7 +213,7 @@ public class CeremonyController {
             @PathVariable Long ceremonyId
     ) {
         List<CeremonyDto.Response.CartLineSummary> response =
-                ceremonyService.retrieveCart(organizationId, ceremonyId, currentUser.userId());
+                ceremonyUnitProductPurchaseService.retrieveCart(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -220,7 +230,7 @@ public class CeremonyController {
             @Valid @RequestBody CeremonyDto.Request.AddToCart request
     ) {
         List<CeremonyDto.Response.CartLineSummary> response =
-                ceremonyService.addToCart(organizationId, ceremonyId, currentUser.userId(), request);
+                ceremonyUnitProductPurchaseService.addToCart(organizationId, ceremonyId, currentUser.userId(), request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -234,7 +244,7 @@ public class CeremonyController {
             @Valid @RequestBody CeremonyDto.Request.UpdateCartLine request
     ) {
         List<CeremonyDto.Response.CartLineSummary> response =
-                ceremonyService.updateCartLine(organizationId, ceremonyId, currentUser.userId(), unitProductId, request);
+                ceremonyUnitProductPurchaseService.updateCartLine(organizationId, ceremonyId, currentUser.userId(), unitProductId, request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -247,7 +257,7 @@ public class CeremonyController {
             @PathVariable Long unitProductId
     ) {
         List<CeremonyDto.Response.CartLineSummary> response =
-                ceremonyService.removeCartLine(organizationId, ceremonyId, currentUser.userId(), unitProductId);
+                ceremonyUnitProductPurchaseService.removeCartLine(organizationId, ceremonyId, currentUser.userId(), unitProductId);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -264,7 +274,7 @@ public class CeremonyController {
             @PathVariable Long ceremonyId
     ) {
         CeremonyDto.Response.UnitProductPurchaseSummary response =
-                ceremonyService.purchaseUnitProducts(organizationId, ceremonyId, currentUser.userId());
+                ceremonyUnitProductPurchaseService.purchaseUnitProducts(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -279,7 +289,7 @@ public class CeremonyController {
             @PathVariable Long ceremonyId
     ) {
         List<CeremonyDto.Response.UnitProductPurchaseSummary> response =
-                ceremonyService.findUnitProductPurchases(organizationId, ceremonyId, currentUser.userId());
+                ceremonyUnitProductPurchaseService.findUnitProductPurchases(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -295,7 +305,7 @@ public class CeremonyController {
             @PathVariable Long ceremonyId
     ) {
         List<UnitProductDto.Response.UnitProductSummary> response =
-                ceremonyService.retrieveApplicableUnitProducts(organizationId, ceremonyId, currentUser.userId());
+                ceremonyCatalogService.retrieveApplicableUnitProducts(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -311,7 +321,7 @@ public class CeremonyController {
             @PathVariable Long ceremonyId
     ) {
         List<UnitProductDto.Response.UnitProductSummary> response =
-                ceremonyService.retrievePurchasableUnitProducts(organizationId, ceremonyId, currentUser.userId());
+                ceremonyUnitProductPurchaseService.retrievePurchasableUnitProducts(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -327,7 +337,7 @@ public class CeremonyController {
             @PathVariable Long ceremonyId
     ) {
         CeremonyDto.Response.CapacityStatus response =
-                ceremonyService.retrieveCapacityStatus(organizationId, ceremonyId, currentUser.userId());
+                ceremonyCatalogService.retrieveCapacityStatus(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -343,7 +353,7 @@ public class CeremonyController {
             @PathVariable Long ceremonyId
     ) {
         CeremonyDto.Response.EstimatedTotal response =
-                ceremonyService.calculateEstimatedTotal(organizationId, ceremonyId, currentUser.userId());
+                ceremonyQuoteService.calculateEstimatedTotal(organizationId, ceremonyId, currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

@@ -65,8 +65,8 @@ public class IdentityController {
 
     @Operation(summary = "내 정보 조회")
     @GetMapping("/me")
-    public ApiResponse<IdentityDto.Response.Me> getMe(@AuthenticationPrincipal CurrentUser currentUser) {
-        IdentityDto.Response.Me response = identityService.getMe(currentUser.userId());
+    public ApiResponse<IdentityDto.Response.Me> retrieveMe(@AuthenticationPrincipal CurrentUser currentUser) {
+        IdentityDto.Response.Me response = identityService.retrieveMe(currentUser.userId());
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 
@@ -86,11 +86,11 @@ public class IdentityController {
 
     @Operation(summary = "내 비밀번호 변경", description = "현재 비밀번호 확인 후 변경한다.")
     @PutMapping("/me/password")
-    public ApiResponse<Void> changeMyPassword(
+    public ApiResponse<Void> updateMyPassword(
             @AuthenticationPrincipal CurrentUser currentUser,
             @Valid @RequestBody IdentityDto.Request.ChangeMyPassword request
     ) {
-        identityService.changeMyPassword(currentUser.userId(), request);
+        identityService.updateMyPassword(currentUser.userId(), request);
         return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 

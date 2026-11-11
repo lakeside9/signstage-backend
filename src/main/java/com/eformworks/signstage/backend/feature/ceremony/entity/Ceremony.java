@@ -3,6 +3,10 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
+import com.eformworks.signstage.backend.core.money.DiscountType;
+import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.billing.entity.DiscountInfo;
+import com.eformworks.signstage.backend.feature.billing.entity.OrganizationSubscription;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import jakarta.persistence.AttributeOverride;
@@ -47,7 +51,7 @@ import lombok.NoArgsConstructor;
  * business/organization-event-discount-pricing-review.md 4.2 결정. NULL sentinel 없이 항상
  * 구체적인 값을 갖고("할인 없음"은 discountValue=0으로 표현), 플랫폼 관리자(PLATFORM_OPS
  * 이상)만 바꿀 수 있다(4.4 결정). 품목 자체의 할인(조직×품목 오버라이드 포함,
- * {@link com.eformworks.signstage.backend.feature.ceremony.service.OrganizationDiscountService})은
+ * {@link com.eformworks.signstage.backend.feature.billing.service.OrganizationDiscountService})은
  * 이 필드와 별개로 각 스냅샷 컬럼(예: {@link CeremonyPlanHistory#getPlanDiscountType()})에
  * 담긴다(같은 문서 4.1절, 2026-08-21 재검토).
  */
@@ -228,7 +232,7 @@ public class Ceremony extends BaseEntity {
     }
 
     /**
-     * DRAFT 상태에서만 플랜을 바꾼다 — 상태 검증은 서비스({@code CeremonyService#changePlan})가
+     * DRAFT 상태에서만 플랜을 바꾼다 — 상태 검증은 서비스({@code CeremonyPlanService#updatePlan})가
      * 하고 이 메서드는 필드만 바꾼다(다른 상태 전이 메서드와 같은 컨벤션). 호출할 때마다
      * {@code CeremonyPlanHistory}에 이력 한 행을 남기는 것도 서비스 몫이다 —
      * signstage-docs business/ceremony-plan-confirmation-review.md 3.2/3.4절.

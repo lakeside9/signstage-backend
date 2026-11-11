@@ -16,7 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 결과 PDF 위변조 검증(signstage-docs business/ceremony-feature-migration-review.md §2.5).
- * 조직 스코프가 없는 완전히 공개된 API라 {@link CeremonyService}의 조직/멤버 검증 헬퍼를
+ * 조직 스코프가 없는 완전히 공개된 API라 {@link CeremonyAccessService}의 조직/멤버 검증 헬퍼를
  * 재사용하지 않는다 — {@link SignerPortalService}와 같은 성격이다.
  *
  * <p>업로드된 파일 바이트 그대로의 SHA-256을 {@link CeremonyResult#getChecksum()}과 대조한다.

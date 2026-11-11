@@ -6,10 +6,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventDto;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyEventLogDto;
-import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
+import com.eformworks.signstage.backend.core.web.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.StrokeDataDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.ActorType;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventAction;
@@ -18,7 +19,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventOpt
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyTemplate;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
 import com.eformworks.signstage.backend.feature.ceremony.entity.StrokeData;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
@@ -30,7 +31,6 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEven
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventOptionalFeatureRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.SignerRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
@@ -55,8 +55,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * business/ceremony-feature-migration-review.md 2.2절(라이프사이클), business/
  * ceremony-billing-options-review.md 4.5절(한도 하드 블록)/4.11절(구매·적용 분리) 참고.
  *
- * <p>조직/행사 접근 검사와 유효 한도 계산은 {@link CeremonyService}의 package-private
- * 헬퍼를 그대로 재사용한다 — 같은 패키지 내 서비스 간 공유는 기존
+ * <p>조직/행사 접근 검사({@link CeremonyAccessService})와 유효 한도 계산({@link CeremonyCatalogService})은
+ * package-private 헬퍼를 그대로 재사용한다 — 같은 패키지 내 서비스 간 공유는 기존
  * {@code PlatformAdminOrganizationService.saveOrganizationWithOwner}와 같은 관례다.
  */
 @Service
@@ -66,16 +66,17 @@ public class CeremonyEventService {
 
     private final CeremonyEventRepository ceremonyEventRepository;
     private final CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
-    private final UnitProductRepository unitProductRepository;
     private final CeremonyTemplateRepository ceremonyTemplateRepository;
     private final TemplateRepository templateRepository;
     private final TemplateFieldRepository templateFieldRepository;
     private final CeremonyEventLogRepository ceremonyEventLogRepository;
     private final StrokeDataRepository strokeDataRepository;
     private final SignerRepository signerRepository;
+    private final BillingCatalogQueryService billingCatalogQueryService;
     private final CeremonyRealtimeNotifier ceremonyRealtimeNotifier;
     private final SignerPresenceService signerPresenceService;
-    private final CeremonyService ceremonyService;
+    private final CeremonyAccessService ceremonyAccessService;
+    private final CeremonyCatalogService ceremonyCatalogService;
     private final CeremonyEventEffectSettingService ceremonyEventEffectSettingService;
     private final CeremonyEventSignerStateService ceremonyEventSignerStateService;
 
@@ -86,11 +87,11 @@ public class CeremonyEventService {
             Long currentUserId,
             CeremonyEventDto.Request.CreateCeremonyEvent request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
-        ceremonyService.checkCeremonyPlanConfirmed(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
+        ceremonyAccessService.checkCeremonyPlanConfirmed(ceremony);
 
         CeremonyEventType eventType = parseEventType(request.getEventType());
         // REHEARSAL은 TEST/MAIN과 별도인 자기 용량 버킷(BillingPlan.maxRehearsalEvents)을 쓴다
@@ -102,7 +103,7 @@ public class CeremonyEventService {
         };
 
         // 한도 하드 블록(4.5절) — 유효 한도 = 플랜 기본값 + Σ 추가구매.
-        int effectiveLimit = ceremonyService.calculateEffectiveCapacity(ceremony, capacityType);
+        int effectiveLimit = ceremonyCatalogService.calculateEffectiveCapacity(ceremony, capacityType);
         long typeCount = ceremonyEventRepository.countByCeremonyIdAndEventType(ceremonyId, eventType);
         if (typeCount >= effectiveLimit) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_LIMIT_EXCEEDED);
@@ -145,9 +146,9 @@ public class CeremonyEventService {
             Long ceremonyId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         return ceremonyEventRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(ceremonyId).stream()
                 .map(event -> toSummary(event, retrieveAppliedOptionalFeatureIds(event)))
@@ -166,10 +167,10 @@ public class CeremonyEventService {
             Long currentUserId,
             DisplayOrderRequest.UpdateDisplayOrders request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Map<Long, CeremonyEvent> eventsById = ceremonyEventRepository
                 .findAllById(request.getItems().stream().map(DisplayOrderRequest.Item::getId).toList())
@@ -193,9 +194,9 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         return toSummary(event, retrieveAppliedOptionalFeatureIds(event));
@@ -213,10 +214,10 @@ public class CeremonyEventService {
             Long currentUserId,
             CeremonyEventDto.Request.UpdateCeremonyEvent request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         checkEventNotLocked(event);
@@ -250,10 +251,10 @@ public class CeremonyEventService {
      */
     @Transactional
     public void deleteCeremonyEvent(Long organizationId, Long ceremonyId, Long eventId, Long currentUserId) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         checkEventNotLocked(event);
@@ -275,10 +276,10 @@ public class CeremonyEventService {
             Long currentUserId,
             CeremonyEventDto.Request.UpdateOptionalFeatures request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
 
@@ -295,15 +296,15 @@ public class CeremonyEventService {
      * 검증·저장 로직을 공유한다.
      */
     private List<Long> applyOptionalFeatures(Ceremony ceremony, CeremonyEvent event, List<Long> requestedIds) {
-        List<Long> applicableIds = ceremonyService.retrieveApplicableUnitProductIds(ceremony);
+        List<Long> applicableIds = ceremonyCatalogService.retrieveApplicableUnitProductIds(ceremony);
         if (!applicableIds.containsAll(requestedIds)) {
             throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_PURCHASED);
         }
 
         List<UnitProduct> unitProducts = requestedIds.isEmpty()
                 ? List.of()
-                : unitProductRepository.findAllByIdIn(requestedIds);
-        ceremonyService.checkExclusivityGroups(unitProducts);
+                : billingCatalogQueryService.findUnitProducts(requestedIds);
+        ceremonyCatalogService.checkExclusivityGroups(unitProducts);
 
         // flush()가 반드시 필요하다: deleteAllByCeremonyEventId는 파생 delete 쿼리라 DELETE SQL을
         // 즉시 내보내지 않는다(플러시 시점까지 지연). CeremonyEventOptionalFeature는 IDENTITY
@@ -341,10 +342,10 @@ public class CeremonyEventService {
             Long currentUserId,
             CeremonyEventDto.Request.MapTemplate request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         checkEventNotLocked(event);
@@ -391,10 +392,10 @@ public class CeremonyEventService {
             Long mappingId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         checkEventNotLocked(event);
@@ -414,9 +415,9 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         findEventInCeremonyOrThrow(ceremonyId, eventId);
         return ceremonyTemplateRepository.findAllByCeremonyEventId(eventId).stream()
@@ -436,10 +437,10 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.DRAFT) {
@@ -461,10 +462,10 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyForUpdateOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.READY) {
@@ -504,10 +505,10 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.STARTED) {
@@ -535,10 +536,10 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.STARTED) {
@@ -566,10 +567,10 @@ public class CeremonyEventService {
             Long signerId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         if (event.getStatus() != CeremonyEventStatus.STARTED) {
@@ -610,10 +611,10 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyForUpdateOrThrow(ceremonyId, eventId);
         if (!canCheckOrResetSignatures(event)) {
@@ -661,10 +662,10 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyForUpdateOrThrow(ceremonyId, eventId);
         if (!canCheckOrResetSignatures(event)) {
@@ -738,9 +739,9 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         findEventInCeremonyOrThrow(ceremonyId, eventId);
         return ceremonyEventLogRepository.findAllByCeremonyEventId(eventId).stream()
@@ -759,9 +760,9 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         findEventInCeremonyOrThrow(ceremonyId, eventId);
         return strokeDataRepository.findAllByCeremonyEventId(eventId).stream()
@@ -819,15 +820,15 @@ public class CeremonyEventService {
             Long eventId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         return collectFinishRequiredSignerIds(event).stream()
                 .map(signerId -> new CeremonyEventDto.Response.SignerCompletionStatus(
                         signerId, ceremonyEventSignerStateService.isSignerComplete(eventId, signerId),
-                        signerPresenceService.getConnectionCount(eventId, signerId)
+                        signerPresenceService.countConnections(eventId, signerId)
                 ))
                 .toList();
     }

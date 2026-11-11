@@ -10,8 +10,8 @@ import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionOptionRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEffectDefinitionRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
-import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
-import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Comparator;

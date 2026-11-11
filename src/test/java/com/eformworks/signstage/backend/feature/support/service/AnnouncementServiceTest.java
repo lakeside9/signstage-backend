@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verify;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
-import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.support.dto.AnnouncementDto;
 import com.eformworks.signstage.backend.feature.support.entity.Announcement;
 import com.eformworks.signstage.backend.feature.support.error.SupportErrorCode;

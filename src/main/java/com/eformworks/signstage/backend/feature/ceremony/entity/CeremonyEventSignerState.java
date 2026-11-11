@@ -23,7 +23,7 @@ import lombok.NoArgsConstructor;
  * {@code ceremony_event_logs}를 최신순으로 훑어 "가장 최근 로그가 SIGNATURE_COMPLETE인가"로
  * 판정했다({@code SignerPortalService}/{@code CeremonyEventService}에 각각 있던
  * {@code isSignerSignatureComplete}) — 이 행 하나만 보면 되도록 대체한다
- * ({@link CeremonyEventSignerStateService}).
+ * ({@code CeremonyEventSignerStateService}).
  */
 @Entity
 @Table(name = "ceremony_event_signer_states")

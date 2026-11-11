@@ -29,13 +29,13 @@ public class OrganizationConsoleService {
     private final MenuService menuService;
     private final RolePermissionService rolePermissionService;
 
-    public List<MenuDto.Response.MenuNode> getMyMenuTree(Long userId) {
+    public List<MenuDto.Response.MenuNode> retrieveMyMenuTree(Long userId) {
         return resolveMyRole(userId)
-                .map(role -> menuService.getMenuTree(RoleAxis.ORGANIZATION, role.name()))
+                .map(role -> menuService.retrieveMenuTree(RoleAxis.ORGANIZATION, role.name()))
                 .orElseGet(List::of);
     }
 
-    public Set<String> getMyPermissionKeys(Long userId) {
+    public Set<String> retrieveMyPermissionKeys(Long userId) {
         return resolveMyRole(userId)
                 .map(role -> rolePermissionService.allowedKeys(role.name()))
                 .orElseGet(Set::of);

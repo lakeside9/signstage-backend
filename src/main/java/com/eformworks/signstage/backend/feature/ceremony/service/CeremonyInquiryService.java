@@ -15,9 +15,9 @@ import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
-import com.eformworks.signstage.backend.feature.platformadmin.dto.PlatformAdminCeremonyInquiryDto;
-import com.eformworks.signstage.backend.feature.platformadmin.entity.PlatformAdminAction;
-import com.eformworks.signstage.backend.feature.platformadmin.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.ceremony.dto.PlatformAdminCeremonyInquiryDto;
+import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
+import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * business/partner-support-center-review.md 5장. 이 코드베이스에 아직 없던 "헤더+메시지
  * 대화 스레드" 패턴을 새로 도입한다(2.4절에서 확인한 갭). {@code CeremonyService}처럼 파트너
  * 쪽과 관리자 쪽 메서드를 한 서비스에 같이 둔다({@code approveUnitProductPurchase}류와 같은
- * 관례) — 조직/행사 접근 검사는 {@code CeremonyService}의 package-private 헬퍼를 그대로
+ * 관례) — 조직/행사 접근 검사는 {@link CeremonyAccessService}의 package-private 헬퍼를 그대로
  * 재사용한다(SignerService/TemplateService와 같은 원칙).
  *
  * <p>쓰기 권한은 새 권한키를 만들지 않고 기존 {@code ACTION_CEREMONY_MANAGE}(파트너 쪽,
@@ -48,7 +48,7 @@ public class CeremonyInquiryService {
 
     private final CeremonyInquiryRepository ceremonyInquiryRepository;
     private final CeremonyInquiryMessageRepository ceremonyInquiryMessageRepository;
-    private final CeremonyService ceremonyService;
+    private final CeremonyAccessService ceremonyAccessService;
     private final UserRepository userRepository;
     private final RolePermissionService rolePermissionService;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
@@ -59,9 +59,9 @@ public class CeremonyInquiryService {
     public CeremonyInquiryDto.Response.InquiryDetail createInquiry(
             Long organizationId, Long ceremonyId, Long currentUserId, CeremonyInquiryDto.Request.CreateInquiry request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
 
         LocalDateTime now = LocalDateTime.now();
         CeremonyInquiry inquiry = CeremonyInquiry.builder()
@@ -84,9 +84,9 @@ public class CeremonyInquiryService {
     public List<CeremonyInquiryDto.Response.InquirySummary> findInquiries(
             Long organizationId, Long ceremonyId, Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         return ceremonyInquiryRepository.findAllByCeremonyIdOrderByLastMessageAtDesc(ceremonyId).stream()
                 .map(this::toSummary)
@@ -96,9 +96,9 @@ public class CeremonyInquiryService {
     public CeremonyInquiryDto.Response.InquiryDetail findInquiry(
             Long organizationId, Long ceremonyId, Long inquiryId, Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         CeremonyInquiry inquiry = findInquiryInCeremonyOrThrow(ceremonyId, inquiryId);
         return toDetail(inquiry, ceremonyInquiryMessageRepository.findAllByInquiryIdOrderByCreatedAtAsc(inquiryId));
@@ -109,9 +109,9 @@ public class CeremonyInquiryService {
             Long organizationId, Long ceremonyId, Long inquiryId, Long currentUserId,
             CeremonyInquiryDto.Request.AddMessage request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
 
         CeremonyInquiry inquiry = findInquiryInCeremonyOrThrow(ceremonyId, inquiryId);
         checkNotClosed(inquiry);
@@ -132,9 +132,9 @@ public class CeremonyInquiryService {
     public CeremonyInquiryDto.Response.InquiryDetail closeInquiry(
             Long organizationId, Long ceremonyId, Long inquiryId, Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
 
         CeremonyInquiry inquiry = findInquiryInCeremonyOrThrow(ceremonyId, inquiryId);
         checkNotClosed(inquiry);
@@ -147,7 +147,7 @@ public class CeremonyInquiryService {
 
     /**
      * 조직 횡단 목록 — organizationId/ceremonyId/status/requesterKeyword/ceremonyTitle 전부
-     * 선택 필터다({@code CeremonyService#findUnitProductPurchaseRequests}와 같은 패턴). 조회는
+     * 선택 필터다({@code CeremonyUnitProductPurchaseApprovalService#findUnitProductPurchaseRequests}와 같은 패턴). 조회는
      * PLATFORM_SUPPORT 이상이면 누구나(SecurityConfig가 이미 게이트, 별도 checkAllowed 없음).
      */
     public Page<PlatformAdminCeremonyInquiryDto.Response.InquirySummary> findInquiriesAcrossOrganizations(

@@ -2,7 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.repository;
 
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -14,7 +14,7 @@ public interface CeremonyUnitProductPurchaseLineRepository extends JpaRepository
     /** 요청자 본인의 이력 조회 화면용 — 여러 구매 요청의 줄을 한 번에 모은다. */
     List<CeremonyUnitProductPurchaseLine> findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(Long ceremonyId);
 
-    /** 유효 한도 계산용 — APPROVED만 넘겨서 쓴다({@code CeremonyService#calculateEffectiveCapacity}). */
+    /** 유효 한도 계산용 — APPROVED만 넘겨서 쓴다({@code CeremonyCatalogService#calculateEffectiveCapacity}). */
     List<CeremonyUnitProductPurchaseLine> findAllByPurchase_CeremonyIdAndUnitProduct_TypeAndPurchase_Status(
             Long ceremonyId,
             UnitProductType type,
@@ -33,7 +33,7 @@ public interface CeremonyUnitProductPurchaseLineRepository extends JpaRepository
 
     /**
      * "지금까지 담은/구매한 수량 합"을 계산하는 데 쓴다 — 최대 구매 수량 검사
-     * ({@code CeremonyService#checkPurchaseQuantity}, 2026-09-12). REJECTED는 셈에서 뺀다(위
+     * ({@code CeremonyUnitProductPurchaseService#checkPurchaseQuantity}, 2026-09-12). REJECTED는 셈에서 뺀다(위
      * {@code existsBy...}와 같은 이유).
      */
     List<CeremonyUnitProductPurchaseLine> findAllByPurchase_CeremonyIdAndUnitProduct_IdAndPurchase_StatusIn(

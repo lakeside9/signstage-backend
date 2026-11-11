@@ -25,6 +25,32 @@ public enum IdentityErrorCode implements ErrorCode {
             "IDENTITY_EMAIL_CHANGE_NOT_ALLOWED",
             HttpStatus.FORBIDDEN,
             "이메일은 로그인 아이디로도 쓰이고 있어 변경할 수 없습니다."
+    ),
+    /**
+     * 아래 5개는 플랫폼 관리자 사용자·계정 관리({@code PlatformAdminUserService}) 오류다. 2026-11-11
+     * {@code feature.platformadmin}을 identity로 합치면서 옛 {@code PlatformAdminErrorCode}에서
+     * 옮겼다(code 값 접두어도 {@code PLATFORM_ADMIN_}에서 {@code IDENTITY_}로 바꿨다).
+     */
+    USER_NOT_FOUND("IDENTITY_USER_NOT_FOUND", HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+    CANNOT_TARGET_SELF(
+            "IDENTITY_CANNOT_TARGET_SELF",
+            HttpStatus.FORBIDDEN,
+            "본인 계정은 이 기능의 대상으로 지정할 수 없습니다."
+    ),
+    NOT_A_PLATFORM_ADMIN(
+            "IDENTITY_NOT_A_PLATFORM_ADMIN",
+            HttpStatus.CONFLICT,
+            "플랫폼 관리자 권한이 없는 계정입니다."
+    ),
+    USER_ALREADY_WITHDRAWN(
+            "IDENTITY_USER_ALREADY_WITHDRAWN",
+            HttpStatus.CONFLICT,
+            "이미 탈퇴 처리된 계정입니다."
+    ),
+    CANNOT_WITHDRAW_PLATFORM_ADMIN(
+            "IDENTITY_CANNOT_WITHDRAW_PLATFORM_ADMIN",
+            HttpStatus.CONFLICT,
+            "플랫폼 관리자 권한을 가진 계정은 탈퇴시킬 수 없습니다. 먼저 관리자 권한을 해제해주세요."
     );
 
     private final String code;

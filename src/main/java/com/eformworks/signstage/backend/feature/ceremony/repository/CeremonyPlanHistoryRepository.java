@@ -15,7 +15,7 @@ public interface CeremonyPlanHistoryRepository extends AppendOnlyRepository<Cere
 
     /**
      * "지금 이 행사가 쓰는 플랜 조건"의 근거 — 카탈로그(BillingPlan)가 나중에 바뀌어도 이 스냅샷은
-     * 안 바뀐다. {@code CeremonyService#calculateEffectiveCapacity}가 라이브 조회 대신 이걸 쓴다.
+     * 안 바뀐다. {@code CeremonyCatalogService#calculateEffectiveCapacity}가 라이브 조회 대신 이걸 쓴다.
      */
     Optional<CeremonyPlanHistory> findFirstByCeremonyIdOrderByCreatedAtDesc(Long ceremonyId);
 
@@ -27,7 +27,7 @@ public interface CeremonyPlanHistoryRepository extends AppendOnlyRepository<Cere
     boolean existsByBillingPlanId(Long billingPlanId);
 
     /**
-     * 플랜이 확정되지 않은(DRAFT) 행사 삭제({@code CeremonyService#deleteCeremony}) 시 이
+     * 플랜이 확정되지 않은(DRAFT) 행사 삭제({@code CeremonyDeletionService#deleteCeremony}) 시 이
      * 행사 자신의 플랜 선택 이력을 함께 지운다 — {@code AppendOnlyRepository}는 delete를
      * 노출하지 않지만 커스텀 쿼리는 예외다({@code UnitProductHistoryRepository.deleteAllByUnitProductId}
      * 와 같은 패턴). 호출 전

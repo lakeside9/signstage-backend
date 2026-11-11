@@ -32,14 +32,14 @@ public class SignerPresenceService {
         }
     }
 
-    public synchronized int getConnectionCount(Long eventId, Long signerId) {
+    public synchronized int countConnections(Long eventId, Long signerId) {
         return (int) sessions.values().stream()
                 .filter(c -> c.eventId().equals(eventId) && c.signerId().equals(signerId)).count();
     }
 
     private void publish(Connection connection) {
         notifier.notifySignerPresence(connection.eventId(), connection.signerId(),
-                getConnectionCount(connection.eventId(), connection.signerId()));
+                countConnections(connection.eventId(), connection.signerId()));
     }
 
     private record Connection(String subscriptionId, Long eventId, Long signerId) {}

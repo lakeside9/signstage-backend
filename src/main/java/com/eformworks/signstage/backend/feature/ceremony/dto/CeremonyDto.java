@@ -1,5 +1,8 @@
 package com.eformworks.signstage.backend.feature.ceremony.dto;
 
+import com.eformworks.signstage.backend.feature.billing.dto.UnitProductDto;
+import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -34,7 +37,7 @@ public final class CeremonyDto {
              * 생략 가능(2026-09-10, 사용자 요청 — signstage-docs
              * business/ceremony-registration-flow-and-billing-tab-separation-review.md 정정,
              * {@code ceremony-billing-options-review.md} 4.10절 "생성 시 필수" 결정을 뒤집었다).
-             * 생략하면 플랜 없이 DRAFT로 생성되고, 이미 있는 {@code changePlan}을 최초 선택으로
+             * 생략하면 플랜 없이 DRAFT로 생성되고, 이미 있는 {@code updatePlan}을 최초 선택으로
              * 그대로 재사용한다.
              */
             private Long billingPlanId;
@@ -208,6 +211,33 @@ public final class CeremonyDto {
             private final String location;
             private final LocalDateTime startsAt;
             private final LocalDateTime endsAt;
+
+            public static CeremonySummary from(Ceremony ceremony) {
+                return new CeremonySummary(
+                        ceremony.getId(),
+                        ceremony.getOrganization().getId(),
+                        ceremony.getBillingPlan() != null ? ceremony.getBillingPlan().getId() : null,
+                        ceremony.getCurrencyCode(),
+                        ceremony.getCurrencyFractionDigits(),
+                        ceremony.getTimeZoneId(),
+                        ceremony.getTitle(),
+                        ceremony.getDescription(),
+                        ceremony.getStatus().name(),
+                        ceremony.getOrganizingInstitution(),
+                        ceremony.getOrganizingDepartment(),
+                        ceremony.getContactName(),
+                        ceremony.getContactTitle(),
+                        ceremony.getContactPhone(),
+                        ceremony.getContactEmail(),
+                        ceremony.getFinalDiscount().getDiscountType().name(),
+                        ceremony.getFinalDiscount().getDiscountValue(),
+                        ceremony.getCreatedBy(),
+                        ceremony.getCreatedAt(),
+                        ceremony.getLocation(),
+                        ceremony.getStartsAt(),
+                        ceremony.getEndsAt()
+                );
+            }
         }
 
         /** 구매 요청 한 줄 — 단위 상품 하나 + 수량 + 구매 시점 스냅샷(할인 없음). */
@@ -223,6 +253,19 @@ public final class CeremonyDto {
             private final String purchasedName;
             private final BigDecimal purchasedSalePrice;
             private final String purchasedTaxCode;
+
+            public static UnitProductPurchaseLineSummary from(CeremonyUnitProductPurchaseLine line) {
+                return new UnitProductPurchaseLineSummary(
+                        line.getId(),
+                        line.getUnitProduct().getId(),
+                        line.getUnitProduct().getType().name(),
+                        line.getQuantity(),
+                        line.getCurrencyCode(),
+                        line.getPurchasedName(),
+                        line.getPurchasedSalePrice(),
+                        line.getPurchasedTaxCode()
+                );
+            }
         }
 
         /**

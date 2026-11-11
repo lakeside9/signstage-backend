@@ -4,9 +4,9 @@ import com.eformworks.signstage.backend.core.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 
 /**
- * feature.ceremony 업무 오류. 1라운드(과금 카탈로그) 코드에 2라운드(Ceremony/CeremonyEvent 본체)
- * 코드를 추가했다. 접근 권한 실패는 별도 코드를 두지 않고 기존 MemberService 관례대로
- * {@code CommonErrorCode.ACCESS_DENIED}를 재사용한다.
+ * feature.ceremony 업무 오류. 과금 카탈로그·조직 할인·구독 코드는 2026-11-11
+ * {@code BillingErrorCode}(feature.billing)로 분리했다. 접근 권한 실패는 별도 코드를 두지 않고
+ * 기존 MemberService 관례대로 {@code CommonErrorCode.ACCESS_DENIED}를 재사용한다.
  */
 public enum CeremonyErrorCode implements ErrorCode {
 
@@ -15,32 +15,10 @@ public enum CeremonyErrorCode implements ErrorCode {
 
     INVALID_SCHEDULE("CEREMONY_INVALID_SCHEDULE", HttpStatus.BAD_REQUEST, "종료일시는 시작일시보다 빠를 수 없습니다."),
 
-    BILLING_PLAN_NOT_FOUND("CEREMONY_BILLING_PLAN_NOT_FOUND", HttpStatus.NOT_FOUND, "과금 플랜을 찾을 수 없습니다."),
-    BILLING_PLAN_IN_USE(
-            "CEREMONY_BILLING_PLAN_IN_USE",
-            HttpStatus.CONFLICT,
-            "행사에 적용되었거나 조직 구독·할인 오버라이드에 사용된 적이 있는 과금 플랜은 삭제할 수 없습니다."
-    ),
     CURRENCY_MISMATCH(
             "CEREMONY_CURRENCY_MISMATCH",
             HttpStatus.CONFLICT,
             "행사와 과금 상품의 통화가 일치하지 않습니다."
-    ),
-    TAX_POLICY_NOT_FOUND(
-            "CEREMONY_TAX_POLICY_NOT_FOUND",
-            HttpStatus.CONFLICT,
-            "거래일에 적용할 수 있는 세금 정책을 찾을 수 없습니다."
-    ),
-    /**
-     * {@code UnitProduct} 통합 카탈로그(signstage-docs
-     * business/billing-catalog-unit-product-model-redesign-review.md, 2026-09-10)의 오류 코드 —
-     * 옛 {@code OPTIONAL_FEATURE_*}/{@code CAPACITY_ADDON_*} 카탈로그 코드를 대체했다.
-     */
-    UNIT_PRODUCT_NOT_FOUND("CEREMONY_UNIT_PRODUCT_NOT_FOUND", HttpStatus.NOT_FOUND, "단위 상품을 찾을 수 없습니다."),
-    UNIT_PRODUCT_EFFECT_BUNDLE_ONLY(
-            "CEREMONY_UNIT_PRODUCT_EFFECT_BUNDLE_ONLY",
-            HttpStatus.CONFLICT,
-            "이벤트 효과 목록은 EVENT_EFFECT_BUNDLE 종류의 단위 상품에서만 지정할 수 있습니다."
     ),
     CEREMONY_NOT_FOUND("CEREMONY_NOT_FOUND", HttpStatus.NOT_FOUND, "행사를 찾을 수 없습니다."),
     CEREMONY_EVENT_NOT_FOUND("CEREMONY_EVENT_NOT_FOUND", HttpStatus.NOT_FOUND, "하위 행사를 찾을 수 없습니다."),
@@ -73,11 +51,6 @@ public enum CeremonyErrorCode implements ErrorCode {
             "CEREMONY_UNIT_PRODUCT_SALE_UNIT_QUANTITY_INVALID",
             HttpStatus.CONFLICT,
             "이 단위 상품은 지정된 판매 단위 수량의 배수로만 구매할 수 있습니다."
-    ),
-    UNIT_PRODUCT_MAX_QUANTITY_NOT_MULTIPLE_OF_SALE_UNIT(
-            "CEREMONY_UNIT_PRODUCT_MAX_QUANTITY_NOT_MULTIPLE_OF_SALE_UNIT",
-            HttpStatus.BAD_REQUEST,
-            "최대 구매 수량은 판매 단위 수량의 배수여야 합니다."
     ),
     UNIT_PRODUCT_GROUP_CONFLICT(
             "CEREMONY_UNIT_PRODUCT_GROUP_CONFLICT",
@@ -290,11 +263,6 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "장바구니가 비어 있습니다. 먼저 항목을 담아주세요."
     ),
-    UNIT_PRODUCT_IN_USE(
-            "CEREMONY_UNIT_PRODUCT_IN_USE",
-            HttpStatus.CONFLICT,
-            "플랜에 포함되었거나 구매·적용된 적이 있는 단위 상품은 삭제할 수 없습니다."
-    ),
     SIGNER_EXCEL_INVALID_FORMAT(
             "CEREMONY_SIGNER_EXCEL_INVALID_FORMAT",
             HttpStatus.BAD_REQUEST,
@@ -373,96 +341,10 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.TOO_MANY_REQUESTS,
             "효과 수동 실행이 너무 잦습니다. 잠시 후 다시 시도해주세요."
     ),
-    DISCOUNT_VALUE_INVALID(
-            "CEREMONY_DISCOUNT_VALUE_INVALID",
-            HttpStatus.BAD_REQUEST,
-            "할인값은 0 이상이어야 하고, 정률(PERCENT) 할인은 100을 넘을 수 없습니다."
-    ),
-    CATALOG_PRICE_VALUE_INVALID(
-            "CEREMONY_CATALOG_PRICE_VALUE_INVALID",
-            HttpStatus.BAD_REQUEST,
-            "공급가/판매가는 0 이상이어야 합니다."
-    ),
-    DISCOUNT_PERIOD_INVALID(
-            "CEREMONY_DISCOUNT_PERIOD_INVALID",
-            HttpStatus.BAD_REQUEST,
-            "종료일은 시작일보다 빠를 수 없습니다."
-    ),
-    DISCOUNT_PERIOD_OVERLAPPING(
-            "CEREMONY_DISCOUNT_PERIOD_OVERLAPPING",
-            HttpStatus.CONFLICT,
-            "같은 조직×품목에 이미 겹치는 기간의 할인 오버라이드가 있습니다."
-    ),
-    ORGANIZATION_DISCOUNT_PERIOD_NOT_FOUND(
-            "CEREMONY_ORGANIZATION_DISCOUNT_PERIOD_NOT_FOUND",
-            HttpStatus.NOT_FOUND,
-            "할인 오버라이드 기간을 찾을 수 없습니다."
-    ),
-    CATALOG_PRICE_PERIOD_OVERLAPPING(
-            "CEREMONY_CATALOG_PRICE_PERIOD_OVERLAPPING",
-            HttpStatus.CONFLICT,
-            "같은 상품에 이미 겹치는 기간의 판매가격이 있습니다."
-    ),
-    CATALOG_PRICE_PERIOD_NOT_FOUND(
-            "CEREMONY_CATALOG_PRICE_PERIOD_NOT_FOUND",
-            HttpStatus.NOT_FOUND,
-            "상품의 해당 판매가격 기간을 찾을 수 없습니다."
-    ),
-    CATALOG_PRICE_PERIOD_REQUIRED(
-            "CEREMONY_CATALOG_PRICE_PERIOD_REQUIRED",
-            HttpStatus.CONFLICT,
-            "상품은 최소 하나의 판매가격 기간이 있어야 합니다."
-    ),
     CATALOG_ITEM_NOT_ON_SALE(
             "CEREMONY_CATALOG_ITEM_NOT_ON_SALE",
             HttpStatus.CONFLICT,
             "지금은 판매 기간이 아닌 상품입니다."
-    ),
-    /**
-     * 조직 구독/계약(signstage-docs business/organization-event-discount-pricing-review.md
-     * 8장 결정, 2026-09-10)의 오류 코드.
-     */
-    SUBSCRIPTION_PLAN_FIELDS_INVALID(
-            "CEREMONY_SUBSCRIPTION_PLAN_FIELDS_INVALID",
-            HttpStatus.BAD_REQUEST,
-            "구독형 플랜은 구독 유형·허용 횟수가 필수이고, 기간형(PERIOD_AND_COUNT)은 기간(6 또는 12개월)도 " +
-                    "필수이며 횟수형(COUNT_ONLY)은 기간을 가질 수 없습니다."
-    ),
-    SUBSCRIPTION_NOT_FOUND("CEREMONY_SUBSCRIPTION_NOT_FOUND", HttpStatus.NOT_FOUND, "구독 신청을 찾을 수 없습니다."),
-    SUBSCRIPTION_NOT_PENDING(
-            "CEREMONY_SUBSCRIPTION_NOT_PENDING",
-            HttpStatus.CONFLICT,
-            "이미 심사가 끝난 구독 신청입니다."
-    ),
-    SUBSCRIPTION_NOT_ACTIVE(
-            "CEREMONY_SUBSCRIPTION_NOT_ACTIVE",
-            HttpStatus.CONFLICT,
-            "사용 중인 구독만 해지를 요청할 수 있습니다."
-    ),
-    SUBSCRIPTION_NOT_CANCELLATION_REQUESTED(
-            "CEREMONY_SUBSCRIPTION_NOT_CANCELLATION_REQUESTED",
-            HttpStatus.CONFLICT,
-            "해지 요청 중인 구독이 아닙니다."
-    ),
-    SUBSCRIPTION_ALREADY_IN_PROGRESS(
-            "CEREMONY_SUBSCRIPTION_ALREADY_IN_PROGRESS",
-            HttpStatus.CONFLICT,
-            "이미 심사 중이거나 해지 심사 중인 구독 신청이 있습니다."
-    ),
-    SUBSCRIPTION_PLAN_NOT_SUBSCRIPTION_TYPE(
-            "CEREMONY_SUBSCRIPTION_PLAN_NOT_SUBSCRIPTION_TYPE",
-            HttpStatus.CONFLICT,
-            "구독형(SUBSCRIPTION) 플랜만 구독 신청할 수 있습니다."
-    ),
-    SUBSCRIPTION_REQUIRED(
-            "CEREMONY_SUBSCRIPTION_REQUIRED",
-            HttpStatus.CONFLICT,
-            "이 구독형 플랜을 사용하려면 먼저 구독 신청이 승인되어야 합니다."
-    ),
-    SUBSCRIPTION_EXHAUSTED(
-            "CEREMONY_SUBSCRIPTION_EXHAUSTED",
-            HttpStatus.CONFLICT,
-            "구독으로 만들 수 있는 행사 건수를 모두 사용했습니다."
     ),
     /**
      * 확정 견적(signstage-docs business/currency-tax-internationalization-review.md 9/10장,
@@ -536,19 +418,19 @@ public enum CeremonyErrorCode implements ErrorCode {
      * business/onsite-support-negotiation-and-billing-classification-review.md 3.2절
      * (2026-09-12). CeremonyInquiry와 같이 Ceremony 직속이라 이 코드에 둔다.
      */
-    ONSITE_SUPPORT_REQUEST_NOT_FOUND("ONSITE_SUPPORT_REQUEST_NOT_FOUND", HttpStatus.NOT_FOUND, "플랫폼 운영사 현장지원 요청을 찾을 수 없습니다."),
-    ONSITE_SUPPORT_REQUEST_NOT_REQUESTED(
-            "ONSITE_SUPPORT_REQUEST_NOT_REQUESTED",
+    CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_FOUND("CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_FOUND", HttpStatus.NOT_FOUND, "플랫폼 운영사 현장지원 요청을 찾을 수 없습니다."),
+    CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_REQUESTED(
+            "CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_REQUESTED",
             HttpStatus.CONFLICT,
             "아직 요청 상태가 아니거나 이미 견적을 매긴 요청입니다."
     ),
-    ONSITE_SUPPORT_REQUEST_NOT_QUOTED(
-            "ONSITE_SUPPORT_REQUEST_NOT_QUOTED",
+    CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_QUOTED(
+            "CEREMONY_ONSITE_SUPPORT_REQUEST_NOT_QUOTED",
             HttpStatus.CONFLICT,
             "견적이 아직 없거나 이미 응답한 요청입니다."
     ),
-    ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND(
-            "ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND",
+    CEREMONY_ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND(
+            "CEREMONY_ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND",
             HttpStatus.INTERNAL_SERVER_ERROR,
             "플랫폼 운영사 현장지원 요청 전용 단위 상품이 카탈로그에 등록되어 있지 않습니다. 플랫폼 관리자에게 문의해주세요."
     );

@@ -32,7 +32,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * 쓰면 된다.
  *
  * <p>{@code systemUsageCostAmount}는 이 견적을 만든 시점에 {@code CeremonyService
- * #buildQuoteCalculation}의 라인 중 {@link UnitProductCategory#isSystemUsageFee()}가 참인
+ * #buildQuoteCalculation}의 라인 중 {@code UnitProductCategory#isSystemUsageFee()}가 참인
  * 라인들의 {@code netAmount} 합계(=파트너가 플랫폼에 내는 시스템 사용료 원가 기준선)를 그대로
  * 스냅샷한 것이다. {@code margin}도 적용 당시 유효했던 값(조직 기본값 또는 행사별 override)의
  * 스냅샷이라, 이후 그 설정이 바뀌어도 이미 만든 견적은 바뀌지 않는다.

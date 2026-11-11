@@ -10,7 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Signer;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Template;
 import com.eformworks.signstage.backend.feature.ceremony.entity.TemplateDocumentRole;
@@ -54,7 +54,9 @@ class TemplateServiceTest {
     @Mock
     private DocumentStoragePort documentStoragePort;
     @Mock
-    private CeremonyService ceremonyService;
+    private CeremonyAccessService ceremonyAccessService;
+    @Mock
+    private CeremonyCatalogService ceremonyCatalogService;
 
     @InjectMocks
     private TemplateService templateService;
@@ -70,11 +72,11 @@ class TemplateServiceTest {
         template.complete();
         given(ceremonyTemplateRepository.existsByTemplateId(TEMPLATE_ID)).willReturn(true);
         var disabled = templateService.updateEnabled(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID,
-                new com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest(false));
+                new com.eformworks.signstage.backend.core.web.UpdateEnabledRequest(false));
         assertThat(disabled.isEnabled()).isFalse();
         assertThat(disabled.isLocked()).isTrue();
         assertThat(templateService.updateEnabled(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID,
-                new com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest(true)).isEnabled()).isTrue();
+                new com.eformworks.signstage.backend.core.web.UpdateEnabledRequest(true)).isEnabled()).isTrue();
         assertThat(template.getStorageKey()).isEqualTo("original.pdf");
     }
 
@@ -105,8 +107,8 @@ class TemplateServiceTest {
         assertThat(template.getDocumentRole()).isEqualTo(TemplateDocumentRole.EXHIBITION);
         assertThat(template.getStatus()).isEqualTo(com.eformworks.signstage.backend.feature.ceremony.entity.TemplateStatus.COMPLETED);
         assertThat(template.getStorageKey()).isEqualTo("original.pdf");
-        verify(ceremonyService).checkCeremonyManageAccess(org.mockito.ArgumentMatchers.eq(template.getCeremony()), any(), org.mockito.ArgumentMatchers.eq(CURRENT_USER_ID));
-        verify(ceremonyService).checkCeremonyEditable(template.getCeremony());
+        verify(ceremonyAccessService).checkCeremonyManageAccess(org.mockito.ArgumentMatchers.eq(template.getCeremony()), any(), org.mockito.ArgumentMatchers.eq(CURRENT_USER_ID));
+        verify(ceremonyAccessService).checkCeremonyEditable(template.getCeremony());
         org.mockito.Mockito.verifyNoInteractions(documentStoragePort);
     }
 
@@ -123,7 +125,7 @@ class TemplateServiceTest {
         prepareTemplate();
         given(ceremonyTemplateRepository.existsByTemplateId(TEMPLATE_ID)).willReturn(true);
         TemplateFieldService fields = new TemplateFieldService(templateFieldRepository, templateRepository,
-                ceremonyTemplateRepository, ceremonyService, mock(SignerService.class));
+                ceremonyTemplateRepository, ceremonyAccessService, mock(SignerService.class));
         assertThatThrownBy(() -> fields.createTemplateField(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID, null))
                 .isInstanceOf(com.eformworks.signstage.backend.core.error.ApplicationException.class);
         org.mockito.Mockito.verifyNoInteractions(templateFieldRepository);
@@ -146,8 +148,8 @@ class TemplateServiceTest {
                 .documentRole(TemplateDocumentRole.EXHIBITION).storageKey("original.pdf")
                 .originalFilename("original.pdf").storedFilename("stored.pdf").build();
         ReflectionTestUtils.setField(template, "id", TEMPLATE_ID);
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
-        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID)).willReturn(Member.builder().role(MemberRole.OWNER).build());
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID)).willReturn(Member.builder().role(MemberRole.OWNER).build());
         given(templateRepository.findById(TEMPLATE_ID)).willReturn(Optional.of(template));
         return template;
     }
@@ -189,10 +191,10 @@ class TemplateServiceTest {
                 .heightRatio(new BigDecimal("0.05000"))
                 .build();
 
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
-        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
                 .willReturn(Member.builder().role(MemberRole.OWNER).build());
-        given(ceremonyService.calculateEffectiveCapacity(ceremony, UnitProductType.TEMPLATES)).willReturn(10);
+        given(ceremonyCatalogService.calculateEffectiveCapacity(ceremony, UnitProductType.TEMPLATES)).willReturn(10);
         given(templateRepository.countByCeremonyId(CEREMONY_ID)).willReturn(1L);
         given(templateRepository.findById(TEMPLATE_ID)).willReturn(Optional.of(original));
 
@@ -264,17 +266,17 @@ class TemplateServiceTest {
                 .storageKey("templates/10/b.pdf").originalFilename("b.pdf").storedFilename("b.pdf").build();
         ReflectionTestUtils.setField(second, "id", 102L);
 
-        given(ceremonyService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
-        given(ceremonyService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
+        given(ceremonyAccessService.findCeremonyInOrganizationOrThrow(ORGANIZATION_ID, CEREMONY_ID)).willReturn(ceremony);
+        given(ceremonyAccessService.findActiveMemberOrThrow(ORGANIZATION_ID, CURRENT_USER_ID))
                 .willReturn(Member.builder().role(MemberRole.OWNER).build());
         given(templateRepository.findAllById(List.of(101L, 102L))).willReturn(List.of(first, second));
         given(templateRepository.findAllByCeremonyIdOrderByDisplayOrderAscIdAsc(CEREMONY_ID))
                 .willReturn(List.of(second, first));
 
-        com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.UpdateDisplayOrders request =
-                new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.UpdateDisplayOrders(List.of(
-                        new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.Item(101L, 1),
-                        new com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest.Item(102L, 0)
+        com.eformworks.signstage.backend.core.web.DisplayOrderRequest.UpdateDisplayOrders request =
+                new com.eformworks.signstage.backend.core.web.DisplayOrderRequest.UpdateDisplayOrders(List.of(
+                        new com.eformworks.signstage.backend.core.web.DisplayOrderRequest.Item(101L, 1),
+                        new com.eformworks.signstage.backend.core.web.DisplayOrderRequest.Item(102L, 0)
                 ));
 
         // when

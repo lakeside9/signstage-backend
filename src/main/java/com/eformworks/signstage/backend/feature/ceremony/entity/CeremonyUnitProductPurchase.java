@@ -112,7 +112,7 @@ public class CeremonyUnitProductPurchase extends BaseEntity {
     /**
      * 이미 승인(APPROVED)된 구매를 관리자가 취소한다 — signstage-docs
      * business/ceremony-unit-product-purchase-cancellation-review.md 결정(2026-09-12).
-     * 대상이 APPROVED인지는 호출부({@code CeremonyService#findApprovedUnitProductPurchaseOrThrow})가
+     * 대상이 APPROVED인지는 호출부({@code CeremonyUnitProductPurchaseApprovalService#findApprovedUnitProductPurchaseOrThrow})가
      * 이미 확인했다고 전제한다.
      */
     public void cancel(Long cancelledBy, String cancellationReason) {

@@ -10,6 +10,6 @@ public interface CeremonyOnsiteSupportRequestRepository
     /** 파트너 쪽 이 행사의 요청 목록 — 최신순. */
     List<CeremonyOnsiteSupportRequest> findAllByCeremonyIdOrderByCreatedAtDesc(Long ceremonyId);
 
-    /** DRAFT 행사 삭제({@code CeremonyService#deleteCeremony}) 시 이 행사의 요청을 함께 지운다. */
+    /** DRAFT 행사 삭제({@code CeremonyDeletionService#deleteCeremony}) 시 이 행사의 요청을 함께 지운다. */
     void deleteAllByCeremonyId(Long ceremonyId);
 }

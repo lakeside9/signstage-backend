@@ -32,7 +32,7 @@ public class TemplateFieldService {
     private final TemplateFieldRepository templateFieldRepository;
     private final TemplateRepository templateRepository;
     private final CeremonyTemplateRepository ceremonyTemplateRepository;
-    private final CeremonyService ceremonyService;
+    private final CeremonyAccessService ceremonyAccessService;
     private final SignerService signerService;
 
     @Transactional
@@ -43,10 +43,10 @@ public class TemplateFieldService {
             Long currentUserId,
             TemplateFieldDto.Request.CreateTemplateField request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         checkNotLocked(template);
@@ -88,10 +88,10 @@ public class TemplateFieldService {
             Long currentUserId,
             TemplateFieldDto.Request.SetFields request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Template template = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         checkNotLocked(template);
@@ -154,10 +154,10 @@ public class TemplateFieldService {
             Long sourceTemplateId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         Template target = findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         checkNotLocked(target);
@@ -220,9 +220,9 @@ public class TemplateFieldService {
             Long templateId,
             Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         findTemplateInCeremonyOrThrow(ceremonyId, templateId);
         return templateFieldRepository.findAllByTemplateId(templateId).stream().map(this::toSummary).toList();

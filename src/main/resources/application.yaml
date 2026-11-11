@@ -3,3 +3,10 @@ spring:
     name: backend
   profiles:
     active: local
+  data:
+    web:
+      pageable:
+        # 목록 조회 페이지 크기 상한(backend-coding-convention.md 10.4절). 클라이언트가 더 큰 size를
+        # 보내면 Spring Data가 이 값으로 잘라낸다. 관리자 화면의 조직 선택 드롭다운이 size=200으로
+        # 조직 목록을 한 번에 받으므로(AdminCeremonyDiscounts.tsx 등) 200으로 둔다.
+        max-page-size: 200

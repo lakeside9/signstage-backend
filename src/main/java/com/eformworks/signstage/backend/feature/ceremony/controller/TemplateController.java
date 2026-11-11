@@ -3,8 +3,9 @@ package com.eformworks.signstage.backend.feature.ceremony.controller;
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
-import com.eformworks.signstage.backend.feature.ceremony.dto.DisplayOrderRequest;
+import com.eformworks.signstage.backend.core.web.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto;
+import com.eformworks.signstage.backend.feature.ceremony.model.DownloadedFile;
 import com.eformworks.signstage.backend.feature.ceremony.service.TemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,7 +48,7 @@ public class TemplateController {
     public ApiResponse<TemplateDto.Response.TemplateSummary> updateEnabled(
             @AuthenticationPrincipal CurrentUser currentUser,
             @PathVariable Long organizationId, @PathVariable Long ceremonyId, @PathVariable Long templateId,
-            @Valid @RequestBody com.eformworks.signstage.backend.feature.ceremony.dto.UpdateEnabledRequest request) {
+            @Valid @RequestBody com.eformworks.signstage.backend.core.web.UpdateEnabledRequest request) {
         return ApiResponse.success(templateService.updateEnabled(organizationId, ceremonyId, templateId,
                 currentUser.userId(), request), traceIdProvider.getTraceId());
     }
@@ -235,7 +236,7 @@ public class TemplateController {
             @PathVariable Long ceremonyId,
             @PathVariable Long templateId
     ) {
-        TemplateService.DownloadedTemplate downloaded =
+        DownloadedFile downloaded =
                 templateService.downloadTemplateFile(organizationId, ceremonyId, templateId, currentUser.userId());
 
         String encodedFilename = URLEncoder.encode(downloaded.originalFilename(), StandardCharsets.UTF_8);

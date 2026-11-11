@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 공개 프로젝터 화면(전시용 화면, `/projector/:eventAccessKey`). JWT를 쓰지 않는다 —
  * {@code eventAccessKey} 소지만으로 접근한다({@link SignerPortalService}와 같은 인가 모델).
- * 조직 스코프 검사가 필요 없어 {@link CeremonyService}의 헬퍼를 재사용하지 않고 리포지토리를
+ * 조직 스코프 검사가 필요 없어 {@link CeremonyAccessService}의 헬퍼를 재사용하지 않고 리포지토리를
  * 직접 쓴다 — {@link SignerPortalService}와 같은 기존 관례.
  *
  * <p>PDF 페이지 렌더링은 {@link TemplateService#buildTemplateInfo(Template)}/

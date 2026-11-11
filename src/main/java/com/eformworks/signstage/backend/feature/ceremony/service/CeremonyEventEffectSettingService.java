@@ -42,14 +42,14 @@ public class CeremonyEventEffectSettingService {
     private final CeremonyEffectDefinitionOptionRepository ceremonyEffectDefinitionOptionRepository;
     private final CeremonyEventOptionalFeatureRepository ceremonyEventOptionalFeatureRepository;
     private final CeremonyEventRepository ceremonyEventRepository;
-    private final CeremonyService ceremonyService;
+    private final CeremonyAccessService ceremonyAccessService;
 
     public List<CeremonyEventEffectSettingDto.Response.EffectSettingSummary> findEffectSettings(
             Long organizationId, Long ceremonyId, Long eventId, Long currentUserId
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         return findSummaries(event.getId());
@@ -64,10 +64,10 @@ public class CeremonyEventEffectSettingService {
             Long currentUserId,
             CeremonyEventEffectSettingDto.Request.UpdateEffectSelections request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
-        ceremonyService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
-        ceremonyService.checkCeremonyEditable(ceremony);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         checkEventNotLocked(event);

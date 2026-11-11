@@ -4,22 +4,24 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
+import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CustomerQuoteDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyMarginOverride;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CustomerQuote;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CustomerQuoteLine;
-import com.eformworks.signstage.backend.feature.ceremony.entity.DiscountType;
+import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.MarginInfo;
 import com.eformworks.signstage.backend.feature.ceremony.entity.MarginPolicySnapshot;
 import com.eformworks.signstage.backend.feature.ceremony.entity.OrganizationMarginPolicy;
-import com.eformworks.signstage.backend.feature.ceremony.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
+import com.eformworks.signstage.backend.feature.ceremony.model.QuoteCalculation;
+import com.eformworks.signstage.backend.feature.ceremony.model.QuoteLineDetail;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyMarginOverrideRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CustomerQuoteLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CustomerQuoteRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.OrganizationMarginPolicyRepository;
-import com.eformworks.signstage.backend.feature.ceremony.repository.UnitProductRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
@@ -65,11 +67,13 @@ public class CustomerQuoteService {
     private final CeremonyMarginOverrideRepository ceremonyMarginOverrideRepository;
     private final CustomerQuoteRepository customerQuoteRepository;
     private final CustomerQuoteLineRepository customerQuoteLineRepository;
-    private final UnitProductRepository unitProductRepository;
     private final OrganizationRepository organizationRepository;
     private final MemberRepository memberRepository;
     private final UserRepository userRepository;
-    private final CeremonyService ceremonyService;
+    private final BillingCatalogQueryService billingCatalogQueryService;
+    private final CeremonyAccessService ceremonyAccessService;
+    private final CeremonyQuoteService ceremonyQuoteService;
+    private final CeremonyCatalogService ceremonyCatalogService;
     private final MoneyCalculator moneyCalculator;
     private final RolePermissionService rolePermissionService;
 
@@ -172,8 +176,8 @@ public class CustomerQuoteService {
     // ==================== 행사별 마진 override ====================
 
     public CustomerQuoteDto.Response.EffectiveMargin retrieveEffectiveMargin(Long organizationId, Long ceremonyId, Long currentUserId) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
 
         return resolveMargin(organizationId, ceremony.getId())
@@ -186,8 +190,8 @@ public class CustomerQuoteService {
     public CustomerQuoteDto.Response.EffectiveMargin updateCeremonyMarginOverride(
             Long organizationId, Long ceremonyId, Long currentUserId, CustomerQuoteDto.Request.UpdateMargin request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
 
         MarginInfo margin = toMarginInfo(request.getMarginType(), request.getMarginValue());
@@ -201,8 +205,8 @@ public class CustomerQuoteService {
 
     @Transactional
     public void clearCeremonyMarginOverride(Long organizationId, Long ceremonyId, Long currentUserId) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
 
         CeremonyMarginOverride override = ceremonyMarginOverrideRepository.findByCeremonyId(ceremony.getId())
@@ -237,9 +241,9 @@ public class CustomerQuoteService {
 
     /**
      * 플랜이 확정(DRAFT → IN_PROGRESS)된 행사에서만 견적서를 만들 수 있다(2026-09-11 사용자
-     * 요청 — 단위 상품 추가구매와 같은 기준, {@link CeremonyService#checkCeremonyPlanConfirmed}).
+     * 요청 — 단위 상품 추가구매와 같은 기준, {@link CeremonyAccessService#checkCeremonyPlanConfirmed}).
      * DRAFT 상태에서는 플랜 스냅샷이 아직 없어(2.4절, {@code findLatestPlanHistoryForSnapshot}이
-     * 라이브 카탈로그 값으로 대체) {@link CeremonyService#buildQuoteCalculation}이 계산하는
+     * 라이브 카탈로그 값으로 대체) {@link CeremonyQuoteService#buildQuoteCalculation}이 계산하는
      * 시스템 사용료 원가가 카탈로그 관리자의 변경에 따라 계속 바뀔 수 있는 잠정치다 — 그
      * 위에서 실고객에게 청구할 견적서를 만들면, 견적서 생성 이후 원가가 바뀌어도 그 견적서
      * 자체는 스냅샷이라 조용히 어긋난 기준으로 남는다.
@@ -247,20 +251,20 @@ public class CustomerQuoteService {
     private QuoteComputation computeQuote(
             Long organizationId, Long ceremonyId, Long currentUserId, CustomerQuoteDto.Request.GenerateQuote request
     ) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
-        ceremonyService.checkCeremonyPlanConfirmed(ceremony);
+        ceremonyAccessService.checkCeremonyPlanConfirmed(ceremony);
         CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
 
         ResolvedMargin resolved = resolveMargin(organizationId, ceremony.getId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.MARGIN_NOT_SET));
         MarginInfo margin = resolved.margin();
 
-        CeremonyService.QuoteCalculation calculation = ceremonyService.buildQuoteCalculation(ceremony);
+        QuoteCalculation calculation = ceremonyQuoteService.buildQuoteCalculation(ceremony);
         BigDecimal systemUsageCostAmount = calculation.lines().stream()
-                .filter(CeremonyService.QuoteLineDetail::platformUsageFee)
-                .map(CeremonyService.QuoteLineDetail::netAmount)
+                .filter(QuoteLineDetail::platformUsageFee)
+                .map(QuoteLineDetail::netAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // 장비/인력은 더 이상 승인된 구매 기록에서 역산하지 않는다 — 파트너가 카탈로그에서
@@ -282,14 +286,15 @@ public class CustomerQuoteService {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
 
-        BigDecimal systemUsageMarginAmount = moneyCalculator.applyMargin(systemUsageCostAmount, margin, currencyPolicy)
+        BigDecimal systemUsageMarginAmount = moneyCalculator
+                .applyMargin(systemUsageCostAmount, margin.getMarginType(), margin.getMarginValue(), currencyPolicy)
                 .subtract(systemUsageCostAmount);
         BigDecimal systemUsageCustomerAmount = systemUsageCostAmount.add(systemUsageMarginAmount);
 
         // 1차: 요청 라인을 전부 검증·해석한다 — 사용중지(또는 가격 기간 공백) 단위 상품과
         // 배타 그룹 충돌 둘 다 이 화면엔 검사가 아예 없어 그대로 담기던 문제였다(2026-09-11
         // 발견). CeremonyEventService의 "이벤트에 옵션 적용" 경로가 쓰던 검사를
-        // CeremonyService의 공유 헬퍼로 옮겨 여기서도 재사용한다.
+        // 공유 헬퍼(지금은 CeremonyCatalogService)로 옮겨 여기서도 재사용한다.
         //
         // unitProductId가 없는 줄은 자유 품목이다(카탈로그에 없는 품목, 2026-09-12 사용자
         // 요청 — signstage-docs
@@ -309,15 +314,14 @@ public class CustomerQuoteService {
                 resolvedLines.add(new ResolvedLine(line, null));
                 continue;
             }
-            UnitProduct unitProduct = unitProductRepository.findById(line.getUnitProductId())
-                    .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_NOT_FOUND));
+            UnitProduct unitProduct = billingCatalogQueryService.findUnitProductOrThrow(line.getUnitProductId());
             if (unitProduct.isPlatformUsageFee()) {
                 throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL);
             }
-            ceremonyService.resolveSellableUnitProductPeriod(unitProduct, asOfDate);
+            ceremonyCatalogService.resolveSellableUnitProductPeriod(unitProduct, asOfDate);
             resolvedLines.add(new ResolvedLine(line, unitProduct));
         }
-        ceremonyService.checkExclusivityGroups(
+        ceremonyCatalogService.checkExclusivityGroups(
                 resolvedLines.stream().map(ResolvedLine::unitProduct).filter(Objects::nonNull).toList()
         );
 
@@ -449,8 +453,8 @@ public class CustomerQuoteService {
      * 증가값이라 지워도 재사용하지 않는다. */
     @Transactional
     public void deleteCustomerQuote(Long organizationId, Long ceremonyId, Long quoteId, Long currentUserId) {
-        ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
 
         CustomerQuote quote = customerQuoteRepository.findByIdAndCeremonyId(quoteId, ceremonyId)
@@ -460,8 +464,8 @@ public class CustomerQuoteService {
     }
 
     public List<CustomerQuoteDto.Response.QuoteSummary> findCustomerQuotes(Long organizationId, Long ceremonyId, Long currentUserId) {
-        Ceremony ceremony = ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
 
         return customerQuoteRepository.findAllByCeremonyIdOrderByVersionDesc(ceremony.getId()).stream()
@@ -472,8 +476,8 @@ public class CustomerQuoteService {
     public CustomerQuoteDto.Response.QuoteDetail findCustomerQuoteDetail(
             Long organizationId, Long ceremonyId, Long quoteId, Long currentUserId
     ) {
-        ceremonyService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
-        Member actingMember = ceremonyService.findActiveMemberOrThrow(organizationId, currentUserId);
+        ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
 
         CustomerQuote quote = customerQuoteRepository.findByIdAndCeremonyId(quoteId, ceremonyId)

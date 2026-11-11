@@ -4,15 +4,14 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.security.JwtProvider;
 import com.eformworks.signstage.backend.feature.identity.dto.IdentityDto;
 import com.eformworks.signstage.backend.feature.identity.error.IdentityErrorCode;
+import com.eformworks.signstage.backend.feature.identity.port.UserMembershipPort;
 import com.eformworks.signstage.backend.feature.identity.repository.UserHistoryRepository;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.LoginHistoryStatus;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.entity.UserHistory;
 import com.eformworks.signstage.backend.feature.identity.entity.UserStatus;
-import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
-import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
-import com.eformworks.signstage.backend.feature.organization.repository.MemberRepository;
+import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -39,7 +38,7 @@ public class IdentityService {
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
     private final LoginAttemptRecorder loginAttemptRecorder;
-    private final MemberRepository memberRepository;
+    private final UserMembershipPort userMembershipPort;
 
     public IdentityDto.Response.Login login(IdentityDto.Request.Login request, String ipAddress, String userAgent) {
         User user = userRepository.findByLoginId(request.getLoginId()).orElse(null);
@@ -82,7 +81,9 @@ public class IdentityService {
         }
 
         if (user.getPlatformRole() != null) {
-            String accessToken = jwtProvider.createPlatformAccessToken(user);
+            String accessToken = jwtProvider.createPlatformAccessToken(
+                    user.getId(), user.getLoginId(), user.getPlatformRole().name()
+            );
             IdentityDto.Response.PlatformAdminInfo platformAdmin = new IdentityDto.Response.PlatformAdminInfo(
                     user.getId(),
                     user.getLoginId(),
@@ -98,9 +99,8 @@ public class IdentityService {
         // isDemoViewer만 예외로 로그인 응답에 함께 싣는다 — 데모 조직(Organization.isDemo)
         // 소속 VIEWER면 프런트가 UserLayout이 아니라 DemoLayout으로 보내야 하기 때문이다
         // (signstage-docs business/demo-account-exhibition-signer-preview-review.md 4.1/4.2절).
-        String accessToken = jwtProvider.createUserAccessToken(user);
-        boolean isDemoViewer = memberRepository.findAllByUserIdAndStatus(user.getId(), MemberStatus.ACTIVE).stream()
-                .anyMatch(member -> member.getOrganization().isDemo() && member.getRole() == MemberRole.VIEWER);
+        String accessToken = jwtProvider.createUserAccessToken(user.getId(), user.getLoginId());
+        boolean isDemoViewer = userMembershipPort.isDemoViewer(user.getId());
         return IdentityDto.Response.Login.success(accessToken, isDemoViewer);
     }
 
@@ -138,7 +138,7 @@ public class IdentityService {
 
     @Transactional
     public void forcePasswordChange(IdentityDto.Request.ForcePasswordChange request) {
-        Long userId = jwtProvider.parsePasswordResetToken(request.getPasswordResetToken());
+        Long userId = parsePasswordResetTokenOrThrow(request.getPasswordResetToken());
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApplicationException(IdentityErrorCode.INVALID_RESET_TOKEN));
@@ -150,7 +150,15 @@ public class IdentityService {
         user.changePassword(passwordEncoder.encode(request.getNewPassword()));
     }
 
-    public IdentityDto.Response.Me getMe(Long userId) {
+    private Long parsePasswordResetTokenOrThrow(String passwordResetToken) {
+        try {
+            return jwtProvider.parsePasswordResetToken(passwordResetToken);
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new ApplicationException(IdentityErrorCode.INVALID_RESET_TOKEN, e);
+        }
+    }
+
+    public IdentityDto.Response.Me retrieveMe(Long userId) {
         return toMeResponse(findUserOrThrow(userId));
     }
 
@@ -197,7 +205,7 @@ public class IdentityService {
     }
 
     @Transactional
-    public void changeMyPassword(Long userId, IdentityDto.Request.ChangeMyPassword request) {
+    public void updateMyPassword(Long userId, IdentityDto.Request.ChangeMyPassword request) {
         User user = findUserOrThrow(userId);
 
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
