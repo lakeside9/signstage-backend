@@ -38,6 +38,18 @@ public interface PartnerOrderRepository extends JpaRepository<PartnerOrder, Long
 
     Optional<PartnerOrder> findByIdAndOrganizationId(Long id, Long organizationId);
 
+    /** 응답 기한이 곧 끝나는데 아직 알리지 않은 응답 대기 발주. */
+    @Query("""
+            select p from PartnerOrder p
+            join fetch p.salesOrder
+            join fetch p.organization
+            where p.status = com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus.ISSUED
+              and p.responseDueAt > :now
+              and p.responseDueAt <= :until
+              and p.dueReminderSentAt is null
+            """)
+    List<PartnerOrder> findDueSoonWithoutReminder(@Param("now") LocalDateTime now, @Param("until") LocalDateTime until);
+
     /** 검수를 만들 발주 — 수락했고 행사가 완료됐지만 아직 검수가 없는 건. */
     @Query("""
             select p from PartnerOrder p

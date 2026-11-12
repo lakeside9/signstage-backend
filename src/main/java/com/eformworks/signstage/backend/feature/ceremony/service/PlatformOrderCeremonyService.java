@@ -24,7 +24,9 @@ import com.eformworks.signstage.backend.feature.organization.error.OrganizationE
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -83,7 +85,7 @@ public class PlatformOrderCeremonyService {
         ceremonyPlanService.recordPlanHistory(ceremony, plan, planPeriod, asOfDate);
         ceremony.confirmPlan();
 
-        saveScopeOptions(ceremony, command, asOfDate);
+        saveScopeOptions(ceremony, command.options(), asOfDate);
 
         User acceptingUser = userRepository.findById(command.acceptingUserId())
                 .orElseThrow(() -> new ApplicationException(CommonErrorCode.ACCESS_DENIED));
@@ -93,14 +95,57 @@ public class PlatformOrderCeremonyService {
         return ceremony;
     }
 
-    private void saveScopeOptions(Ceremony ceremony, PlatformOrderCeremonyCommand command, LocalDate asOfDate) {
-        if (command.options() == null || command.options().isEmpty()) {
+    /**
+     * 수락 후 교체된 발주의 행사를 새 파트너에게 넘긴다(D03). 기존 담당자 배정을 지우고 새로 수락한
+     * 사용자를 담당자로 배정한다. 서명자·문서·하위 행사는 행사에 그대로 남는다.
+     */
+    @Transactional
+    public Ceremony transferPlatformOrderCeremony(Ceremony ceremony, Long organizationId, Long acceptingUserId) {
+        Organization organization = organizationRepository.findById(organizationId)
+                .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_NOT_FOUND));
+        ceremonyCatalogService.checkCurrencyMatches(organization.getBillingCurrencyCode(), ceremony.getCurrencyCode());
+        ceremony.transferTo(organization);
+        releaseAssignments(ceremony.getId());
+        User acceptingUser = userRepository.findById(acceptingUserId)
+                .orElseThrow(() -> new ApplicationException(CommonErrorCode.ACCESS_DENIED));
+        ceremonyAssignmentRepository.save(
+                CeremonyAssignment.builder().ceremony(ceremony).user(acceptingUser).build()
+        );
+        return ceremony;
+    }
+
+    /** 발주가 수락 후 취소되면 이전 파트너 담당자 배정을 지운다 — 운영 담당자(OPERATOR)가 더는 보지 못한다. */
+    @Transactional
+    public void releaseAssignments(Long ceremonyId) {
+        ceremonyAssignmentRepository.deleteAllByCeremonyId(ceremonyId);
+    }
+
+    /**
+     * 수주 범위 변경(D08)을 행사에 반영한다 — 장소·일정을 바꾸고, 늘어난 단위 상품 수량만 0원 자동 승인
+     * 구매로 더한다. 줄어든 수량은 이미 확정된 구매를 되돌리지 않는다(한도가 남을 뿐 비용은 없다).
+     */
+    @Transactional
+    public void applyScopeChange(
+            Ceremony ceremony,
+            String location,
+            LocalDateTime startsAt,
+            LocalDateTime endsAt,
+            List<PlatformOrderCeremonyCommand.ScopeOption> additions
+    ) {
+        ceremony.updateSchedule(location, startsAt, endsAt);
+        saveScopeOptions(ceremony, additions, LocalDate.now(ZoneId.of(ceremony.getTimeZoneId())));
+    }
+
+    private void saveScopeOptions(
+            Ceremony ceremony, List<PlatformOrderCeremonyCommand.ScopeOption> options, LocalDate asOfDate
+    ) {
+        if (options == null || options.isEmpty()) {
             return;
         }
         CeremonyUnitProductPurchase purchase = CeremonyUnitProductPurchase.builder().ceremony(ceremony).build();
         purchase.autoApprove();
         ceremonyUnitProductPurchaseRepository.save(purchase);
-        for (PlatformOrderCeremonyCommand.ScopeOption option : command.options()) {
+        for (PlatformOrderCeremonyCommand.ScopeOption option : options) {
             UnitProduct unitProduct = billingCatalogQueryService.findUnitProductOrThrow(option.unitProductId());
             UnitProductPricePeriod period = ceremonyCatalogService.resolveSellableUnitProductPeriod(unitProduct, asOfDate);
             ceremonyUnitProductPurchaseLineRepository.save(

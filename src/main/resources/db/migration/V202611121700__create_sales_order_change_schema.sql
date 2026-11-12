@@ -1,0 +1,82 @@
+-- 수주 범위 변경(D08) — signstage-docs business/platform-order-partner-subcontract-review.md D08.
+-- 플랫폼이 고객 변경 계약과 발주 변경을 한 건으로 제안하고, 고객 수락과 파트너 동의(수락된 발주가
+-- 있을 때)를 받으면 수주·발주·행사에 반영한다. 파트너는 범위 변경 요청으로 필요만 알린다.
+
+CREATE TABLE sales_order_changes (
+    id                                  BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    sales_order_id                      BIGINT NOT NULL,
+    partner_order_id                    BIGINT NULL,
+    status                              VARCHAR(20) NOT NULL,
+    reason                              VARCHAR(500) NOT NULL,
+    before_tablet_count                 INT NOT NULL,
+    before_onsite_staff_person_days     INT NOT NULL,
+    before_supply_amount                DECIMAL(19,4) NOT NULL,
+    before_total_amount                 DECIMAL(19,4) NOT NULL,
+    before_partner_amount               DECIMAL(19,4) NULL,
+    tablet_count                        INT NOT NULL,
+    onsite_staff_person_days            INT NOT NULL,
+    supply_amount                       DECIMAL(19,4) NOT NULL,
+    vat_amount                          DECIMAL(19,4) NOT NULL,
+    total_amount                        DECIMAL(19,4) NOT NULL,
+    discount_reason                     VARCHAR(500) NULL,
+    estimated_partner_amount            DECIMAL(19,4) NOT NULL,
+    partner_amount                      DECIMAL(19,4) NULL,
+    location                            VARCHAR(500) NULL,
+    starts_at                           DATETIME(6) NULL,
+    ends_at                             DATETIME(6) NULL,
+    proposed_by                         BIGINT NOT NULL,
+    customer_accepted_by_name           VARCHAR(100) NULL,
+    customer_accepted_at                TIMESTAMP(6) NULL,
+    partner_responded_by                BIGINT NULL,
+    partner_responded_at                TIMESTAMP(6) NULL,
+    partner_rejection_reason            VARCHAR(500) NULL,
+    applied_at                          TIMESTAMP(6) NULL,
+    cancelled_at                        TIMESTAMP(6) NULL,
+    cancellation_reason                 VARCHAR(500) NULL,
+    created_by                          BIGINT NULL,
+    updated_by                          BIGINT NULL,
+    created_at                          TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at                          TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_sales_order_changes_order_status (sales_order_id, status),
+    CONSTRAINT fk_sales_order_change_order FOREIGN KEY (sales_order_id) REFERENCES sales_orders (id),
+    CONSTRAINT fk_sales_order_change_partner_order FOREIGN KEY (partner_order_id) REFERENCES partner_orders (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE sales_order_change_lines (
+    id                      BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    sales_order_change_id   BIGINT NOT NULL,
+    line_type               VARCHAR(20) NOT NULL,
+    unit_product_id         BIGINT NULL,
+    name                    VARCHAR(200) NOT NULL,
+    quantity                INT NOT NULL,
+    unit_price              DECIMAL(19,4) NOT NULL,
+    amount                  DECIMAL(19,4) NOT NULL,
+    tax_code                VARCHAR(50) NOT NULL,
+    tax_rate_percent        DECIMAL(7,4) NOT NULL,
+    tax_amount              DECIMAL(19,4) NOT NULL,
+    display_order           INT NOT NULL,
+    created_by              BIGINT NULL,
+    updated_by              BIGINT NULL,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sales_order_change_line_change FOREIGN KEY (sales_order_change_id) REFERENCES sales_order_changes (id),
+    CONSTRAINT fk_sales_order_change_line_unit_product FOREIGN KEY (unit_product_id) REFERENCES unit_products (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE scope_change_requests (
+    id                      BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    partner_order_id        BIGINT NOT NULL,
+    content                 VARCHAR(1000) NOT NULL,
+    requested_by            BIGINT NOT NULL,
+    requested_at            TIMESTAMP(6) NOT NULL,
+    closed_at               TIMESTAMP(6) NULL,
+    closed_by               BIGINT NULL,
+    closing_note            VARCHAR(500) NULL,
+    sales_order_change_id   BIGINT NULL,
+    created_by              BIGINT NULL,
+    updated_by              BIGINT NULL,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_scope_change_request_partner_order FOREIGN KEY (partner_order_id) REFERENCES partner_orders (id),
+    CONSTRAINT fk_scope_change_request_change FOREIGN KEY (sales_order_change_id) REFERENCES sales_order_changes (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

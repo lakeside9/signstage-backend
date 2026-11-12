@@ -1,0 +1,89 @@
+package com.eformworks.signstage.backend.feature.order.entity;
+
+import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+/**
+ * 범위 변경 후 견적 줄 — {@link SalesOrderLine}과 같은 스냅샷이다. 반영할 때 수주 줄을 이 줄로 바꾼다.
+ */
+@Entity
+@Table(name = "sales_order_change_lines")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class SalesOrderChangeLine extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sales_order_change_id", nullable = false)
+    private SalesOrderChange salesOrderChange;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "line_type", nullable = false, length = 20)
+    private SalesOrderLineType lineType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "unit_product_id")
+    private UnitProduct unitProduct;
+
+    @Column(nullable = false, length = 200)
+    private String name;
+
+    @Column(nullable = false)
+    private int quantity;
+
+    @Column(name = "unit_price", nullable = false, precision = 19, scale = 4)
+    private BigDecimal unitPrice;
+
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal amount;
+
+    @Column(name = "tax_code", nullable = false, length = 50)
+    private String taxCode;
+
+    @Column(name = "tax_rate_percent", nullable = false, precision = 7, scale = 4)
+    private BigDecimal taxRatePercent;
+
+    @Column(name = "tax_amount", nullable = false, precision = 19, scale = 4)
+    private BigDecimal taxAmount;
+
+    @Column(name = "display_order", nullable = false)
+    private int displayOrder;
+
+    @Builder
+    private SalesOrderChangeLine(
+            SalesOrderChange salesOrderChange, SalesOrderLineType lineType, UnitProduct unitProduct, String name,
+            int quantity, BigDecimal unitPrice, BigDecimal amount, String taxCode, BigDecimal taxRatePercent,
+            BigDecimal taxAmount, int displayOrder
+    ) {
+        this.salesOrderChange = salesOrderChange;
+        this.lineType = lineType;
+        this.unitProduct = unitProduct;
+        this.name = name;
+        this.quantity = quantity;
+        this.unitPrice = unitPrice;
+        this.amount = amount;
+        this.taxCode = taxCode;
+        this.taxRatePercent = taxRatePercent;
+        this.taxAmount = taxAmount;
+        this.displayOrder = displayOrder;
+    }
+}

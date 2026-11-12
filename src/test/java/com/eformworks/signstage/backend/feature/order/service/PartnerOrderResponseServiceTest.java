@@ -63,6 +63,10 @@ class PartnerOrderResponseServiceTest {
     private PlatformOrderCeremonyService platformOrderCeremonyService;
     @Mock
     private OrderInspectionService orderInspectionService;
+    @Mock
+    private SalesOrderChangeService salesOrderChangeService;
+    @Mock
+    private OrderNotificationService orderNotificationService;
 
     @InjectMocks
     private PartnerOrderResponseService partnerOrderResponseService;
@@ -139,6 +143,29 @@ class PartnerOrderResponseServiceTest {
         assertThat(issued.getStatus()).isEqualTo(PartnerOrderStatus.ACCEPTED);
         assertThat(issued.getCeremony()).isSameAs(ceremony);
         assertThat(issued.getRespondedBy()).isEqualTo(USER_ID);
+    }
+
+    @Test
+    @DisplayName("수락 후 취소된 이전 발주의 행사가 있으면 새로 만들지 않고 넘겨받는다(파트너 교체)")
+    void acceptOrder_takesOverCarriedCeremony() {
+        givenMember(MemberRole.ADMIN, true);
+        PartnerOrder issued = partnerOrder(LocalDateTime.now().plusDays(1));
+        given(partnerOrderRepository.findByIdAndOrganizationId(PARTNER_ORDER_ID, PARTNER_ID)).willReturn(Optional.of(issued));
+        Ceremony ceremony = Ceremony.builder().organization(OrderFixtures.organization(8L)).title("협약식").build();
+        ReflectionTestUtils.setField(ceremony, "id", 900L);
+        PartnerOrder previous = partnerOrder(LocalDateTime.now().minusDays(3));
+        previous.accept(80L, ceremony);
+        previous.cancel("파트너 사정");
+        given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(100L)).willReturn(List.of(issued, previous));
+        given(platformOrderCeremonyService.transferPlatformOrderCeremony(ceremony, PARTNER_ID, USER_ID)).willReturn(ceremony);
+        given(salesOrderService.findOptionLines(100L)).willReturn(List.of());
+
+        partnerOrderResponseService.acceptOrder(PARTNER_ID, PARTNER_ORDER_ID, USER_ID);
+
+        verify(platformOrderCeremonyService, never()).createPlatformOrderCeremony(any());
+        assertThat(issued.getStatus()).isEqualTo(PartnerOrderStatus.ACCEPTED);
+        assertThat(issued.getCeremony()).isSameAs(ceremony);
+        verify(orderNotificationService).partnerOrderResponded(issued);
     }
 
     @Test

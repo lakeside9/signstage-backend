@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.order.dto.OrderInspectionDto;
 import com.eformworks.signstage.backend.feature.order.dto.PartnerOrderDto;
+import com.eformworks.signstage.backend.feature.order.dto.SalesOrderChangeDto;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.service.PartnerOrderResponseService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -104,6 +105,64 @@ public class PartnerOrderController {
     ) {
         return ApiResponse.success(
                 partnerOrderResponseService.disputeInspection(organizationId, partnerOrderId, currentUser.userId(), request.getReason()),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "범위 변경·범위 변경 요청 조회")
+    @GetMapping("/{partnerOrderId}/scope-changes")
+    public ApiResponse<SalesOrderChangeDto.Response.PartnerOverview> findScopeChanges(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long partnerOrderId
+    ) {
+        return ApiResponse.success(
+                partnerOrderResponseService.findScopeChanges(organizationId, partnerOrderId, currentUser.userId()),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "범위 변경 동의", description = "플랫폼이 제안한 범위 변경(수량·일정·발주 금액)에 동의한다. 고객 수락도 받았으면 바로 반영된다.")
+    @PostMapping("/{partnerOrderId}/scope-changes/{changeId}/accept")
+    public ApiResponse<SalesOrderChangeDto.Response.PartnerOverview> acceptScopeChange(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long partnerOrderId,
+            @PathVariable Long changeId
+    ) {
+        return ApiResponse.success(
+                partnerOrderResponseService.acceptScopeChange(organizationId, partnerOrderId, changeId, currentUser.userId()),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "범위 변경 거절")
+    @PostMapping("/{partnerOrderId}/scope-changes/{changeId}/reject")
+    public ApiResponse<SalesOrderChangeDto.Response.PartnerOverview> rejectScopeChange(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long partnerOrderId,
+            @PathVariable Long changeId,
+            @Valid @RequestBody SalesOrderChangeDto.Request.Reason request
+    ) {
+        return ApiResponse.success(
+                partnerOrderResponseService.rejectScopeChange(
+                        organizationId, partnerOrderId, changeId, currentUser.userId(), request.getReason()
+                ),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "범위 변경 요청", description = "현장 상황 등으로 범위 변경이 필요할 때 플랫폼에 알린다. 범위는 플랫폼이 고객과 정해 바꾼다.")
+    @PostMapping("/{partnerOrderId}/scope-requests")
+    public ApiResponse<SalesOrderChangeDto.Response.PartnerOverview> submitScopeRequest(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long partnerOrderId,
+            @Valid @RequestBody SalesOrderChangeDto.Request.SubmitScopeRequest request
+    ) {
+        return ApiResponse.success(
+                partnerOrderResponseService.submitScopeRequest(organizationId, partnerOrderId, currentUser.userId(), request.getContent()),
                 traceIdProvider.getTraceId()
         );
     }

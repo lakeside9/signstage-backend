@@ -83,6 +83,11 @@ public enum PlatformAdminAction {
     REGISTER_PARTNER_OFFSET,
     CANCEL_PARTNER_OFFSET,
     APPROVE_PARTNER_PAYOUT,
+    /** 수주 범위 변경 — signstage-docs business/platform-order-partner-subcontract-review.md D08. */
+    PROPOSE_SALES_ORDER_CHANGE,
+    RECORD_SALES_ORDER_CHANGE_ACCEPTANCE,
+    CANCEL_SALES_ORDER_CHANGE,
+    CLOSE_SCOPE_CHANGE_REQUEST,
     /** 고객 청구·수납 — signstage-docs business/platform-order-partner-subcontract-review.md D12·D16. */
     ISSUE_CUSTOMER_INVOICE,
     RECORD_CUSTOMER_PAYMENT,

@@ -58,6 +58,7 @@ public class OrderInspectionService {
     private final PartnerPaymentControlPolicy partnerPaymentControlPolicy;
     private final RolePermissionService rolePermissionService;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
+    private final OrderNotificationService orderNotificationService;
 
     /** 완료된 행사의 검수를 만들고, 기한이 지난 대기 검수를 승인 간주한다. 바꾼 건수를 돌려준다. */
     @Transactional
@@ -75,6 +76,7 @@ public class OrderInspectionService {
         for (OrderInspection inspection : orderInspectionRepository.findPendingDueBefore(today())) {
             inspection.approveAsDeemed();
             partnerLedgerEntryRepository.save(PartnerLedgerEntry.payable(inspection));
+            orderNotificationService.inspectionApproved(inspection);
             changed++;
         }
         return changed;
@@ -144,6 +146,7 @@ public class OrderInspectionService {
         );
         partnerLedgerEntryRepository.save(PartnerLedgerEntry.payable(inspection));
 
+        orderNotificationService.inspectionApproved(inspection);
         auditLogRecorder.record(adminUserId, PlatformAdminAction.APPROVE_ORDER_INSPECTION, null,
                 inspection.getOrganization().getId(),
                 "inspectionId=" + inspectionId + ", partnerOrderId=" + inspection.getPartnerOrder().getId()
@@ -165,6 +168,7 @@ public class OrderInspectionService {
             throw new ApplicationException(OrderErrorCode.INSPECTION_NOT_DISPUTABLE);
         }
         inspection.openDispute(userId, reason.trim());
+        orderNotificationService.inspectionDisputed(inspection);
         return OrderInspectionDto.Response.InspectionSummary.forPartner(inspection, today(), disputeDays);
     }
 
@@ -203,6 +207,7 @@ public class OrderInspectionService {
             partnerLedgerEntryRepository.save(PartnerLedgerEntry.adjustment(inspection, difference, today));
         }
 
+        orderNotificationService.inspectionDisputeResolved(inspection);
         auditLogRecorder.record(adminUserId, PlatformAdminAction.RESOLVE_INSPECTION_DISPUTE, null,
                 inspection.getOrganization().getId(),
                 "inspectionId=" + inspectionId + ", deductionAmount=" + deduction + ", payableDifference=" + difference);

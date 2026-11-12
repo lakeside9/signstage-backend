@@ -27,7 +27,7 @@ import lombok.NoArgsConstructor;
 /**
  * 플랫폼 수주(고객 견적·계약) — signstage-docs business/platform-order-partner-subcontract-review.md
  * 3장 1~2단계, 5장. 견적(QUOTED) 동안에는 범위·금액을 다시 계산해 고칠 수 있고, 고객이 수락하면
- * (ACCEPTED) 금액과 범위가 고정된다. 수락 후 범위 변경(D08)은 아직 지원하지 않는다.
+ * (ACCEPTED) 금액과 범위가 고정된다. 수락 후에는 범위 변경({@link SalesOrderChange}, D08)으로만 바꾼다.
  *
  * <p>범위는 플랜(제공 범위, D07)과 추가 옵션 줄({@link SalesOrderLine})로 표현한다.
  * {@code tabletCount}·{@code onsiteStaffPersonDays}는 플랜 포함 수량과 옵션 수량을 더한 값으로,
@@ -164,6 +164,17 @@ public class SalesOrder extends BaseEntity {
         this.totalAmount = supplyAmount.add(vatAmount);
         this.discountReason = discountReason == null || discountReason.isBlank() ? null : discountReason.trim();
         this.estimatedPartnerAmount = estimatedPartnerAmount;
+    }
+
+    /** 수락 후 범위 변경(D08)을 반영한다 — 플랜·권역은 그대로 두고 장소·일정과 금액만 바꾼다. */
+    public void applyChange(SalesOrderChange change) {
+        this.location = change.getLocation();
+        this.startsAt = change.getStartsAt();
+        this.endsAt = change.getEndsAt();
+        applyAmounts(
+                change.getTabletCount(), change.getOnsiteStaffPersonDays(), change.getSupplyAmount(),
+                change.getVatAmount(), change.getDiscountReason(), change.getEstimatedPartnerAmount()
+        );
     }
 
     public void accept(String acceptedByName, SalesOrderAcceptanceChannel channel) {

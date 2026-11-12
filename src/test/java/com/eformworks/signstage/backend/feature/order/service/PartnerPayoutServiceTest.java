@@ -71,6 +71,8 @@ class PartnerPayoutServiceTest {
     private RolePermissionService rolePermissionService;
     @Mock
     private PlatformAdminAuditLogRecorder auditLogRecorder;
+    @Mock
+    private OrderNotificationService orderNotificationService;
 
     private PartnerPayoutService partnerPayoutService;
     private Organization partnerA;
@@ -83,7 +85,7 @@ class PartnerPayoutServiceTest {
                 partnerPayoutRepository, orderInspectionRepository, partnerLedgerEntryRepository, orderInspectionService,
                 partnerOffsetRepository, new PartnerSettlementPolicy(7, 60), OrderFixtures.paymentControlPolicy(),
                 partnerSubcontractProfileService, memberRepository,
-                rolePermissionService, auditLogRecorder
+                rolePermissionService, auditLogRecorder, orderNotificationService
         );
         partnerA = OrderFixtures.organization(7L);
         partnerB = OrderFixtures.organization(8L);

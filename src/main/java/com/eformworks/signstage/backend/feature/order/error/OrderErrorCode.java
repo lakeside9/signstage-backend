@@ -56,7 +56,7 @@ public enum OrderErrorCode implements ErrorCode {
     SALES_ORDER_HAS_ACCEPTED_PARTNER_ORDER(
             "ORDER_SALES_ORDER_HAS_ACCEPTED_PARTNER_ORDER",
             HttpStatus.CONFLICT,
-            "파트너가 수락한 발주가 있는 수주는 취소할 수 없습니다. 발주 취소 절차는 아직 지원하지 않습니다."
+            "파트너가 수락한 발주가 있는 수주는 취소할 수 없습니다. 먼저 수락한 발주를 취소(파트너 교체)하세요."
     ),
     PARTNER_ORDER_NOT_FOUND("ORDER_PARTNER_ORDER_NOT_FOUND", HttpStatus.NOT_FOUND, "발주를 찾을 수 없습니다."),
     PARTNER_ORDER_ALREADY_ACTIVE(
@@ -70,6 +70,16 @@ public enum OrderErrorCode implements ErrorCode {
             "응답 대기 중인 발주만 수락·거절·취소할 수 있습니다."
     ),
     PARTNER_ORDER_EXPIRED("ORDER_PARTNER_ORDER_EXPIRED", HttpStatus.CONFLICT, "응답 기한이 지난 발주입니다."),
+    PARTNER_ORDER_NOT_CANCELLABLE(
+            "ORDER_PARTNER_ORDER_NOT_CANCELLABLE",
+            HttpStatus.CONFLICT,
+            "응답 대기 중이거나 수락된 발주만 취소할 수 있습니다."
+    ),
+    PARTNER_ORDER_CEREMONY_COMPLETED(
+            "ORDER_PARTNER_ORDER_CEREMONY_COMPLETED",
+            HttpStatus.CONFLICT,
+            "행사가 완료된 발주는 취소할 수 없습니다. 검수 감액이나 귀책 상계로 처리합니다."
+    ),
     PARTNER_ORDER_DUE_INVALID("ORDER_PARTNER_ORDER_DUE_INVALID", HttpStatus.BAD_REQUEST, "응답 기한은 현재 이후여야 합니다."),
     PARTNER_ADJUSTMENT_REASON_REQUIRED(
             "ORDER_PARTNER_ADJUSTMENT_REASON_REQUIRED",
@@ -198,6 +208,54 @@ public enum OrderErrorCode implements ErrorCode {
             "ORDER_SALES_ORDER_HAS_ACTIVE_INVOICE",
             HttpStatus.CONFLICT,
             "청구가 있는 수주는 취소할 수 없습니다. 입금 전 청구를 먼저 취소해주세요."
+    ),
+    SALES_ORDER_CHANGE_NOT_FOUND("ORDER_SALES_ORDER_CHANGE_NOT_FOUND", HttpStatus.NOT_FOUND, "범위 변경을 찾을 수 없습니다."),
+    SALES_ORDER_CHANGE_IN_PROGRESS(
+            "ORDER_SALES_ORDER_CHANGE_IN_PROGRESS",
+            HttpStatus.CONFLICT,
+            "진행 중인 범위 변경이 있습니다. 반영되거나 취소된 뒤에 다시 제안하거나 발주하세요."
+    ),
+    SALES_ORDER_CHANGE_NOT_PROPOSED(
+            "ORDER_SALES_ORDER_CHANGE_NOT_PROPOSED",
+            HttpStatus.CONFLICT,
+            "진행 중인 범위 변경만 수락·동의·거절·취소할 수 있습니다."
+    ),
+    SALES_ORDER_CHANGE_PARTNER_ORDER_PENDING(
+            "ORDER_SALES_ORDER_CHANGE_PARTNER_ORDER_PENDING",
+            HttpStatus.CONFLICT,
+            "응답 대기 중인 발주가 있습니다. 발주를 취소하거나 응답을 받은 뒤에 범위를 바꾸세요."
+    ),
+    SALES_ORDER_CHANGE_CEREMONY_COMPLETED(
+            "ORDER_SALES_ORDER_CHANGE_CEREMONY_COMPLETED",
+            HttpStatus.CONFLICT,
+            "행사가 완료된 수주는 범위를 바꿀 수 없습니다. 검수 감액이나 귀책 상계로 처리합니다."
+    ),
+    SALES_ORDER_CHANGE_BALANCE_INVOICED(
+            "ORDER_SALES_ORDER_CHANGE_BALANCE_INVOICED",
+            HttpStatus.CONFLICT,
+            "잔금을 청구한 수주는 범위를 바꿀 수 없습니다. 잔금 청구를 먼저 취소해주세요."
+    ),
+    SALES_ORDER_CHANGE_BELOW_INVOICED(
+            "ORDER_SALES_ORDER_CHANGE_BELOW_INVOICED",
+            HttpStatus.CONFLICT,
+            "변경 후 수주 금액이 이미 청구한 금액보다 작습니다. 청구를 먼저 조정해주세요."
+    ),
+    SALES_ORDER_CHANGE_ALREADY_RESPONDED(
+            "ORDER_SALES_ORDER_CHANGE_ALREADY_RESPONDED",
+            HttpStatus.CONFLICT,
+            "이미 응답한 범위 변경입니다."
+    ),
+    SALES_ORDER_CHANGE_CUSTOMER_ALREADY_ACCEPTED(
+            "ORDER_SALES_ORDER_CHANGE_CUSTOMER_ALREADY_ACCEPTED",
+            HttpStatus.CONFLICT,
+            "고객 수락을 이미 기록했습니다."
+    ),
+    SCOPE_REQUEST_NOT_FOUND("ORDER_SCOPE_REQUEST_NOT_FOUND", HttpStatus.NOT_FOUND, "범위 변경 요청을 찾을 수 없습니다."),
+    SCOPE_REQUEST_CLOSED("ORDER_SCOPE_REQUEST_CLOSED", HttpStatus.CONFLICT, "이미 처리한 범위 변경 요청입니다."),
+    SCOPE_REQUEST_NOT_ALLOWED(
+            "ORDER_SCOPE_REQUEST_NOT_ALLOWED",
+            HttpStatus.CONFLICT,
+            "수락한 발주의 행사가 끝나기 전에만 범위 변경을 요청할 수 있습니다."
     );
 
     private final String code;

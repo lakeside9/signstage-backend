@@ -58,6 +58,8 @@ class OrderInspectionServiceTest {
     private RolePermissionService rolePermissionService;
     @Mock
     private PlatformAdminAuditLogRecorder auditLogRecorder;
+    @Mock
+    private OrderNotificationService orderNotificationService;
 
     private OrderInspectionService orderInspectionService;
     private Organization partner;
@@ -66,7 +68,8 @@ class OrderInspectionServiceTest {
     void setUp() {
         orderInspectionService = new OrderInspectionService(
                 orderInspectionRepository, partnerOrderRepository, partnerLedgerEntryRepository,
-                new PartnerSettlementPolicy(7, 60), OrderFixtures.paymentControlPolicy(), rolePermissionService, auditLogRecorder
+                new PartnerSettlementPolicy(7, 60), OrderFixtures.paymentControlPolicy(), rolePermissionService, auditLogRecorder,
+                orderNotificationService
         );
         partner = OrderFixtures.organization(7L);
     }

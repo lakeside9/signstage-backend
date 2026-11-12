@@ -16,6 +16,11 @@ public interface CustomerInvoiceRepository extends JpaRepository<CustomerInvoice
 
     boolean existsBySalesOrderIdAndStatusNot(Long salesOrderId, CustomerInvoiceStatus status);
 
+    /** 입금 기한이 지났는데 아직 미수 알림을 보내지 않은 청구. */
+    List<CustomerInvoice> findAllByStatusAndDueDateBeforeAndOverdueNotifiedAtIsNull(
+            CustomerInvoiceStatus status, LocalDate today
+    );
+
     /** {@code overdueBefore}를 주면 그 날짜 전에 기한이 지난 미입금 청구만 본다. */
     @Query(
             value = """

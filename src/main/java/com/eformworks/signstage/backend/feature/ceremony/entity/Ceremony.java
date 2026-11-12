@@ -283,6 +283,15 @@ public class Ceremony extends BaseEntity {
         return orderRoute == CeremonyOrderRoute.PLATFORM_ORDER;
     }
 
+    /**
+     * 플랫폼 수주 행사를 교체된 파트너 조직으로 옮긴다(signstage-docs
+     * business/platform-order-partner-subcontract-review.md D03). 통화·시간대는 행사 생성 때 고정한
+     * 값을 그대로 쓴다 — 통화가 다른 조직으로는 서비스가 옮기지 않는다.
+     */
+    public void transferTo(Organization organization) {
+        this.organization = organization;
+    }
+
     public CurrencyPolicy currencyPolicy() {
         return new CurrencyPolicy(currencyCode, currencyFractionDigits, RoundingMode.valueOf(currencyRoundingMode));
     }

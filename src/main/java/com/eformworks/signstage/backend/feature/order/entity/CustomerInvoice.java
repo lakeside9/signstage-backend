@@ -100,6 +100,9 @@ public class CustomerInvoice extends BaseEntity {
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
 
+    @Column(name = "overdue_notified_at")
+    private LocalDateTime overdueNotifiedAt;
+
     @Column(name = "cancellation_reason", length = 500)
     private String cancellationReason;
 
@@ -132,6 +135,11 @@ public class CustomerInvoice extends BaseEntity {
     /** 입금 기한이 지났는데 아직 입금 기록이 없는 청구(미수). */
     public boolean isOverdue(LocalDate today) {
         return isIssued() && today.isAfter(dueDate);
+    }
+
+    /** 미수 알림을 보냈다 — 같은 청구로 다시 보내지 않는다. */
+    public void markOverdueNotified() {
+        this.overdueNotifiedAt = LocalDateTime.now();
     }
 
     public void recordPayment(Long recordedBy, LocalDate paidDate, BigDecimal paidAmount, String paymentMemo) {

@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.order.dto;
 
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
+import com.eformworks.signstage.backend.feature.order.entity.SalesOrderChangeLine;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLine;
 import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
@@ -265,6 +266,19 @@ public final class PlatformAdminSalesOrderDto {
                         line.amount(),
                         line.taxRatePercent(),
                         line.taxAmount()
+                );
+            }
+
+            public static QuoteLine from(SalesOrderChangeLine line) {
+                return new QuoteLine(
+                        line.getLineType().name(),
+                        line.getUnitProduct() != null ? line.getUnitProduct().getId() : null,
+                        line.getName(),
+                        line.getQuantity(),
+                        line.getUnitPrice(),
+                        line.getAmount(),
+                        line.getTaxRatePercent(),
+                        line.getTaxAmount()
                 );
             }
 

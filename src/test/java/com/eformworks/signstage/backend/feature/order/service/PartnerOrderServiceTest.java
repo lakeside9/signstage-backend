@@ -6,11 +6,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
+import com.eformworks.signstage.backend.feature.ceremony.service.PlatformOrderCeremonyService;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminPartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
@@ -35,6 +40,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * {@link PartnerOrderService} 단위 테스트 — 발주 발급 조건(D04·D05·D22)과 금액 스냅샷.
@@ -61,6 +67,12 @@ class PartnerOrderServiceTest {
     private RolePermissionService rolePermissionService;
     @Mock
     private PlatformAdminAuditLogRecorder auditLogRecorder;
+    @Mock
+    private PlatformOrderCeremonyService platformOrderCeremonyService;
+    @Mock
+    private SalesOrderChangeService salesOrderChangeService;
+    @Mock
+    private OrderNotificationService orderNotificationService;
 
     @InjectMocks
     private PartnerOrderService partnerOrderService;
@@ -73,7 +85,7 @@ class PartnerOrderServiceTest {
         salesOrder = OrderFixtures.salesOrder(SALES_ORDER_ID, OrderFixtures.customer(1L), OrderFixtures.plan(1L));
         partner = OrderFixtures.organization(PARTNER_ID);
         given(rolePermissionService.isAllowed(ROLE, "ACTION_PARTNER_ORDER_ISSUE")).willReturn(true);
-        given(salesOrderService.findSalesOrderOrThrow(SALES_ORDER_ID)).willReturn(salesOrder);
+        lenient().when(salesOrderService.findSalesOrderOrThrow(SALES_ORDER_ID)).thenReturn(salesOrder);
     }
 
     @Test
@@ -152,6 +164,71 @@ class PartnerOrderServiceTest {
         assertThat(issued.getTotalAmount()).isEqualByComparingTo("1300000");
         assertThat(issued.getTabletCount()).isEqualTo(4);
         assertThat(issued.getIssuedBy()).isEqualTo(ADMIN_ID);
+    }
+
+    @Test
+    @DisplayName("진행 중인 범위 변경이 있으면 새 발주를 내지 않는다(D08)")
+    void issuePartnerOrder_rejectsDuringScopeChange() {
+        salesOrder.accept("고객 담당자", SalesOrderAcceptanceChannel.PLATFORM_RECORDED);
+        given(salesOrderChangeService.hasProposedChange(SALES_ORDER_ID)).willReturn(true);
+
+        assertThatThrownBy(() -> partnerOrderService.issuePartnerOrder(SALES_ORDER_ID, ADMIN_ID, ROLE, issueRequest(null, null)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(OrderErrorCode.SALES_ORDER_CHANGE_IN_PROGRESS);
+    }
+
+    @Test
+    @DisplayName("수락한 발주 취소(파트너 교체)는 교체 권한이 있어야 한다")
+    void cancelPartnerOrder_acceptedRequiresReplacePermission() {
+        PartnerOrder accepted = acceptedOrder(false);
+        given(partnerOrderRepository.findById(300L)).willReturn(Optional.of(accepted));
+
+        assertThatThrownBy(() -> partnerOrderService.cancelPartnerOrder(300L, ADMIN_ID, ROLE, "파트너 사정"))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+        assertThat(accepted.getStatus()).isEqualTo(PartnerOrderStatus.ACCEPTED);
+    }
+
+    @Test
+    @DisplayName("행사가 완료된 발주는 수락 후 취소할 수 없다")
+    void cancelPartnerOrder_rejectsCompletedCeremony() {
+        given(rolePermissionService.isAllowed(ROLE, "ACTION_PARTNER_ORDER_REPLACE")).willReturn(true);
+        given(partnerOrderRepository.findById(300L)).willReturn(Optional.of(acceptedOrder(true)));
+
+        assertThatThrownBy(() -> partnerOrderService.cancelPartnerOrder(300L, ADMIN_ID, ROLE, "파트너 사정"))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(OrderErrorCode.PARTNER_ORDER_CEREMONY_COMPLETED);
+    }
+
+    @Test
+    @DisplayName("수락 후 취소하면 행사 연결은 남기고 담당자 배정·진행 중 범위 변경을 정리하고 파트너에게 알린다")
+    void cancelPartnerOrder_acceptedReleasesCeremony() {
+        given(rolePermissionService.isAllowed(ROLE, "ACTION_PARTNER_ORDER_REPLACE")).willReturn(true);
+        PartnerOrder accepted = acceptedOrder(false);
+        given(partnerOrderRepository.findById(300L)).willReturn(Optional.of(accepted));
+
+        partnerOrderService.cancelPartnerOrder(300L, ADMIN_ID, ROLE, "파트너 사정");
+
+        assertThat(accepted.getStatus()).isEqualTo(PartnerOrderStatus.CANCELLED);
+        assertThat(accepted.getCeremony()).isNotNull();
+        verify(platformOrderCeremonyService).releaseAssignments(900L);
+        verify(salesOrderChangeService).cancelProposedForPartnerOrder(eq(300L), any());
+        verify(orderNotificationService).partnerOrderCancelled(accepted, "파트너 사정");
+    }
+
+    private PartnerOrder acceptedOrder(boolean ceremonyCompleted) {
+        PartnerOrder order = partnerOrder(LocalDateTime.now().plusDays(1));
+        ReflectionTestUtils.setField(order, "id", 300L);
+        Ceremony ceremony = Ceremony.builder().organization(partner).title("협약식").build();
+        ReflectionTestUtils.setField(ceremony, "id", 900L);
+        if (ceremonyCompleted) {
+            ceremony.changeStatus(CeremonyStatus.COMPLETED);
+        }
+        order.accept(70L, ceremony);
+        return order;
     }
 
     private PartnerOrder partnerOrder(LocalDateTime responseDueAt) {

@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.ceremony.service.PlatformOrderCeremonyService;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminPartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
@@ -38,8 +39,11 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>파트너는 활성 조직이고 데모 조직이 아니며 외주 정보 요건(D22)을 채워야 한다.</li>
  *   <li>발주 금액은 파트너 단가표로 다시 계산하고(조정은 사유 필수), 최소 마진을 다시 검사한다.
  *       금액은 발주에 스냅샷한다.</li>
- *   <li>취소는 응답 대기 발주만 한다. 수락한 발주 취소는 하도급법상 부당 취소 검토가 필요해 다음
- *       단계(검수·지급)와 함께 다룬다.</li>
+ *   <li>응답 대기 발주는 발급 권한으로 취소한다. 수락한 발주는 행사 완료 전까지만, 파트너 교체
+ *       권한({@code ACTION_PARTNER_ORDER_REPLACE}, SUPER)으로 사유를 남기고 취소한다(D03). 행사는
+ *       남겨 두고 이전 파트너 담당자 배정만 지운다 — 다음에 발급한 발주를 수락하는 파트너가 행사를
+ *       넘겨받는다({@link PartnerOrderResponseService#acceptOrder}). 하도급법상 부당 취소가 되지 않도록
+ *       사유와 감사 로그를 남긴다.</li>
  * </ul>
  */
 @Service
@@ -54,6 +58,9 @@ public class PartnerOrderService {
     private final OrderPricingService orderPricingService;
     private final RolePermissionService rolePermissionService;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
+    private final PlatformOrderCeremonyService platformOrderCeremonyService;
+    private final SalesOrderChangeService salesOrderChangeService;
+    private final OrderNotificationService orderNotificationService;
 
     public Page<PlatformAdminPartnerOrderDto.Response.AdminPartnerOrderSummary> findPartnerOrders(
             PartnerOrderStatus status,
@@ -93,6 +100,9 @@ public class PartnerOrderService {
         if (salesOrder.getStatus() != SalesOrderStatus.ACCEPTED) {
             throw new ApplicationException(OrderErrorCode.SALES_ORDER_NOT_ACCEPTED);
         }
+        if (salesOrderChangeService.hasProposedChange(salesOrderId)) {
+            throw new ApplicationException(OrderErrorCode.SALES_ORDER_CHANGE_IN_PROGRESS);
+        }
         LocalDateTime now = LocalDateTime.now(SalesOrderService.PLATFORM_ZONE);
         if (!request.getResponseDueAt().isAfter(now)) {
             throw new ApplicationException(OrderErrorCode.PARTNER_ORDER_DUE_INVALID);
@@ -131,6 +141,7 @@ public class PartnerOrderService {
                 .issuedBy(adminUserId)
                 .build());
 
+        orderNotificationService.partnerOrderIssued(partnerOrder);
         auditLogRecorder.record(adminUserId, PlatformAdminAction.ISSUE_PARTNER_ORDER, null, partner.getId(),
                 "partnerOrderId=" + partnerOrder.getId() + ", salesOrderId=" + salesOrderId
                         + ", totalAmount=" + partnerOrder.getTotalAmount());
@@ -147,13 +158,27 @@ public class PartnerOrderService {
         checkCanIssue(actingPlatformRole);
         PartnerOrder partnerOrder = partnerOrderRepository.findById(partnerOrderId)
                 .orElseThrow(() -> new ApplicationException(OrderErrorCode.PARTNER_ORDER_NOT_FOUND));
-        if (partnerOrder.getStatus() != PartnerOrderStatus.ISSUED) {
-            throw new ApplicationException(OrderErrorCode.PARTNER_ORDER_NOT_ISSUED);
+        boolean afterAcceptance = partnerOrder.getStatus() == PartnerOrderStatus.ACCEPTED;
+        if (afterAcceptance) {
+            if (!rolePermissionService.isAllowed(actingPlatformRole, "ACTION_PARTNER_ORDER_REPLACE")) {
+                throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
+            }
+            if (!partnerOrder.isCancellableAfterAcceptance()) {
+                throw new ApplicationException(OrderErrorCode.PARTNER_ORDER_CEREMONY_COMPLETED);
+            }
+        } else if (partnerOrder.getStatus() != PartnerOrderStatus.ISSUED) {
+            throw new ApplicationException(OrderErrorCode.PARTNER_ORDER_NOT_CANCELLABLE);
         }
         partnerOrder.cancel(reason);
+        if (afterAcceptance) {
+            platformOrderCeremonyService.releaseAssignments(partnerOrder.getCeremony().getId());
+            salesOrderChangeService.cancelProposedForPartnerOrder(partnerOrderId, "발주 취소(파트너 교체)");
+        }
 
+        orderNotificationService.partnerOrderCancelled(partnerOrder, reason);
         auditLogRecorder.record(adminUserId, PlatformAdminAction.CANCEL_PARTNER_ORDER, null,
-                partnerOrder.getOrganization().getId(), "partnerOrderId=" + partnerOrderId + ", reason=" + reason);
+                partnerOrder.getOrganization().getId(), "partnerOrderId=" + partnerOrderId
+                        + ", afterAcceptance=" + afterAcceptance + ", reason=" + reason);
         return PlatformAdminPartnerOrderDto.Response.AdminPartnerOrderSummary.from(
                 partnerOrder, LocalDateTime.now(SalesOrderService.PLATFORM_ZONE)
         );

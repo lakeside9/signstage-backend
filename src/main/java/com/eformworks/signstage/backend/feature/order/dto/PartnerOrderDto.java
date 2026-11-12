@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.order.dto;
 
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLine;
 import jakarta.validation.constraints.NotBlank;
@@ -74,7 +75,10 @@ public final class PartnerOrderDto {
                         partnerOrder.effectiveStatus(now).name(),
                         partnerOrder.getResponseDueAt(),
                         partnerOrder.getIssuedAt(),
-                        partnerOrder.getCeremony() != null ? partnerOrder.getCeremony().getId() : null
+                        // 수락 후 취소(파트너 교체)된 발주는 행사로 들어가지 못한다 — 행사는 다음 파트너에게 넘어간다.
+                        partnerOrder.getStatus() == PartnerOrderStatus.ACCEPTED && partnerOrder.getCeremony() != null
+                                ? partnerOrder.getCeremony().getId()
+                                : null
                 );
             }
         }
@@ -110,14 +114,17 @@ public final class PartnerOrderDto {
                     LocalDateTime now
             ) {
                 SalesOrder salesOrder = partnerOrder.getSalesOrder();
+                // 응답 대기·수락 중일 때만 고객 담당자 연락처를 보인다 — 거절·만료·취소(파트너 교체)된 파트너에게는 감춘다(D18).
+                boolean showsContact = partnerOrder.getStatus() == PartnerOrderStatus.ISSUED
+                        || partnerOrder.getStatus() == PartnerOrderStatus.ACCEPTED;
                 return new PartnerOrderDetail(
                         PartnerOrderSummary.from(partnerOrder, now),
                         salesOrder.getBillingPlan().getName(),
                         optionLines.stream().map(ScopeOption::from).toList(),
                         salesOrder.getCustomer().getName(),
-                        salesOrder.getCustomer().getContactName(),
-                        salesOrder.getCustomer().getContactPhone(),
-                        salesOrder.getCustomer().getContactEmail(),
+                        showsContact ? salesOrder.getCustomer().getContactName() : null,
+                        showsContact ? salesOrder.getCustomer().getContactPhone() : null,
+                        showsContact ? salesOrder.getCustomer().getContactEmail() : null,
                         partnerOrder.getBaseFee(),
                         partnerOrder.getTabletCount(),
                         partnerOrder.getTabletUnitRate(),

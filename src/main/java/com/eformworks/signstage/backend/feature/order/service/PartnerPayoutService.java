@@ -75,6 +75,7 @@ public class PartnerPayoutService {
     private final MemberRepository memberRepository;
     private final RolePermissionService rolePermissionService;
     private final PlatformAdminAuditLogRecorder auditLogRecorder;
+    private final OrderNotificationService orderNotificationService;
 
     public Page<PartnerPayoutDto.Response.PayoutSummary> findPayouts(
             String settlementMonth,
@@ -153,6 +154,9 @@ public class PartnerPayoutService {
                 partnerOffsetRepository.save(offsets.getLast().carryOver(offsetTotal.subtract(gross), payout, monthEnd));
             }
 
+            if (payout.isAwaitingApproval()) {
+                orderNotificationService.payoutAwaitingApproval(payout);
+            }
             auditLogRecorder.record(adminUserId, PlatformAdminAction.CREATE_PARTNER_PAYOUTS, null, organizationId,
                     "partnerPayoutId=" + payout.getId() + ", settlementMonth=" + settlementMonth
                             + ", grossAmount=" + gross + ", offsetAmount=" + appliedOffset + ", amount=" + amount
@@ -180,6 +184,7 @@ public class PartnerPayoutService {
         payout.markPaid(adminUserId, request.getPaidDate(), request.getTransferredAmount(), trimToNull(request.getPaymentMemo()));
         partnerLedgerEntryRepository.save(PartnerLedgerEntry.payment(payout));
 
+        orderNotificationService.payoutPaid(payout);
         auditLogRecorder.record(adminUserId, PlatformAdminAction.MARK_PARTNER_PAYOUT_PAID, null,
                 payout.getOrganization().getId(),
                 "partnerPayoutId=" + partnerPayoutId + ", paidDate=" + request.getPaidDate()

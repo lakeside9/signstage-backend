@@ -110,6 +110,10 @@ public class PartnerOrder extends BaseEntity {
     @JoinColumn(name = "ceremony_id")
     private Ceremony ceremony;
 
+    /** 응답 기한 임박 알림을 보낸 시각 — 한 번만 보낸다. */
+    @Column(name = "due_reminder_sent_at")
+    private LocalDateTime dueReminderSentAt;
+
     @Builder
     private PartnerOrder(
             SalesOrder salesOrder, Organization organization, String currencyCode, BigDecimal baseFee,
@@ -133,6 +137,22 @@ public class PartnerOrder extends BaseEntity {
         this.issuedBy = issuedBy;
         this.issuedAt = LocalDateTime.now();
         this.status = PartnerOrderStatus.ISSUED;
+    }
+
+    /** 발급 때 스냅샷한 단가로 다시 계산한 발주 금액 — 범위 변경(D08)에 쓴다. 단가는 이미 통화 단위로 맞춰져 있다. */
+    public BigDecimal amountFor(int tabletCount, int onsiteStaffPersonDays) {
+        return baseFee
+                .add(tabletUnitRate.multiply(BigDecimal.valueOf(tabletCount)))
+                .add(onsiteStaffDayRate.multiply(BigDecimal.valueOf(onsiteStaffPersonDays)))
+                .add(regionSurcharge)
+                .add(adjustmentAmount);
+    }
+
+    /** 범위 변경(D08)을 반영한다 — 파트너가 동의한 수량과 금액으로 바꾼다. */
+    public void applyScopeChange(int tabletCount, int onsiteStaffPersonDays, BigDecimal totalAmount) {
+        this.tabletCount = tabletCount;
+        this.onsiteStaffPersonDays = onsiteStaffPersonDays;
+        this.totalAmount = totalAmount;
     }
 
     public boolean isOverdue(LocalDateTime now) {
@@ -164,8 +184,20 @@ public class PartnerOrder extends BaseEntity {
         this.rejectionReason = rejectionReason;
     }
 
+    public void markDueReminderSent() {
+        this.dueReminderSentAt = LocalDateTime.now();
+    }
+
     public void expire() {
         this.status = PartnerOrderStatus.EXPIRED;
+    }
+
+    /**
+     * 수락한 발주를 행사 완료 전에 취소할 수 있는지 — 파트너 교체(D03). 행사 연결은 이력으로 남기고,
+     * 다음에 수락하는 발주가 같은 행사를 넘겨받는다.
+     */
+    public boolean isCancellableAfterAcceptance() {
+        return status == PartnerOrderStatus.ACCEPTED && ceremony != null && ceremony.getCompletedAt() == null;
     }
 
     public void cancel(String cancellationReason) {
