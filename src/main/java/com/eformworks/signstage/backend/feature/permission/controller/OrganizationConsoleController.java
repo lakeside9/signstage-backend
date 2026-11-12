@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.permission.controller;
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
+import com.eformworks.signstage.backend.core.web.PartnerDirectOrderPolicy;
 import com.eformworks.signstage.backend.feature.permission.dto.MenuDto;
 import com.eformworks.signstage.backend.feature.permission.dto.PermissionDto;
 import com.eformworks.signstage.backend.feature.permission.entity.RoleAxis;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrganizationConsoleController {
 
     private final OrganizationConsoleService organizationConsoleService;
+    private final PartnerDirectOrderPolicy partnerDirectOrderPolicy;
     private final TraceIdProvider traceIdProvider;
 
     @Operation(summary = "내 역할 기준 메뉴 트리 조회", description = "role_permissions에서 허용되지 않은 메뉴는 응답에서 빠진다.")
@@ -49,5 +51,12 @@ public class OrganizationConsoleController {
                 new PermissionDto.Response.MyPermissions(RoleAxis.ORGANIZATION.name(), roleValue, keys),
                 traceIdProvider.getTraceId()
         );
+    }
+
+    @Operation(summary = "콘솔 기능 설정", description = "파트너 직접 수주 기능 사용 여부(D29). 꺼져 있으면 프론트가 관련 화면을 숨긴다.")
+    @GetMapping("/features")
+    public ApiResponse<PermissionDto.Response.ConsoleFeatures> retrieveConsoleFeatures() {
+        return ApiResponse.success(
+                new PermissionDto.Response.ConsoleFeatures(partnerDirectOrderPolicy.isEnabled()), traceIdProvider.getTraceId());
     }
 }

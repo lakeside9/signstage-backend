@@ -20,7 +20,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
  */
 class PartnerDirectOrderInterceptorTest {
 
-    private final PartnerDirectOrderInterceptor disabled = new PartnerDirectOrderInterceptor(false);
+    private final PartnerDirectOrderInterceptor disabled = new PartnerDirectOrderInterceptor(new PartnerDirectOrderPolicy(false));
 
     @AfterEach
     void clearContext() {
@@ -56,7 +56,7 @@ class PartnerDirectOrderInterceptorTest {
         assertAllowed("POST", "/api/organizations/1/ceremonies");
 
         authenticate(null);
-        assertThat(new PartnerDirectOrderInterceptor(true)
+        assertThat(new PartnerDirectOrderInterceptor(new PartnerDirectOrderPolicy(true))
                 .preHandle(request("POST", "/api/organizations/1/ceremonies"), new MockHttpServletResponse(), new Object()))
                 .isTrue();
     }

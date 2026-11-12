@@ -46,6 +46,13 @@ public final class PermissionDto {
             private List<String> permissionKeys;
         }
 
+        /** 조직 콘솔 기능 설정 — 파트너 직접 수주 보류(signstage-docs business/platform-order-partner-subcontract-review.md D29). */
+        @Getter
+        @AllArgsConstructor
+        public static class ConsoleFeatures {
+            private boolean partnerDirectOrderEnabled;
+        }
+
         /** 관리 화면의 "역할 × 권한키" 매트릭스 한 행. */
         @Getter
         @AllArgsConstructor

@@ -104,7 +104,7 @@ public class OrderPricingService {
         RegionSurcharge surcharge = findRegionSurchargeOrThrow(region, asOfDate);
         checkCurrency(surcharge.getCurrencyCode(), currencyPolicy);
         if (surcharge.getCustomerAmount().signum() > 0) {
-            lines.add(buildLine(SalesOrderLineType.REGION_SURCHARGE, null, "지역 할증(" + region.name() + ")", 1,
+            lines.add(buildLine(SalesOrderLineType.REGION_SURCHARGE, null, "지역 할증(" + region.label() + ")", 1,
                     surcharge.getCustomerAmount(), surcharge.getTaxCode(), currencyPolicy, asOfDate));
         }
 

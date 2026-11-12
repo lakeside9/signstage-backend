@@ -6,7 +6,6 @@ import com.eformworks.signstage.backend.core.security.CurrentUser;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,7 +17,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
  * 파트너 직접 수주 기능을 끈다 — signstage-docs business/platform-order-partner-subcontract-review.md
  * D01(2026-11-12 결정: 플랫폼 수주 단독, 파트너 직접 수주 보류)·D29 안 A(코드 유지, 설정으로 끔).
  *
- * <p>{@code signstage.partner-direct-order.enabled=false}(기본값)이면 파트너가 쓰던 행사 직접 등록,
+ * <p>{@link PartnerDirectOrderPolicy}가 꺼져 있으면(기본값) 파트너가 쓰던 행사 직접 등록,
  * 플랜 선택·확정, 장바구니·추가구매, 고객 견적·마진, 현장지원 요청, 마진 정책, 구독 신청·해지 요청,
  * 과금 시뮬레이터를 거부한다. 조회 API는 열어 둔다(플랫폼 수주 행사 화면이 한도·구매 내역을 읽는다).
  *
@@ -49,16 +48,16 @@ public class PartnerDirectOrderInterceptor implements HandlerInterceptor {
             "/api/organizations/*/subscriptions/**"
     );
 
-    private final boolean enabled;
+    private final PartnerDirectOrderPolicy partnerDirectOrderPolicy;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
-    public PartnerDirectOrderInterceptor(@Value("${signstage.partner-direct-order.enabled:false}") boolean enabled) {
-        this.enabled = enabled;
+    public PartnerDirectOrderInterceptor(PartnerDirectOrderPolicy partnerDirectOrderPolicy) {
+        this.partnerDirectOrderPolicy = partnerDirectOrderPolicy;
     }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        if (enabled || isPlatformAdmin()) {
+        if (partnerDirectOrderPolicy.isEnabled() || isPlatformAdmin()) {
             return true;
         }
         String path = request.getRequestURI().substring(request.getContextPath().length());
