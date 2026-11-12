@@ -22,3 +22,5 @@ signstage:
     # 검수 기한(행사 완료일 + N일, 지나면 승인 간주)과 지급 기한 상한(승인일 + N일) — D11.
     inspection-days: 7
     payment-max-days: 60
+    # 고객 선금 비율(수주 금액 대비, 0이면 잔금만 청구) — D12.
+    advance-payment-rate: 0.3

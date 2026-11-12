@@ -11,6 +11,7 @@ import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQu
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminPartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminSalesOrderDto;
 import com.eformworks.signstage.backend.feature.order.dto.SalesQuotePortalDto;
+import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceStatus;
 import com.eformworks.signstage.backend.feature.order.entity.Customer;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerStatus;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
@@ -23,6 +24,7 @@ import com.eformworks.signstage.backend.feature.order.entity.SalesOrderStatus;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteOption;
+import com.eformworks.signstage.backend.feature.order.repository.CustomerInvoiceRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderLineRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderRepository;
@@ -66,6 +68,7 @@ public class SalesOrderService {
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
     private final PartnerOrderRepository partnerOrderRepository;
+    private final CustomerInvoiceRepository customerInvoiceRepository;
     private final CustomerService customerService;
     private final BillingCatalogQueryService billingCatalogQueryService;
     private final OrderPricingService orderPricingService;
@@ -156,6 +159,9 @@ public class SalesOrderService {
         List<PartnerOrder> partnerOrders = partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(salesOrderId);
         if (partnerOrders.stream().anyMatch(order -> order.getStatus() == PartnerOrderStatus.ACCEPTED)) {
             throw new ApplicationException(OrderErrorCode.SALES_ORDER_HAS_ACCEPTED_PARTNER_ORDER);
+        }
+        if (customerInvoiceRepository.existsBySalesOrderIdAndStatusNot(salesOrderId, CustomerInvoiceStatus.CANCELLED)) {
+            throw new ApplicationException(OrderErrorCode.SALES_ORDER_HAS_ACTIVE_INVOICE);
         }
         partnerOrders.stream()
                 .filter(order -> order.getStatus() == PartnerOrderStatus.ISSUED)

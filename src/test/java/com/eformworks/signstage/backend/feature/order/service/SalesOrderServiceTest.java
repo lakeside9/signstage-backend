@@ -7,12 +7,14 @@ import static org.mockito.BDDMockito.given;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
+import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceStatus;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderAcceptanceChannel;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderStatus;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
+import com.eformworks.signstage.backend.feature.order.repository.CustomerInvoiceRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderLineRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderRepository;
@@ -46,6 +48,8 @@ class SalesOrderServiceTest {
     private SalesOrderLineRepository salesOrderLineRepository;
     @Mock
     private PartnerOrderRepository partnerOrderRepository;
+    @Mock
+    private CustomerInvoiceRepository customerInvoiceRepository;
     @Mock
     private CustomerService customerService;
     @Mock
@@ -118,6 +122,20 @@ class SalesOrderServiceTest {
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(OrderErrorCode.SALES_ORDER_HAS_ACCEPTED_PARTNER_ORDER);
+    }
+
+    @Test
+    @DisplayName("취소되지 않은 청구가 있으면 수주를 취소하지 않는다")
+    void cancelSalesOrder_rejectsWhenInvoiceActive() {
+        given(rolePermissionService.isAllowed(ROLE, "ACTION_SALES_ORDER_MANAGE")).willReturn(true);
+        given(salesOrderRepository.findById(100L)).willReturn(Optional.of(salesOrder));
+        given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(100L)).willReturn(List.of());
+        given(customerInvoiceRepository.existsBySalesOrderIdAndStatusNot(100L, CustomerInvoiceStatus.CANCELLED)).willReturn(true);
+
+        assertThatThrownBy(() -> salesOrderService.cancelSalesOrder(100L, 1L, ROLE, "고객 취소"))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(OrderErrorCode.SALES_ORDER_HAS_ACTIVE_INVOICE);
     }
 
     @Test

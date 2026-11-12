@@ -109,7 +109,40 @@ public enum OrderErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "지급 대기 중인 건만 지급 완료·취소할 수 있습니다."
     ),
-    PAYOUT_PAID_DATE_INVALID("ORDER_PAYOUT_PAID_DATE_INVALID", HttpStatus.BAD_REQUEST, "지급일은 오늘 이후일 수 없습니다.");
+    PAYOUT_PAID_DATE_INVALID("ORDER_PAYOUT_PAID_DATE_INVALID", HttpStatus.BAD_REQUEST, "지급일은 오늘 이후일 수 없습니다."),
+    INVOICE_NOT_FOUND("ORDER_INVOICE_NOT_FOUND", HttpStatus.NOT_FOUND, "청구를 찾을 수 없습니다."),
+    INVOICE_SALES_ORDER_NOT_ACCEPTED(
+            "ORDER_INVOICE_SALES_ORDER_NOT_ACCEPTED",
+            HttpStatus.CONFLICT,
+            "고객이 수락한 수주만 청구할 수 있습니다."
+    ),
+    INVOICE_ALREADY_ISSUED("ORDER_INVOICE_ALREADY_ISSUED", HttpStatus.CONFLICT, "이 수주에 같은 종류의 청구가 이미 있습니다."),
+    INVOICE_ADVANCE_DISABLED("ORDER_INVOICE_ADVANCE_DISABLED", HttpStatus.CONFLICT, "선금 비율이 0이라 선금을 청구하지 않습니다."),
+    INVOICE_ADVANCE_AFTER_BALANCE(
+            "ORDER_INVOICE_ADVANCE_AFTER_BALANCE",
+            HttpStatus.CONFLICT,
+            "잔금을 이미 청구한 수주에는 선금을 청구할 수 없습니다."
+    ),
+    INVOICE_BALANCE_BEFORE_COMPLETION(
+            "ORDER_INVOICE_BALANCE_BEFORE_COMPLETION",
+            HttpStatus.CONFLICT,
+            "행사가 완료된 뒤에 잔금을 청구할 수 있습니다."
+    ),
+    INVOICE_NOTHING_TO_BILL("ORDER_INVOICE_NOTHING_TO_BILL", HttpStatus.CONFLICT, "청구할 잔액이 없습니다."),
+    INVOICE_NOT_ISSUED("ORDER_INVOICE_NOT_ISSUED", HttpStatus.CONFLICT, "입금 대기 중인 청구만 입금 기록·취소할 수 있습니다."),
+    INVOICE_CANCELLED("ORDER_INVOICE_CANCELLED", HttpStatus.CONFLICT, "취소된 청구입니다."),
+    INVOICE_BALANCE_EXISTS(
+            "ORDER_INVOICE_BALANCE_EXISTS",
+            HttpStatus.CONFLICT,
+            "잔금 청구가 있어 선금 청구를 취소할 수 없습니다. 잔금 청구를 먼저 취소해주세요."
+    ),
+    INVOICE_DUE_DATE_INVALID("ORDER_INVOICE_DUE_DATE_INVALID", HttpStatus.BAD_REQUEST, "입금 기한은 오늘 이후여야 합니다."),
+    INVOICE_PAID_DATE_INVALID("ORDER_INVOICE_PAID_DATE_INVALID", HttpStatus.BAD_REQUEST, "입금일은 오늘 이후일 수 없습니다."),
+    SALES_ORDER_HAS_ACTIVE_INVOICE(
+            "ORDER_SALES_ORDER_HAS_ACTIVE_INVOICE",
+            HttpStatus.CONFLICT,
+            "청구가 있는 수주는 취소할 수 없습니다. 입금 전 청구를 먼저 취소해주세요."
+    );
 
     private final String code;
     private final HttpStatus httpStatus;

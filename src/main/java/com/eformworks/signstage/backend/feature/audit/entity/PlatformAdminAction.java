@@ -77,5 +77,10 @@ public enum PlatformAdminAction {
     APPROVE_ORDER_INSPECTION,
     CREATE_PARTNER_PAYOUTS,
     MARK_PARTNER_PAYOUT_PAID,
-    CANCEL_PARTNER_PAYOUT
+    CANCEL_PARTNER_PAYOUT,
+    /** 고객 청구·수납 — signstage-docs business/platform-order-partner-subcontract-review.md D12·D16. */
+    ISSUE_CUSTOMER_INVOICE,
+    RECORD_CUSTOMER_PAYMENT,
+    RECORD_CUSTOMER_TAX_INVOICE,
+    CANCEL_CUSTOMER_INVOICE
 }
