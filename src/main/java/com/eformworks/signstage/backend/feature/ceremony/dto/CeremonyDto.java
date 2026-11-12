@@ -343,6 +343,8 @@ public final class CeremonyDto {
             private final BigDecimal taxAmount;
             private final BigDecimal grossAmount;
             private final BigDecimal finalTotal;
+            /** 구독으로 확정한 행사라 플랜 금액을 구독으로 이미 냈다(플랜 금액은 0, D21). */
+            private final boolean planCoveredBySubscription;
         }
 
         /** 플랜 이력 스냅샷의 단위 상품 한 줄 — 포함 수량 × 그 순간 단가. */

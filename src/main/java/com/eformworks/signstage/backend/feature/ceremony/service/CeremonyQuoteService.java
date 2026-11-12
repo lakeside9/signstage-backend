@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.OrganizationSubscription;
 import com.eformworks.signstage.backend.feature.billing.entity.TaxPolicy;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCategory;
@@ -21,6 +22,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlan
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -84,7 +86,8 @@ public class CeremonyQuoteService {
                 calculation.netAmount(),
                 calculation.taxAmount(),
                 calculation.grossAmount(),
-                calculation.grossAmount()
+                calculation.grossAmount(),
+                ceremony.getSubscription() != null
         );
     }
 
@@ -99,12 +102,83 @@ public class CeremonyQuoteService {
      * 순서는 원래 설계 그대로: 플랜 소계 → 플랜 할인(품목 할인) → 추가구매 합산 → subtotal →
      * 행사 건별 재량 할인(ceremony 할인) → 세금(라인별 비례 배분 + 라인별 taxCode로 계산).
      * 호출자가 이미 조직/행사 접근 권한을 검증했다고 전제한다(이 메서드 자체는 검증하지 않음).
+     *
+     * <p>구독으로 확정한 행사({@code ceremony.subscription})는 플랜 금액을 구독으로 이미 냈으므로 플랜 줄을
+     * 넣지 않고 추가구매만 센다 — "구독 포함 기본료 재청구 제외"(signstage-docs
+     * business/platform-order-partner-subcontract-review.md D21).
      */
     QuoteCalculation buildQuoteCalculation(Ceremony ceremony) {
         CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
         LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
 
-        // ---- 플랜 줄(품목 식별자 보존) → 플랜 할인(품목 할인) 비례 배분 ----
+        List<QuoteLineDraft> planLines = ceremony.getSubscription() == null
+                ? buildPlanLines(ceremony, asOfDate, currencyPolicy)
+                : List.of();
+        BigDecimal planAppliedPrice = planLines.stream()
+                .map(QuoteLineDraft::afterItemDiscount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // ---- 추가구매 줄(승인분, 정가 그대로 — 품목 할인 없음, 3.5절 결정) ----
+        List<QuoteLineDraft> purchaseLines = ceremonyUnitProductPurchaseLineRepository
+                .findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(ceremony.getId()).stream()
+                .filter(line -> line.getPurchase().getStatus() == PurchaseStatus.APPROVED)
+                .map(line -> {
+                    BigDecimal listAmount = line.getPurchasedSalePrice().multiply(BigDecimal.valueOf(line.getQuantity()));
+                    return new QuoteLineDraft(
+                            "UNIT_PRODUCT_PURCHASE", line.getUnitProduct().getId(), line.getPurchasedName(),
+                            line.getUnitProduct().getCategory(), line.getUnitProduct().isPlatformUsageFee(),
+                            line.getQuantity(), line.getPurchasedSalePrice(), listAmount, BigDecimal.ZERO,
+                            line.getPurchasedTaxCode()
+                    );
+                })
+                .toList();
+        BigDecimal purchaseTotal = purchaseLines.stream().map(QuoteLineDraft::listAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        List<QuoteLineDraft> allLines = new ArrayList<>(planLines);
+        allLines.addAll(purchaseLines);
+
+        BigDecimal subtotal = planAppliedPrice.add(purchaseTotal);
+        BigDecimal netAmount = moneyCalculator.applyDiscount(
+                subtotal, ceremony.getFinalDiscount().getDiscountType(), ceremony.getFinalDiscount().getDiscountValue(), currencyPolicy
+        );
+
+        List<QuoteLineDetail> lineDetails = allocateCeremonyDiscountAndTax(allLines, subtotal, netAmount, currencyPolicy, asOfDate);
+        BigDecimal taxAmount = lineDetails.stream().map(QuoteLineDetail::taxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal grossAmount = moneyCalculator.normalize(netAmount.add(taxAmount), currencyPolicy);
+
+        return new QuoteCalculation(planAppliedPrice, purchaseTotal, subtotal, netAmount, taxAmount, grossAmount, lineDetails);
+    }
+
+    /**
+     * 구독으로 확정한 행사의 고객 견적 시스템 사용료 원가 — 구독 1회분(구매 금액 ÷ 허용 횟수) 중 플랜에서
+     * 플랫폼 이용료 단위 상품이 차지하는 비중(플랜 할인 후 금액 기준)만큼이다(D21, 2026-11-12 결정).
+     * 구독 행사가 아니면 0이다. 행사 건별 재량 할인은 구독 금액에 적용하지 않는다.
+     */
+    BigDecimal calculateSubscriptionUsageCost(Ceremony ceremony) {
+        OrganizationSubscription subscription = ceremony.getSubscription();
+        if (subscription == null || subscription.getPurchaseAmountSnapshot() == null) {
+            return BigDecimal.ZERO;
+        }
+        CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
+        LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
+        List<QuoteLineDraft> planLines = buildPlanLines(ceremony, asOfDate, currencyPolicy);
+        BigDecimal planTotal = planLines.stream().map(QuoteLineDraft::afterItemDiscount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (planTotal.signum() == 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal usageFeeTotal = planLines.stream()
+                .filter(QuoteLineDraft::platformUsageFee)
+                .map(QuoteLineDraft::afterItemDiscount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        int allowedCount = subscription.getAllowedCountSnapshot() == null ? 1 : Math.max(1, subscription.getAllowedCountSnapshot());
+        BigDecimal share = subscription.getPurchaseAmountSnapshot()
+                .multiply(usageFeeTotal)
+                .divide(planTotal.multiply(BigDecimal.valueOf(allowedCount)), MathContext.DECIMAL64);
+        return moneyCalculator.normalize(share, currencyPolicy);
+    }
+
+    /** 플랜 줄(품목 식별자 보존)에 플랜 할인(품목 할인)을 비례 배분한 결과. 플랜이 없으면 빈 목록이다. */
+    private List<QuoteLineDraft> buildPlanLines(Ceremony ceremony, LocalDate asOfDate, CurrencyPolicy currencyPolicy) {
         List<QuoteLineDraft> planLines = new ArrayList<>();
         BillingPlan plan = ceremony.getBillingPlan();
         if (plan != null) {
@@ -156,39 +230,7 @@ public class CeremonyQuoteService {
             planLines.clear();
             planLines.addAll(allocatedPlanLines);
         }
-        BigDecimal planAppliedPrice = planLines.stream()
-                .map(QuoteLineDraft::afterItemDiscount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // ---- 추가구매 줄(승인분, 정가 그대로 — 품목 할인 없음, 3.5절 결정) ----
-        List<QuoteLineDraft> purchaseLines = ceremonyUnitProductPurchaseLineRepository
-                .findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(ceremony.getId()).stream()
-                .filter(line -> line.getPurchase().getStatus() == PurchaseStatus.APPROVED)
-                .map(line -> {
-                    BigDecimal listAmount = line.getPurchasedSalePrice().multiply(BigDecimal.valueOf(line.getQuantity()));
-                    return new QuoteLineDraft(
-                            "UNIT_PRODUCT_PURCHASE", line.getUnitProduct().getId(), line.getPurchasedName(),
-                            line.getUnitProduct().getCategory(), line.getUnitProduct().isPlatformUsageFee(),
-                            line.getQuantity(), line.getPurchasedSalePrice(), listAmount, BigDecimal.ZERO,
-                            line.getPurchasedTaxCode()
-                    );
-                })
-                .toList();
-        BigDecimal purchaseTotal = purchaseLines.stream().map(QuoteLineDraft::listAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        List<QuoteLineDraft> allLines = new ArrayList<>(planLines);
-        allLines.addAll(purchaseLines);
-
-        BigDecimal subtotal = planAppliedPrice.add(purchaseTotal);
-        BigDecimal netAmount = moneyCalculator.applyDiscount(
-                subtotal, ceremony.getFinalDiscount().getDiscountType(), ceremony.getFinalDiscount().getDiscountValue(), currencyPolicy
-        );
-
-        List<QuoteLineDetail> lineDetails = allocateCeremonyDiscountAndTax(allLines, subtotal, netAmount, currencyPolicy, asOfDate);
-        BigDecimal taxAmount = lineDetails.stream().map(QuoteLineDetail::taxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal grossAmount = moneyCalculator.normalize(netAmount.add(taxAmount), currencyPolicy);
-
-        return new QuoteCalculation(planAppliedPrice, purchaseTotal, subtotal, netAmount, taxAmount, grossAmount, lineDetails);
+        return planLines;
     }
 
     /**

@@ -102,6 +102,8 @@ class CustomerQuoteServiceTest {
     @BeforeEach
     void setUpPermissions() {
         lenient().when(rolePermissionService.isAllowed(eq("OWNER"), anyString())).thenReturn(true);
+        // 구독 행사가 아닌 견적이 기본이다(D21 구독 1회분 원가는 CeremonyQuoteServiceTest에서 본다).
+        lenient().when(ceremonyQuoteService.calculateSubscriptionUsageCost(any())).thenReturn(BigDecimal.ZERO);
     }
 
     private Ceremony ceremony() {

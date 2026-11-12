@@ -265,10 +265,12 @@ public class CustomerQuoteService {
         MarginInfo margin = resolved.margin();
 
         QuoteCalculation calculation = ceremonyQuoteService.buildQuoteCalculation(ceremony);
+        // 구독 행사는 플랜 줄이 계산에서 빠지므로 구독 1회분을 원가로 더한다(D21).
         BigDecimal systemUsageCostAmount = calculation.lines().stream()
                 .filter(QuoteLineDetail::platformUsageFee)
                 .map(QuoteLineDetail::netAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .add(ceremonyQuoteService.calculateSubscriptionUsageCost(ceremony));
 
         // 장비/인력은 더 이상 승인된 구매 기록에서 역산하지 않는다 — 파트너가 카탈로그에서
         // 직접 고른 품목·수량·고객 단가를 그대로 쓴다(signstage-docs

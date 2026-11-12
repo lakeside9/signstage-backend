@@ -9,7 +9,10 @@ import static org.mockito.Mockito.mock;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyDto;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.OrganizationSubscription;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCategory;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.ceremony.model.QuoteCalculation;
 import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.billing.entity.TaxCategory;
 import com.eformworks.signstage.backend.feature.billing.entity.TaxPolicy;
@@ -73,5 +76,61 @@ class CeremonyQuoteServiceTest extends CeremonyServiceTestSupport {
         assertThat(result.getGrossAmount()).isEqualByComparingTo("11006");
         assertThat(result.getCurrencyCode()).isEqualTo("KRW");
         assertThat(result.getFractionDigits()).isZero();
+    }
+
+    @Test
+    @DisplayName("구독으로 확정한 행사의 예상 이용료는 플랜 금액을 다시 세지 않는다(D21)")
+    void buildQuoteCalculation_excludesPlanForSubscriptionCeremony() {
+        BillingPlan plan = BillingPlan.builder().name("구독").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Ceremony ceremony = Ceremony.builder().organization(organization()).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+        ReflectionTestUtils.setField(ceremony, "subscription", mock(OrganizationSubscription.class));
+        given(ceremonyUnitProductPurchaseLineRepository.findAllByPurchase_CeremonyIdOrderByCreatedAtDesc(10L)).willReturn(List.of());
+
+        QuoteCalculation calculation = ceremonyQuoteService.buildQuoteCalculation(ceremony);
+
+        assertThat(calculation.planAppliedPrice()).isEqualByComparingTo("0");
+        assertThat(calculation.netAmount()).isEqualByComparingTo("0");
+        assertThat(calculation.lines()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("구독 행사의 고객 견적 원가는 구독 1회분 중 플랫폼 이용료 비중이다(D21)")
+    void calculateSubscriptionUsageCost_usesOneUseShare() {
+        BillingPlan plan = BillingPlan.builder().name("구독").build();
+        ReflectionTestUtils.setField(plan, "id", 101L);
+        Ceremony ceremony = Ceremony.builder().organization(organization()).billingPlan(plan).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+        OrganizationSubscription subscription = mock(OrganizationSubscription.class);
+        given(subscription.getPurchaseAmountSnapshot()).willReturn(new BigDecimal("100000"));
+        given(subscription.getAllowedCountSnapshot()).willReturn(5);
+        ReflectionTestUtils.setField(ceremony, "subscription", subscription);
+
+        UnitProduct signers = unitProduct(901L, UnitProductType.SIGNERS);
+        UnitProduct tablets = UnitProduct.builder()
+                .type(UnitProductType.SIGNERS).name("태블릿").category(UnitProductCategory.EQUIPMENT).build();
+        ReflectionTestUtils.setField(tablets, "id", 902L);
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(101L)).willReturn(List.of(
+                BillingPlanUnitProduct.builder().billingPlan(plan).unitProduct(signers).includedQuantity(1).build(),
+                BillingPlanUnitProduct.builder().billingPlan(plan).unitProduct(tablets).includedQuantity(1).build()
+        ));
+        given(unitProductPricePeriodRepository.findEffective(eq(901L), any(LocalDate.class)))
+                .willReturn(Optional.of(unitProductPeriod(signers, new BigDecimal("10000"), new BigDecimal("10000"))));
+        given(unitProductPricePeriodRepository.findEffective(eq(902L), any(LocalDate.class)))
+                .willReturn(Optional.of(unitProductPeriod(tablets, new BigDecimal("10000"), new BigDecimal("10000"))));
+        given(billingPlanDiscountPeriodRepository.findEffective(eq(101L), any(LocalDate.class)))
+                .willReturn(Optional.of(planDiscountPeriod(plan, DiscountType.FIXED_AMOUNT, BigDecimal.ZERO)));
+
+        // 1회분 100,000 ÷ 5 = 20,000 중 플랫폼 이용료(서명자) 비중 1/2
+        assertThat(ceremonyQuoteService.calculateSubscriptionUsageCost(ceremony)).isEqualByComparingTo("10000");
+    }
+
+    @Test
+    @DisplayName("구독 행사가 아니면 구독 원가는 0이다")
+    void calculateSubscriptionUsageCost_zeroWithoutSubscription() {
+        Ceremony ceremony = Ceremony.builder().organization(organization()).title("행사").build();
+
+        assertThat(ceremonyQuoteService.calculateSubscriptionUsageCost(ceremony)).isEqualByComparingTo("0");
     }
 }
