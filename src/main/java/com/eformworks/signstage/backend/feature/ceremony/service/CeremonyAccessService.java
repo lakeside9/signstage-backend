@@ -105,6 +105,17 @@ public class CeremonyAccessService {
     }
 
     /**
+     * 플랜 변경·추가구매·고객 견적·현장지원 요청은 파트너 직접 수주 행사에서만 쓴다 — 플랫폼 수주
+     * 행사는 범위와 가격을 플랫폼이 수주·발주로 관리한다(signstage-docs
+     * business/platform-order-partner-subcontract-review.md 4.3~4.7절).
+     */
+    void checkPartnerDirectCeremony(Ceremony ceremony) {
+        if (ceremony.isPlatformOrder()) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLATFORM_ORDER_RESTRICTED);
+        }
+    }
+
+    /**
      * 완료(COMPLETED)된 Ceremony 아래에서는 하위 데이터를 더 이상 수정할 수 없다 — 조회만 가능하다.
      * 결과물 생성처럼 완료를 유발하는 호출 자체는 이 체크가 통과한 뒤(아직 IN_PROGRESS일 때)
      * 실행되고, 완료 전이는 그 성공 이후에 일어나므로 스스로를 막지 않는다.

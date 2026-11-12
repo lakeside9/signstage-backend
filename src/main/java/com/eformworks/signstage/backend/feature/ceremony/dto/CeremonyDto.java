@@ -211,6 +211,7 @@ public final class CeremonyDto {
             private final String location;
             private final LocalDateTime startsAt;
             private final LocalDateTime endsAt;
+            private final String orderRoute;
 
             public static CeremonySummary from(Ceremony ceremony) {
                 return new CeremonySummary(
@@ -235,7 +236,8 @@ public final class CeremonyDto {
                         ceremony.getCreatedAt(),
                         ceremony.getLocation(),
                         ceremony.getStartsAt(),
-                        ceremony.getEndsAt()
+                        ceremony.getEndsAt(),
+                        ceremony.getOrderRoute().name()
                 );
             }
         }

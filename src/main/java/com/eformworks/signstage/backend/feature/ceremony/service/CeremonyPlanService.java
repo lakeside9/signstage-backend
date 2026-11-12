@@ -58,6 +58,7 @@ public class CeremonyPlanService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
         checkCeremonyPlanChangeable(ceremony);
 
         BillingPlan newPlan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId());
@@ -86,6 +87,7 @@ public class CeremonyPlanService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
         checkCeremonyPlanChangeable(ceremony);
         if (ceremony.getBillingPlan() == null) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);
@@ -119,6 +121,7 @@ public class CeremonyPlanService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
         checkCeremonyPlanChangeable(ceremony);
         if (ceremony.getBillingPlan() == null) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLAN_NOT_SELECTED);

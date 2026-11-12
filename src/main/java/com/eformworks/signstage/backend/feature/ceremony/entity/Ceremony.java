@@ -69,6 +69,14 @@ public class Ceremony extends BaseEntity {
     @JoinColumn(name = "organization_id", nullable = false)
     private Organization organization;
 
+    /**
+     * 수주 경로 — {@link CeremonyOrderRoute} 참고. 만든 뒤 바꾸지 않는다. 플랫폼 수주 행사는
+     * {@code PlatformOrderCeremonyService}만 만든다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_route", nullable = false, length = 20)
+    private CeremonyOrderRoute orderRoute;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "billing_plan_id")
     private BillingPlan billingPlan;
@@ -159,11 +167,12 @@ public class Ceremony extends BaseEntity {
 
     @Builder
     private Ceremony(
-            Organization organization, BillingPlan billingPlan, String title,
+            Organization organization, CeremonyOrderRoute orderRoute, BillingPlan billingPlan, String title,
             String description, String organizingInstitution, String organizingDepartment,
             String contactName, String contactTitle, String contactPhone, String contactEmail
     ) {
         this.organization = organization;
+        this.orderRoute = orderRoute != null ? orderRoute : CeremonyOrderRoute.PARTNER_DIRECT;
         this.billingPlan = billingPlan;
         this.currencyCode = organization == null
                 ? com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults.CURRENCY_CODE
@@ -257,6 +266,10 @@ public class Ceremony extends BaseEntity {
      */
     public void linkSubscription(OrganizationSubscription subscription) {
         this.subscription = subscription;
+    }
+
+    public boolean isPlatformOrder() {
+        return orderRoute == CeremonyOrderRoute.PLATFORM_ORDER;
     }
 
     public CurrencyPolicy currencyPolicy() {

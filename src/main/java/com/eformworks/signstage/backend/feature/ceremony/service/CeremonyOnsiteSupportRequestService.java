@@ -71,6 +71,7 @@ public class CeremonyOnsiteSupportRequestService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
 
         CeremonyOnsiteSupportRequest onsiteSupportRequest = CeremonyOnsiteSupportRequest.builder()
                 .ceremony(ceremony)
@@ -102,6 +103,7 @@ public class CeremonyOnsiteSupportRequestService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
 
         CeremonyOnsiteSupportRequest onsiteSupportRequest = findRequestInCeremonyOrThrow(ceremonyId, requestId);
         if (onsiteSupportRequest.getStatus() != OnsiteSupportRequestStatus.QUOTED) {
@@ -121,6 +123,7 @@ public class CeremonyOnsiteSupportRequestService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
 
         CeremonyOnsiteSupportRequest onsiteSupportRequest = findRequestInCeremonyOrThrow(ceremonyId, requestId);
         if (onsiteSupportRequest.getStatus() != OnsiteSupportRequestStatus.QUOTED) {

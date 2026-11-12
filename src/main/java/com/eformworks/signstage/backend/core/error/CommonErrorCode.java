@@ -12,6 +12,15 @@ public enum CommonErrorCode implements ErrorCode {
     METHOD_NOT_ALLOWED("METHOD_NOT_ALLOWED", HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 HTTP 메서드입니다."),
     TOO_MANY_REQUESTS("TOO_MANY_REQUESTS", HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
     /**
+     * 파트너 직접 수주 기능을 보류 중이라 꺼 둔 API — signstage-docs
+     * business/platform-order-partner-subcontract-review.md D01·D29. {@code PartnerDirectOrderInterceptor}가 던진다.
+     */
+    PARTNER_DIRECT_ORDER_DISABLED(
+            "PARTNER_DIRECT_ORDER_DISABLED",
+            HttpStatus.FORBIDDEN,
+            "파트너 직접 수주 기능(행사 직접 등록·플랜·추가구매·구독·고객 견적·현장지원 요청)은 현재 제공하지 않습니다."
+    ),
+    /**
      * DB 제약(유니크·외래키 등) 위반으로 저장에 실패했을 때 쓴다 —
      * {@code GlobalExceptionHandler#handleDataIntegrityViolationException}이
      * {@code DataIntegrityViolationException}을 여기로 번역한다. 이전엔 이 예외가 잡히지 않아

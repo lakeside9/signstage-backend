@@ -193,6 +193,7 @@ public class CustomerQuoteService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
 
         MarginInfo margin = toMarginInfo(request.getMarginType(), request.getMarginValue());
         CeremonyMarginOverride override = ceremonyMarginOverrideRepository.findByCeremonyId(ceremony.getId())
@@ -208,6 +209,7 @@ public class CustomerQuoteService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
 
         CeremonyMarginOverride override = ceremonyMarginOverrideRepository.findByCeremonyId(ceremony.getId())
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CUSTOMER_MARGIN_OVERRIDE_NOT_SET));
@@ -254,6 +256,7 @@ public class CustomerQuoteService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         checkCustomerQuoteAccess(actingMember);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
         ceremonyAccessService.checkCeremonyPlanConfirmed(ceremony);
         CurrencyPolicy currencyPolicy = ceremony.currencyPolicy();
 

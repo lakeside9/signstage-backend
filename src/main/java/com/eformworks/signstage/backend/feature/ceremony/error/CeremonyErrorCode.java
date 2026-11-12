@@ -233,6 +233,16 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "행사에 과금 플랜을 먼저 선택해주세요."
     ),
+    CEREMONY_PLATFORM_ORDER_RESTRICTED(
+            "CEREMONY_PLATFORM_ORDER_RESTRICTED",
+            HttpStatus.CONFLICT,
+            "플랫폼 수주 행사에서는 플랜 변경·추가구매·고객 견적·현장지원 요청을 할 수 없습니다. 범위 변경은 플랫폼에 문의해주세요."
+    ),
+    CEREMONY_PLATFORM_ORDER_CONTRACT_FIELD_LOCKED(
+            "CEREMONY_PLATFORM_ORDER_CONTRACT_FIELD_LOCKED",
+            HttpStatus.CONFLICT,
+            "플랫폼 수주 행사의 제목·장소·일정은 계약 조건이라 플랫폼만 바꿀 수 있습니다."
+    ),
     CEREMONY_NOT_DELETABLE(
             "CEREMONY_NOT_DELETABLE",
             HttpStatus.CONFLICT,

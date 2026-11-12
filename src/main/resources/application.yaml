@@ -10,3 +10,12 @@ spring:
         # 보내면 Spring Data가 이 값으로 잘라낸다. 관리자 화면의 조직 선택 드롭다운이 size=200으로
         # 조직 목록을 한 번에 받으므로(AdminCeremonyDiscounts.tsx 등) 200으로 둔다.
         max-page-size: 200
+
+signstage:
+  # 파트너 직접 수주 보류(signstage-docs business/platform-order-partner-subcontract-review.md D01·D29).
+  # true로 바꾸면 파트너의 행사 직접 등록·플랜·추가구매·구독·고객 견적·현장지원 요청 API가 다시 열린다.
+  partner-direct-order:
+    enabled: false
+  platform-order:
+    # 최소 마진율(고객 공급가 대비). 0이면 적자 수주만 막는다(D06 최소 마진 기준 미정).
+    minimum-margin-rate: 0

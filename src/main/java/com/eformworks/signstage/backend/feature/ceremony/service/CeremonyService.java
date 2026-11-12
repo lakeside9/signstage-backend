@@ -29,6 +29,7 @@ import com.eformworks.signstage.backend.feature.permission.service.RolePermissio
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -227,6 +228,7 @@ public class CeremonyService {
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
         ceremonyAccessService.checkCeremonyEditable(ceremony);
+        checkPlatformOrderContractFieldsUnchanged(ceremony, request);
 
         ceremony.updateInfo(
                 request.getTitle(),
@@ -336,6 +338,27 @@ public class CeremonyService {
             return DiscountType.valueOf(discountType);
         } catch (IllegalArgumentException e) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    /**
+     * 플랫폼 수주 행사의 제목·장소·일정은 고객 계약 조건이라 파트너가 바꾸지 않는다(signstage-docs
+     * business/platform-order-partner-subcontract-review.md D14). 운영 정보(설명, 주관 기관,
+     * 담당자)는 그대로 고칠 수 있다.
+     */
+    private void checkPlatformOrderContractFieldsUnchanged(Ceremony ceremony, CeremonyDto.Request.UpdateCeremony request) {
+        if (!ceremony.isPlatformOrder()) {
+            return;
+        }
+        String requestedLocation = request.getLocation() == null || request.getLocation().isBlank()
+                ? null
+                : request.getLocation().trim();
+        boolean changed = !Objects.equals(ceremony.getTitle(), request.getTitle())
+                || !Objects.equals(ceremony.getLocation(), requestedLocation)
+                || !Objects.equals(ceremony.getStartsAt(), request.getStartsAt())
+                || !Objects.equals(ceremony.getEndsAt(), request.getEndsAt());
+        if (changed) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_PLATFORM_ORDER_CONTRACT_FIELD_LOCKED);
         }
     }
 

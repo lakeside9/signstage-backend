@@ -76,6 +76,7 @@ public class CeremonyUnitProductPurchaseService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
         ceremonyAccessService.checkCeremonyEditable(ceremony);
         ceremonyAccessService.checkCeremonyPlanConfirmed(ceremony);
 
@@ -109,6 +110,7 @@ public class CeremonyUnitProductPurchaseService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
         ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyUnitProductCartLine line = ceremonyUnitProductCartLineRepository
@@ -128,6 +130,7 @@ public class CeremonyUnitProductPurchaseService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
         ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyUnitProductCartLine line = ceremonyUnitProductCartLineRepository
@@ -163,6 +166,7 @@ public class CeremonyUnitProductPurchaseService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyManageAccess(ceremony, actingMember, currentUserId);
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
         ceremonyAccessService.checkCeremonyEditable(ceremony);
         // 플랜이 확정(DRAFT → IN_PROGRESS)된 행사에서만 구매할 수 있다(2026-09-11 사용자
         // 요청) — addToCart에서 이미 막지만, 이 요청 이전에 이미 담겨 있던 장바구니로

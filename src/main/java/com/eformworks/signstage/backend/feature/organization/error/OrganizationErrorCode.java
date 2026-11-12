@@ -70,6 +70,21 @@ public enum OrganizationErrorCode implements ErrorCode {
             "ORGANIZATION_MEMBER_IS_PLATFORM_ADMIN",
             HttpStatus.CONFLICT,
             "플랫폼 관리자는 조직에 소속될 수 없습니다."
+    ),
+    ORGANIZATION_PARTNER_PROFILE_NOT_FOUND(
+            "ORGANIZATION_PARTNER_PROFILE_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "파트너 외주 정보가 등록되지 않았습니다."
+    ),
+    ORGANIZATION_PARTNER_BUSINESS_NUMBER_REQUIRED(
+            "ORGANIZATION_PARTNER_BUSINESS_NUMBER_REQUIRED",
+            HttpStatus.BAD_REQUEST,
+            "개인이 아닌 사업자는 사업자등록번호를 입력해야 합니다."
+    ),
+    ORGANIZATION_PARTNER_ACCOUNT_NOT_REGISTERED(
+            "ORGANIZATION_PARTNER_ACCOUNT_NOT_REGISTERED",
+            HttpStatus.CONFLICT,
+            "정산 계좌(은행·계좌번호·예금주)가 모두 등록되지 않아 확인할 수 없습니다."
     );
 
     private final String code;

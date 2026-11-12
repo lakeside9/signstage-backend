@@ -58,5 +58,19 @@ public enum PlatformAdminAction {
     REPLY_CEREMONY_INQUIRY,
     CLOSE_CEREMONY_INQUIRY,
     /** 현장지원 요청에 거리 등을 보고 실제 금액을 매긴다 — signstage-docs business/onsite-support-negotiation-and-billing-classification-review.md 3.2절(2026-09-12). */
-    QUOTE_ONSITE_SUPPORT_REQUEST
+    QUOTE_ONSITE_SUPPORT_REQUEST,
+    /** 플랫폼 수주·파트너 발주 — signstage-docs business/platform-order-partner-subcontract-review.md 4.1절. */
+    VERIFY_PARTNER_SETTLEMENT_ACCOUNT,
+    CREATE_CUSTOMER,
+    UPDATE_CUSTOMER,
+    CREATE_CUSTOMER_PRICE,
+    CREATE_REGION_SURCHARGE,
+    CREATE_PARTNER_RATE_CARD,
+    CLOSE_ORDER_PRICE_PERIOD,
+    CREATE_SALES_ORDER,
+    UPDATE_SALES_ORDER,
+    ACCEPT_SALES_ORDER,
+    CANCEL_SALES_ORDER,
+    ISSUE_PARTNER_ORDER,
+    CANCEL_PARTNER_ORDER
 }
