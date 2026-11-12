@@ -82,7 +82,7 @@ public class OrderPricingService {
                 .orElseThrow(() -> new ApplicationException(OrderErrorCode.CUSTOMER_PRICE_NOT_FOUND));
         checkCurrency(planPrice.getCurrencyCode(), currencyPolicy);
         lines.add(buildLine(SalesOrderLineType.BILLING_PLAN, null, plan.getName(), 1,
-                planPrice.getUnitPrice(), planPrice.getTaxCode(), currencyPolicy, asOfDate));
+                planPrice.getUnitPrice(), planPrice.getTaxCode(), planPrice.getId(), currencyPolicy, asOfDate));
 
         Set<Long> seenUnitProductIds = new HashSet<>();
         for (SalesQuoteOption option : options == null ? List.<SalesQuoteOption>of() : options) {
@@ -98,7 +98,7 @@ public class OrderPricingService {
                     .orElseThrow(() -> new ApplicationException(OrderErrorCode.CUSTOMER_PRICE_NOT_FOUND));
             checkCurrency(optionPrice.getCurrencyCode(), currencyPolicy);
             lines.add(buildLine(SalesOrderLineType.UNIT_PRODUCT, unitProduct, unitProduct.getName(), quantity,
-                    optionPrice.getUnitPrice(), optionPrice.getTaxCode(), currencyPolicy, asOfDate));
+                    optionPrice.getUnitPrice(), optionPrice.getTaxCode(), optionPrice.getId(), currencyPolicy, asOfDate));
             if (unitProduct.getType() == UnitProductType.TABLETS) {
                 tabletCount += quantity;
             } else if (unitProduct.getType() == UnitProductType.ONSITE_SUPPORT) {
@@ -110,7 +110,7 @@ public class OrderPricingService {
         checkCurrency(surcharge.getCurrencyCode(), currencyPolicy);
         if (surcharge.getCustomerAmount().signum() > 0) {
             lines.add(buildLine(SalesOrderLineType.REGION_SURCHARGE, null, "지역 할증(" + region.label() + ")", 1,
-                    surcharge.getCustomerAmount(), surcharge.getTaxCode(), currencyPolicy, asOfDate));
+                    surcharge.getCustomerAmount(), surcharge.getTaxCode(), null, currencyPolicy, asOfDate));
         }
         if (extras.rehearsalStaffPersonDays() > 0) {
             UnitProduct onsiteSupport = billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT)
@@ -119,12 +119,13 @@ public class OrderPricingService {
                     .orElseThrow(() -> new ApplicationException(OrderErrorCode.CUSTOMER_PRICE_NOT_FOUND));
             checkCurrency(staffPrice.getCurrencyCode(), currencyPolicy);
             lines.add(buildLine(SalesOrderLineType.REHEARSAL_STAFF, onsiteSupport, "리허설 현장 인력(별도일)",
-                    extras.rehearsalStaffPersonDays(), staffPrice.getUnitPrice(), staffPrice.getTaxCode(), currencyPolicy, asOfDate));
+                    extras.rehearsalStaffPersonDays(), staffPrice.getUnitPrice(), staffPrice.getTaxCode(), staffPrice.getId(),
+                    currencyPolicy, asOfDate));
         }
         if (extras.lodgingPersonNights() > 0) {
             lines.add(buildLine(SalesOrderLineType.LODGING, null,
                     "숙박(" + extras.lodgingNights() + "박 × " + extras.lodgingPersons() + "명)", extras.lodgingPersonNights(),
-                    surcharge.getLodgingCustomerAmount(), surcharge.getTaxCode(), currencyPolicy, asOfDate));
+                    surcharge.getLodgingCustomerAmount(), surcharge.getTaxCode(), null, currencyPolicy, asOfDate));
         }
 
         BigDecimal subtotal = lines.stream().map(SalesQuoteCalculation.Line::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -135,17 +136,17 @@ public class OrderPricingService {
         if (discount.signum() > 0) {
             // 할인은 패키지 세율로 음수 줄을 둔다 — 줄별 세액 합계가 그대로 부가세가 되게 한다.
             SalesQuoteCalculation.Line discountLine = buildLine(SalesOrderLineType.DISCOUNT, null, "영업 할인", 1,
-                    discount, planPrice.getTaxCode(), currencyPolicy, asOfDate);
+                    discount, planPrice.getTaxCode(), null, currencyPolicy, asOfDate);
             lines.add(new SalesQuoteCalculation.Line(
                     SalesOrderLineType.DISCOUNT, null, discountLine.name(), 1,
                     discountLine.unitPrice().negate(), discountLine.amount().negate(),
-                    discountLine.taxCode(), discountLine.taxRatePercent(), discountLine.taxAmount().negate()
+                    discountLine.taxCode(), discountLine.taxRatePercent(), discountLine.taxAmount().negate(), null
             ));
         }
 
         BigDecimal supplyAmount = lines.stream().map(SalesQuoteCalculation.Line::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal vatAmount = lines.stream().map(SalesQuoteCalculation.Line::taxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new SalesQuoteCalculation(lines, supplyAmount, vatAmount, tabletCount, onsiteStaffPersonDays, extras);
+        return new SalesQuoteCalculation(lines, supplyAmount, vatAmount, tabletCount, onsiteStaffPersonDays, extras, surcharge.getId());
     }
 
     /**
@@ -191,7 +192,8 @@ public class OrderPricingService {
         return new PartnerOrderAmount(
                 baseFee, tabletCount, tabletUnitRate, onsiteStaffPersonDays, onsiteStaffDayRate,
                 regionSurcharge, adjustment, moneyCalculator.normalize(total, currencyPolicy),
-                extras.spareTabletCount(), extras.rehearsalStaffPersonDays(), extras.lodgingPersonNights(), lodgingNightRate
+                extras.spareTabletCount(), extras.rehearsalStaffPersonDays(), extras.lodgingPersonNights(), lodgingNightRate,
+                rateCard.getId(), surcharge.getId()
         );
     }
 
@@ -232,14 +234,15 @@ public class OrderPricingService {
 
     private SalesQuoteCalculation.Line buildLine(
             SalesOrderLineType lineType, UnitProduct unitProduct, String name, int quantity, BigDecimal unitPrice,
-            String taxCode, CurrencyPolicy currencyPolicy, LocalDate asOfDate
+            String taxCode, Long customerPriceId, CurrencyPolicy currencyPolicy, LocalDate asOfDate
     ) {
         BigDecimal normalizedUnitPrice = moneyCalculator.normalize(unitPrice, currencyPolicy);
         BigDecimal amount = moneyCalculator.normalize(normalizedUnitPrice.multiply(BigDecimal.valueOf(quantity)), currencyPolicy);
         TaxPolicy taxPolicy = taxPolicyResolver.resolve(TAX_COUNTRY_CODE, taxCode, asOfDate);
         BigDecimal taxAmount = moneyCalculator.calculateExclusiveTax(amount, taxPolicy.getRatePercent(), currencyPolicy);
         return new SalesQuoteCalculation.Line(
-                lineType, unitProduct, name, quantity, normalizedUnitPrice, amount, taxCode, taxPolicy.getRatePercent(), taxAmount
+                lineType, unitProduct, name, quantity, normalizedUnitPrice, amount, taxCode, taxPolicy.getRatePercent(), taxAmount,
+                customerPriceId
         );
     }
 

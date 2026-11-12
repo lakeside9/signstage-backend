@@ -141,6 +141,8 @@ public class PartnerOrderService {
                 .totalAmount(amount.totalAmount())
                 .responseDueAt(request.getResponseDueAt())
                 .issuedBy(adminUserId)
+                .partnerRateCardId(amount.partnerRateCardId())
+                .regionSurchargeId(amount.regionSurchargeId())
                 .build());
 
         orderNotificationService.partnerOrderIssued(partnerOrder);

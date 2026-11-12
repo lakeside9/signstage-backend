@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 플랫폼 수주 가격표 API — 고객 가격표·지역 할증·파트너 단가표(signstage-docs
- * business/platform-order-partner-subcontract-review.md 6장). 등록·기간 종료는
+ * business/platform-order-partner-subcontract-review.md 6장). 등록·기간 종료·삭제는
  * ACTION_ORDER_PRICE_MANAGE 권한이 필요하다.
  */
 @Tag(name = "PlatformAdmin", description = "플랫폼 관리자의 수주 가격표 API")
@@ -66,6 +67,16 @@ public class PlatformAdminOrderPriceController {
         );
     }
 
+    @Operation(summary = "고객 가격 삭제", description = "견적 줄(범위 변경 포함)에 쓰인 가격은 삭제할 수 없다(ORDER_PRICE_IN_USE).")
+    @DeleteMapping("/customer-prices/{customerPriceId}")
+    public ApiResponse<Void> deleteCustomerPrice(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long customerPriceId
+    ) {
+        orderPriceService.deleteCustomerPrice(customerPriceId, currentUser.userId(), currentUser.platformRole());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
     @Operation(summary = "지역 할증 목록 조회")
     @GetMapping("/region-surcharges")
     public ApiResponse<List<PlatformAdminOrderPriceDto.Response.AdminRegionSurcharge>> findRegionSurcharges() {
@@ -97,6 +108,16 @@ public class PlatformAdminOrderPriceController {
         );
     }
 
+    @Operation(summary = "지역 할증 삭제", description = "수주·범위 변경·발주 계산에 쓰인 할증은 삭제할 수 없다(ORDER_PRICE_IN_USE).")
+    @DeleteMapping("/region-surcharges/{regionSurchargeId}")
+    public ApiResponse<Void> deleteRegionSurcharge(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long regionSurchargeId
+    ) {
+        orderPriceService.deleteRegionSurcharge(regionSurchargeId, currentUser.userId(), currentUser.platformRole());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
+    }
+
     @Operation(summary = "파트너 단가표 목록 조회", description = "organizationId가 없는 행이 기본 단가표다.")
     @GetMapping("/partner-rate-cards")
     public ApiResponse<List<PlatformAdminOrderPriceDto.Response.AdminPartnerRateCard>> findPartnerRateCards() {
@@ -126,5 +147,15 @@ public class PlatformAdminOrderPriceController {
                 partnerRateCardService.closePartnerRateCard(partnerRateCardId, currentUser.userId(), currentUser.platformRole(), request),
                 traceIdProvider.getTraceId()
         );
+    }
+
+    @Operation(summary = "파트너 단가표 삭제", description = "발주 금액 계산에 쓰인 단가표는 삭제할 수 없다(ORDER_PRICE_IN_USE).")
+    @DeleteMapping("/partner-rate-cards/{partnerRateCardId}")
+    public ApiResponse<Void> deletePartnerRateCard(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long partnerRateCardId
+    ) {
+        partnerRateCardService.deletePartnerRateCard(partnerRateCardId, currentUser.userId(), currentUser.platformRole());
+        return ApiResponse.success(null, traceIdProvider.getTraceId());
     }
 }

@@ -69,11 +69,15 @@ public class SalesOrderLine extends BaseEntity {
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
+    /** 단가를 가져온 고객 가격 행 — 쓰인 가격은 삭제할 수 없다. 할인·할증·숙박 줄은 null이다. */
+    @Column(name = "customer_price_id")
+    private Long customerPriceId;
+
     @Builder
     private SalesOrderLine(
             SalesOrder salesOrder, SalesOrderLineType lineType, UnitProduct unitProduct, String name, int quantity,
             BigDecimal unitPrice, BigDecimal amount, String taxCode, BigDecimal taxRatePercent, BigDecimal taxAmount,
-            int displayOrder
+            int displayOrder, Long customerPriceId
     ) {
         this.salesOrder = salesOrder;
         this.lineType = lineType;
@@ -86,5 +90,6 @@ public class SalesOrderLine extends BaseEntity {
         this.taxRatePercent = taxRatePercent;
         this.taxAmount = taxAmount;
         this.displayOrder = displayOrder;
+        this.customerPriceId = customerPriceId;
     }
 }

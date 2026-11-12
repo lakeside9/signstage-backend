@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -165,6 +166,8 @@ class SalesOrderChangeServiceTest {
         verify(orderPricingService, never()).estimatePartnerAmountWithinMargin(any(), any(), any(), any());
         assertThat(openRequest.isOpen()).isFalse();
         verify(orderNotificationService).scopeChangeProposed(any());
+        verify(salesOrderChangeRepository).save(argThat(saved -> Long.valueOf(61L).equals(saved.getRegionSurchargeId())));
+        verify(salesOrderChangeLineRepository).save(argThat(line -> Long.valueOf(51L).equals(line.getCustomerPriceId())));
     }
 
     @Test
@@ -296,9 +299,9 @@ class SalesOrderChangeServiceTest {
     private SalesQuoteCalculation calculation(int tabletCount, BigDecimal supplyAmount) {
         SalesQuoteCalculation.Line line = new SalesQuoteCalculation.Line(
                 SalesOrderLineType.UNIT_PRODUCT, tablets, "태블릿", tabletCount - 2, BigDecimal.valueOf(100_000),
-                BigDecimal.valueOf(100_000L * (tabletCount - 2)), "KR_VAT_STANDARD", BigDecimal.TEN, BigDecimal.ZERO
+                BigDecimal.valueOf(100_000L * (tabletCount - 2)), "KR_VAT_STANDARD", BigDecimal.TEN, BigDecimal.ZERO, 51L
         );
-        return new SalesQuoteCalculation(List.of(line), supplyAmount, supplyAmount.divide(BigDecimal.TEN), tabletCount, 1, ScopeExtras.NONE);
+        return new SalesQuoteCalculation(List.of(line), supplyAmount, supplyAmount.divide(BigDecimal.TEN), tabletCount, 1, ScopeExtras.NONE, 61L);
     }
 
     private SalesOrderLine salesOrderLine(int quantity) {

@@ -19,4 +19,6 @@ public interface SalesOrderChangeRepository extends JpaRepository<SalesOrderChan
     Optional<SalesOrderChange> findByIdAndSalesOrderId(Long id, Long salesOrderId);
 
     Optional<SalesOrderChange> findByIdAndPartnerOrderId(Long id, Long partnerOrderId);
+
+    boolean existsByRegionSurchargeId(Long regionSurchargeId);
 }

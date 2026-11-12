@@ -87,6 +87,13 @@ public class PartnerOrder extends BaseEntity {
     @Column(name = "lodging_night_rate", nullable = false, precision = 19, scale = 4)
     private BigDecimal lodgingNightRate;
 
+    /** 발주 금액 계산에 쓴 파트너 단가표·권역 할증 행 — 쓰인 가격표는 삭제할 수 없다. */
+    @Column(name = "partner_rate_card_id")
+    private Long partnerRateCardId;
+
+    @Column(name = "region_surcharge_id")
+    private Long regionSurchargeId;
+
     @Column(name = "adjustment_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal adjustmentAmount;
 
@@ -138,7 +145,8 @@ public class PartnerOrder extends BaseEntity {
             SalesOrder salesOrder, Organization organization, String currencyCode, BigDecimal baseFee,
             int tabletCount, BigDecimal tabletUnitRate, int onsiteStaffPersonDays, BigDecimal onsiteStaffDayRate,
             BigDecimal regionSurcharge, ScopeExtras extras, BigDecimal lodgingNightRate, BigDecimal adjustmentAmount,
-            String adjustmentReason, BigDecimal totalAmount, LocalDateTime responseDueAt, Long issuedBy
+            String adjustmentReason, BigDecimal totalAmount, LocalDateTime responseDueAt, Long issuedBy,
+            Long partnerRateCardId, Long regionSurchargeId
     ) {
         this.salesOrder = salesOrder;
         this.organization = organization;
@@ -156,6 +164,8 @@ public class PartnerOrder extends BaseEntity {
         this.totalAmount = totalAmount;
         this.responseDueAt = responseDueAt;
         this.issuedBy = issuedBy;
+        this.partnerRateCardId = partnerRateCardId;
+        this.regionSurchargeId = regionSurchargeId;
         this.issuedAt = LocalDateTime.now();
         this.status = PartnerOrderStatus.ISSUED;
     }

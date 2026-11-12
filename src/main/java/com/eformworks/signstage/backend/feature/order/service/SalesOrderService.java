@@ -242,6 +242,7 @@ public class SalesOrderService {
                 calculation.tabletCount(), calculation.onsiteStaffPersonDays(), calculation.extras(), calculation.supplyAmount(),
                 calculation.vatAmount(), request.getDiscountReason(), estimatedPartnerAmount
         );
+        salesOrder.useRegionSurcharge(calculation.regionSurchargeId());
         if (isNew) {
             salesOrderRepository.save(salesOrder);
         } else {
@@ -261,6 +262,7 @@ public class SalesOrderService {
                     .taxRatePercent(line.taxRatePercent())
                     .taxAmount(line.taxAmount())
                     .displayOrder(displayOrder++)
+                    .customerPriceId(line.customerPriceId())
                     .build());
         }
     }

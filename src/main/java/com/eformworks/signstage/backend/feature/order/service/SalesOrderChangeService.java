@@ -174,6 +174,7 @@ public class SalesOrderChangeService {
                 .startsAt(request.getStartsAt() != null ? request.getStartsAt() : salesOrder.getStartsAt())
                 .endsAt(request.getEndsAt() != null ? request.getEndsAt() : salesOrder.getEndsAt())
                 .proposedBy(adminUserId)
+                .regionSurchargeId(calculation.regionSurchargeId())
                 .build());
         int displayOrder = 0;
         List<SalesOrderChangeLine> lines = new ArrayList<>();
@@ -190,6 +191,7 @@ public class SalesOrderChangeService {
                     .taxRatePercent(line.taxRatePercent())
                     .taxAmount(line.taxAmount())
                     .displayOrder(displayOrder++)
+                    .customerPriceId(line.customerPriceId())
                     .build()));
         }
         scopeChangeRequestRepository.findAllByPartnerOrderSalesOrderIdAndClosedAtIsNull(salesOrderId)
@@ -346,6 +348,7 @@ public class SalesOrderChangeService {
                     .taxRatePercent(line.getTaxRatePercent())
                     .taxAmount(line.getTaxAmount())
                     .displayOrder(line.getDisplayOrder())
+                    .customerPriceId(line.getCustomerPriceId())
                     .build());
         }
 

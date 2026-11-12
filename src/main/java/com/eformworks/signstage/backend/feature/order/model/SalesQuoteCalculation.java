@@ -12,6 +12,7 @@ import java.util.List;
  * @param tabletCount 플랜 포함 + 옵션 태블릿 대수(발주 금액 계산 입력)
  * @param onsiteStaffPersonDays 플랜 포함 + 옵션 현장 인력 인·일
  * @param extras 예비 태블릿·리허설 별도일 인력·숙박(D23·D24·D26)
+ * @param regionSurchargeId 계산에 쓴 권역 할증 행(가격표 사용 여부 판단)
  */
 public record SalesQuoteCalculation(
         List<Line> lines,
@@ -19,9 +20,11 @@ public record SalesQuoteCalculation(
         BigDecimal vatAmount,
         int tabletCount,
         int onsiteStaffPersonDays,
-        ScopeExtras extras
+        ScopeExtras extras,
+        Long regionSurchargeId
 ) {
 
+    /** @param customerPriceId 단가를 가져온 고객 가격 행. 할인·할증·숙박 줄은 null이다. */
     public record Line(
             SalesOrderLineType lineType,
             UnitProduct unitProduct,
@@ -31,7 +34,8 @@ public record SalesQuoteCalculation(
             BigDecimal amount,
             String taxCode,
             BigDecimal taxRatePercent,
-            BigDecimal taxAmount
+            BigDecimal taxAmount,
+            Long customerPriceId
     ) {
     }
 }

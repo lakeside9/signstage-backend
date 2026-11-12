@@ -100,6 +100,10 @@ public class SalesOrderChange extends BaseEntity {
     @Column(name = "lodging_persons", nullable = false)
     private int lodgingPersons;
 
+    /** 변경 견적 계산에 쓴 권역 할증 행. */
+    @Column(name = "region_surcharge_id")
+    private Long regionSurchargeId;
+
     @Column(name = "supply_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal supplyAmount;
 
@@ -159,7 +163,8 @@ public class SalesOrderChange extends BaseEntity {
     private SalesOrderChange(
             SalesOrder salesOrder, PartnerOrder partnerOrder, String reason, int tabletCount, int onsiteStaffPersonDays,
             ScopeExtras extras, BigDecimal supplyAmount, BigDecimal vatAmount, String discountReason, BigDecimal estimatedPartnerAmount,
-            BigDecimal partnerAmount, String location, LocalDateTime startsAt, LocalDateTime endsAt, Long proposedBy
+            BigDecimal partnerAmount, String location, LocalDateTime startsAt, LocalDateTime endsAt, Long proposedBy,
+            Long regionSurchargeId
     ) {
         this.salesOrder = salesOrder;
         this.partnerOrder = partnerOrder;
@@ -191,6 +196,7 @@ public class SalesOrderChange extends BaseEntity {
         this.startsAt = startsAt;
         this.endsAt = endsAt;
         this.proposedBy = proposedBy;
+        this.regionSurchargeId = regionSurchargeId;
     }
 
     public ScopeExtras beforeScopeExtras() {

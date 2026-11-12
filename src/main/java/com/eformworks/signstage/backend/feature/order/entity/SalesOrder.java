@@ -99,6 +99,10 @@ public class SalesOrder extends BaseEntity {
     @Column(name = "lodging_persons", nullable = false)
     private int lodgingPersons;
 
+    /** 견적 계산에 쓴 권역 할증 행 — 쓰인 할증은 삭제할 수 없다. */
+    @Column(name = "region_surcharge_id")
+    private Long regionSurchargeId;
+
     @Column(name = "supply_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal supplyAmount;
 
@@ -186,8 +190,13 @@ public class SalesOrder extends BaseEntity {
         this.estimatedPartnerAmount = estimatedPartnerAmount;
     }
 
+    public void useRegionSurcharge(Long regionSurchargeId) {
+        this.regionSurchargeId = regionSurchargeId;
+    }
+
     /** 수락 후 범위 변경(D08)을 반영한다 — 플랜·권역은 그대로 두고 장소·일정과 금액만 바꾼다. */
     public void applyChange(SalesOrderChange change) {
+        this.regionSurchargeId = change.getRegionSurchargeId();
         this.location = change.getLocation();
         this.startsAt = change.getStartsAt();
         this.endsAt = change.getEndsAt();

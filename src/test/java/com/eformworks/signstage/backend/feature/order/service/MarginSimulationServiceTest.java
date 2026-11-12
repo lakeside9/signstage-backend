@@ -46,7 +46,7 @@ class MarginSimulationServiceTest {
         BillingPlan plan = OrderFixtures.plan(1L);
         given(billingCatalogQueryService.findBillingPlanOrThrow(1L)).willReturn(plan);
         given(orderPricingService.calculateSalesQuote(eq(plan), any(), eq(ServiceRegion.CAPITAL), any(), any(), any(), any()))
-                .willReturn(new SalesQuoteCalculation(List.of(), new BigDecimal("1000000"), new BigDecimal("100000"), 10, 2, ScopeExtras.NONE));
+                .willReturn(new SalesQuoteCalculation(List.of(), new BigDecimal("1000000"), new BigDecimal("100000"), 10, 2, ScopeExtras.NONE, null));
         given(orderPricingService.minimumMarginRate()).willReturn(new BigDecimal("0.20"));
         given(orderPricingService.isPartnerOrderMarginSufficient(any(), any())).willAnswer(invocation ->
                 ((BigDecimal) invocation.getArgument(1)).compareTo(new BigDecimal("800000")) <= 0);
@@ -92,6 +92,6 @@ class MarginSimulationServiceTest {
 
     private PartnerOrderAmount amount(long total) {
         BigDecimal zero = BigDecimal.ZERO;
-        return new PartnerOrderAmount(zero, 10, zero, 2, zero, zero, zero, BigDecimal.valueOf(total), 0, 0, 0, zero);
+        return new PartnerOrderAmount(zero, 10, zero, 2, zero, zero, zero, BigDecimal.valueOf(total), 0, 0, 0, zero, null, null);
     }
 }

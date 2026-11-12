@@ -86,4 +86,8 @@ public interface PartnerOrderRepository extends JpaRepository<PartnerOrder, Long
             group by p.organization.id
             """)
     List<PartnerOrderStats> aggregateByOrganization(@Param("now") LocalDateTime now);
+
+    boolean existsByRegionSurchargeId(Long regionSurchargeId);
+
+    boolean existsByPartnerRateCardId(Long partnerRateCardId);
 }

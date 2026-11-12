@@ -9,4 +9,6 @@ public interface SalesOrderLineRepository extends JpaRepository<SalesOrderLine, 
     List<SalesOrderLine> findAllBySalesOrderIdOrderByDisplayOrder(Long salesOrderId);
 
     void deleteAllBySalesOrderId(Long salesOrderId);
+
+    boolean existsByCustomerPriceId(Long customerPriceId);
 }

@@ -10,4 +10,6 @@ public interface SalesOrderChangeLineRepository extends JpaRepository<SalesOrder
     List<SalesOrderChangeLine> findAllBySalesOrderChangeIdOrderByDisplayOrder(Long salesOrderChangeId);
 
     List<SalesOrderChangeLine> findAllBySalesOrderChangeIdInOrderByDisplayOrder(Collection<Long> salesOrderChangeIds);
+
+    boolean existsByCustomerPriceId(Long customerPriceId);
 }

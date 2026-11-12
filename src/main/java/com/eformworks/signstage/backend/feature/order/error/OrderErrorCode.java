@@ -14,6 +14,11 @@ public enum OrderErrorCode implements ErrorCode {
             "고객 가격은 플랜과 단위 상품 중 하나만 지정해야 합니다."
     ),
     PRICE_PERIOD_INVALID("ORDER_PRICE_PERIOD_INVALID", HttpStatus.BAD_REQUEST, "종료일은 시작일보다 빠를 수 없습니다."),
+    PRICE_IN_USE(
+            "ORDER_PRICE_IN_USE",
+            HttpStatus.CONFLICT,
+            "견적·수주·발주 계산에 쓰인 가격은 삭제할 수 없습니다. 기간을 종료해주세요."
+    ),
     PRICE_PERIOD_OVERLAP(
             "ORDER_PRICE_PERIOD_OVERLAP",
             HttpStatus.CONFLICT,

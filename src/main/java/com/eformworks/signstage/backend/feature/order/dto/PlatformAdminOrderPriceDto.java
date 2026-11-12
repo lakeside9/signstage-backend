@@ -151,8 +151,10 @@ public final class PlatformAdminOrderPriceDto {
             private final String taxCode;
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;
+            /** 견적·수주·발주 계산에 쓰였는지 — 쓰이지 않은 가격만 삭제할 수 있다. */
+            private final boolean used;
 
-            public static AdminCustomerPrice from(CustomerPrice price) {
+            public static AdminCustomerPrice from(CustomerPrice price, boolean used) {
                 return new AdminCustomerPrice(
                         price.getId(),
                         price.getBillingPlan() != null ? price.getBillingPlan().getId() : null,
@@ -163,7 +165,8 @@ public final class PlatformAdminOrderPriceDto {
                         price.getUnitPrice(),
                         price.getTaxCode(),
                         price.getPeriod().getEffectiveFrom(),
-                        price.getPeriod().getEffectiveTo()
+                        price.getPeriod().getEffectiveTo(),
+                        used
                 );
             }
         }
@@ -182,8 +185,9 @@ public final class PlatformAdminOrderPriceDto {
             private final String taxCode;
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;
+            private final boolean used;
 
-            public static AdminRegionSurcharge from(RegionSurcharge surcharge) {
+            public static AdminRegionSurcharge from(RegionSurcharge surcharge, boolean used) {
                 return new AdminRegionSurcharge(
                         surcharge.getId(),
                         surcharge.getRegion().name(),
@@ -194,7 +198,8 @@ public final class PlatformAdminOrderPriceDto {
                         surcharge.getLodgingPartnerAmount(),
                         surcharge.getTaxCode(),
                         surcharge.getPeriod().getEffectiveFrom(),
-                        surcharge.getPeriod().getEffectiveTo()
+                        surcharge.getPeriod().getEffectiveTo(),
+                        used
                 );
             }
         }
@@ -212,8 +217,9 @@ public final class PlatformAdminOrderPriceDto {
             private final BigDecimal onsiteStaffDayRate;
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;
+            private final boolean used;
 
-            public static AdminPartnerRateCard from(PartnerRateCard rateCard) {
+            public static AdminPartnerRateCard from(PartnerRateCard rateCard, boolean used) {
                 return new AdminPartnerRateCard(
                         rateCard.getId(),
                         rateCard.getOrganization() != null ? rateCard.getOrganization().getId() : null,
@@ -223,7 +229,8 @@ public final class PlatformAdminOrderPriceDto {
                         rateCard.getTabletUnitRate(),
                         rateCard.getOnsiteStaffDayRate(),
                         rateCard.getPeriod().getEffectiveFrom(),
-                        rateCard.getPeriod().getEffectiveTo()
+                        rateCard.getPeriod().getEffectiveTo(),
+                        used
                 );
             }
         }

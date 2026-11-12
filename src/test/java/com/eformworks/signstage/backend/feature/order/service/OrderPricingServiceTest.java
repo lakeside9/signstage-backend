@@ -20,6 +20,7 @@ import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQu
 import com.eformworks.signstage.backend.feature.billing.service.TaxPolicyResolver;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerPrice;
 import com.eformworks.signstage.backend.feature.order.entity.EffectivePeriod;
+import com.eformworks.signstage.backend.feature.order.entity.RegionSurcharge;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLineType;
 import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * {@link OrderPricingService} 단위 테스트 — signstage-docs
@@ -81,13 +83,17 @@ class OrderPricingServiceTest {
                 OrderFixtures.planUnitProduct(plan, tablet, 4),
                 OrderFixtures.planUnitProduct(plan, staff, 1)
         ));
-        given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY))
-                .willReturn(Optional.of(customerPrice(plan, null, 3_000_000)));
+        CustomerPrice planPrice = customerPrice(plan, null, 3_000_000);
+        ReflectionTestUtils.setField(planPrice, "id", 201L);
+        CustomerPrice tabletPrice = customerPrice(null, tablet, 50_000);
+        ReflectionTestUtils.setField(tabletPrice, "id", 202L);
+        RegionSurcharge surcharge = OrderFixtures.regionSurcharge(ServiceRegion.YEONGNAM_HONAM, 200_000, 150_000);
+        ReflectionTestUtils.setField(surcharge, "id", 301L);
+        given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY)).willReturn(Optional.of(planPrice));
         given(billingCatalogQueryService.findUnitProductOrThrow(11L)).willReturn(tablet);
-        given(customerPriceRepository.findEffectiveForUnitProduct(11L, OrderFixtures.TODAY))
-                .willReturn(Optional.of(customerPrice(null, tablet, 50_000)));
+        given(customerPriceRepository.findEffectiveForUnitProduct(11L, OrderFixtures.TODAY)).willReturn(Optional.of(tabletPrice));
         given(regionSurchargeRepository.findEffective(ServiceRegion.YEONGNAM_HONAM, OrderFixtures.TODAY))
-                .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.YEONGNAM_HONAM, 200_000, 150_000)));
+                .willReturn(Optional.of(surcharge));
         stubVat();
 
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
@@ -104,6 +110,10 @@ class OrderPricingServiceTest {
         assertThat(calculation.vatAmount()).isEqualByComparingTo("320000");
         assertThat(calculation.tabletCount()).isEqualTo(6);
         assertThat(calculation.onsiteStaffPersonDays()).isEqualTo(1);
+        // 가격표 사용 여부 판단용 — 패키지·옵션 줄은 고객 가격 행, 견적은 권역 할증 행을 남긴다.
+        assertThat(calculation.lines()).extracting(SalesQuoteCalculation.Line::customerPriceId)
+                .containsExactly(201L, 202L, null, null);
+        assertThat(calculation.regionSurchargeId()).isEqualTo(301L);
     }
 
     @Test
@@ -201,7 +211,7 @@ class OrderPricingServiceTest {
                 .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
         // 발주 1,300,000 / 공급가 1,500,000 → 마진 200,000 < 300,000(20%)
         SalesQuoteCalculation calculation = new SalesQuoteCalculation(
-                List.of(), BigDecimal.valueOf(1_500_000), BigDecimal.valueOf(150_000), 4, 1, ScopeExtras.NONE
+                List.of(), BigDecimal.valueOf(1_500_000), BigDecimal.valueOf(150_000), 4, 1, ScopeExtras.NONE, null
         );
 
         assertThatThrownBy(() -> orderPricingService.estimatePartnerAmountWithinMargin(
