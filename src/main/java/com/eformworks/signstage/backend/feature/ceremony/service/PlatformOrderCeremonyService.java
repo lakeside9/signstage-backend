@@ -3,9 +3,8 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
-import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanDiscountPeriod;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
-import com.eformworks.signstage.backend.feature.billing.entity.UnitProductPricePeriod;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyAssignment;
@@ -23,9 +22,7 @@ import com.eformworks.signstage.backend.feature.organization.entity.Organization
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -63,12 +60,11 @@ public class PlatformOrderCeremonyService {
     public Ceremony createPlatformOrderCeremony(PlatformOrderCeremonyCommand command) {
         Organization organization = organizationRepository.findById(command.organizationId())
                 .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_NOT_FOUND));
-        BillingPlan plan = billingCatalogQueryService.findBillingPlanOrThrow(command.billingPlanId());
-        LocalDate asOfDate = LocalDate.now(ZoneId.of(organization.getDefaultTimeZoneId()));
-        BillingPlanDiscountPeriod planPeriod = ceremonyCatalogService.resolveSellablePlanPeriod(plan, asOfDate);
-        ceremonyCatalogService.checkCurrencyMatches(
-                organization.getBillingCurrencyCode(), ceremonyCatalogService.resolvePlanCurrency(plan, asOfDate)
+        BillingPlan plan = billingCatalogQueryService.findBillingPlanOrThrow(
+                command.billingPlanId(), SalesChannel.PLATFORM_ORDER
         );
+        // 플랫폼 수주 플랜에는 할인·판매 가격 기간이 없다 — 통화는 수주 통화로 확인한다(U05).
+        ceremonyCatalogService.checkCurrencyMatches(organization.getBillingCurrencyCode(), command.currencyCode());
 
         Ceremony ceremony = Ceremony.builder()
                 .organization(organization)
@@ -82,10 +78,10 @@ public class PlatformOrderCeremonyService {
                 .build();
         ceremony.updateSchedule(command.location(), command.startsAt(), command.endsAt());
         ceremonyRepository.save(ceremony);
-        ceremonyPlanService.recordPlanHistory(ceremony, plan, planPeriod, asOfDate);
+        ceremonyPlanService.recordPlatformOrderPlanHistory(ceremony, plan, command.planTaxCode());
         ceremony.confirmPlan();
 
-        saveScopeOptions(ceremony, command.options(), asOfDate);
+        saveScopeOptions(ceremony, command.options());
 
         User acceptingUser = userRepository.findById(command.acceptingUserId())
                 .orElseThrow(() -> new ApplicationException(CommonErrorCode.ACCESS_DENIED));
@@ -137,12 +133,10 @@ public class PlatformOrderCeremonyService {
             List<PlatformOrderCeremonyCommand.ScopeOption> additions
     ) {
         ceremony.updateSchedule(location, startsAt, endsAt);
-        saveScopeOptions(ceremony, additions, LocalDate.now(ZoneId.of(ceremony.getTimeZoneId())));
+        saveScopeOptions(ceremony, additions);
     }
 
-    private void saveScopeOptions(
-            Ceremony ceremony, List<PlatformOrderCeremonyCommand.ScopeOption> options, LocalDate asOfDate
-    ) {
+    private void saveScopeOptions(Ceremony ceremony, List<PlatformOrderCeremonyCommand.ScopeOption> options) {
         if (options == null || options.isEmpty()) {
             return;
         }
@@ -150,8 +144,9 @@ public class PlatformOrderCeremonyService {
         purchase.autoApprove();
         ceremonyUnitProductPurchaseRepository.save(purchase);
         for (PlatformOrderCeremonyCommand.ScopeOption option : options) {
-            UnitProduct unitProduct = billingCatalogQueryService.findUnitProductOrThrow(option.unitProductId());
-            UnitProductPricePeriod period = ceremonyCatalogService.resolveSellableUnitProductPeriod(unitProduct, asOfDate);
+            UnitProduct unitProduct = billingCatalogQueryService.findUnitProductOrThrow(
+                    option.unitProductId(), SalesChannel.PLATFORM_ORDER
+            );
             ceremonyUnitProductPurchaseLineRepository.save(
                     CeremonyUnitProductPurchaseLine.builder()
                             .purchase(purchase)
@@ -160,7 +155,7 @@ public class PlatformOrderCeremonyService {
                             .currencyCode(ceremony.getCurrencyCode())
                             .purchasedName(unitProduct.getName())
                             .purchasedSalePrice(BigDecimal.ZERO)
-                            .purchasedTaxCode(period.getPriceInfo().getTaxCode())
+                            .purchasedTaxCode(option.taxCode())
                             .build()
             );
         }

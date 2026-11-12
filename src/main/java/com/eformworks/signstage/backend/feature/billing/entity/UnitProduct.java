@@ -45,6 +45,11 @@ public class UnitProduct extends BaseEntity {
     @Column(nullable = false, length = 30)
     private UnitProductType type;
 
+    /** 판매 경로(U01) — 생성 후 불변. 플랫폼 수주 상품은 판매 가격 기간이 없다(U05). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sales_channel", nullable = false, length = 20)
+    private SalesChannel salesChannel;
+
     @Column(nullable = false, length = 100)
     private String name;
 
@@ -126,9 +131,11 @@ public class UnitProduct extends BaseEntity {
     @Builder
     private UnitProduct(
             UnitProductType type, String name, String description, UnitProductCategory category,
-            String exclusivityGroup, Integer maxPurchaseQuantity, Integer saleUnitQuantity, Boolean platformUsageFee
+            String exclusivityGroup, Integer maxPurchaseQuantity, Integer saleUnitQuantity, Boolean platformUsageFee,
+            SalesChannel salesChannel
     ) {
         this.type = type;
+        this.salesChannel = salesChannel != null ? salesChannel : SalesChannel.PARTNER_DIRECT;
         this.name = name;
         this.description = description;
         this.category = category;
@@ -166,5 +173,9 @@ public class UnitProduct extends BaseEntity {
         if (displayOrder != null) {
             this.displayOrder = displayOrder;
         }
+    }
+
+    public boolean isPlatformOrder() {
+        return salesChannel == SalesChannel.PLATFORM_ORDER;
     }
 }

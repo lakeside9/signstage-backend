@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.billing.service;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.error.BillingErrorCode;
 import com.eformworks.signstage.backend.feature.billing.port.CeremonyBillingUsagePort;
 import com.eformworks.signstage.backend.feature.billing.dto.BillingPlanDto;
@@ -17,6 +18,7 @@ import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.billing.entity.SubscriptionType;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductPricePeriod;
+import com.eformworks.signstage.backend.feature.billing.port.OrderCatalogUsagePort;
 import com.eformworks.signstage.backend.feature.billing.repository.BillingPlanDiscountPeriodHistoryRepository;
 import com.eformworks.signstage.backend.feature.billing.repository.BillingPlanDiscountPeriodRepository;
 import com.eformworks.signstage.backend.feature.billing.repository.BillingPlanHistoryRepository;
@@ -67,6 +69,7 @@ public class BillingPlanService {
     private final UnitProductRepository unitProductRepository;
     private final UnitProductPricePeriodRepository unitProductPricePeriodRepository;
     private final CeremonyBillingUsagePort ceremonyBillingUsagePort;
+    private final OrderCatalogUsagePort orderCatalogUsagePort;
     private final OrganizationSubscriptionRepository organizationSubscriptionRepository;
     private final OrganizationBillingPlanDiscountRepository organizationBillingPlanDiscountRepository;
     private final OrganizationBillingPlanDiscountHistoryRepository organizationBillingPlanDiscountHistoryRepository;
@@ -81,14 +84,23 @@ public class BillingPlanService {
     ) {
         checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
 
+        SalesChannel salesChannel = parseSalesChannel(request.getSalesChannel());
         List<BillingPlanDto.Request.PlanUnitProductLine> lines = request.getUnitProducts() == null
                 ? List.of() : request.getUnitProducts();
-        Map<Long, UnitProduct> unitProducts = resolveUnitProducts(lines);
+        Map<Long, UnitProduct> unitProducts = resolveUnitProducts(lines, salesChannel);
 
         LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
         checkPeriodValid(effectiveFrom, request.getEffectiveTo());
-        DiscountType discountType = parseDiscountType(request.getDiscountType());
         BillingPlanType planType = parseSubscriptionFields(request);
+        if (salesChannel == SalesChannel.PLATFORM_ORDER && planType != BillingPlanType.STANDARD) {
+            throw new ApplicationException(BillingErrorCode.PLATFORM_ORDER_CATALOG_INVALID);
+        }
+        if (salesChannel == SalesChannel.PARTNER_DIRECT
+                && (request.getDiscountValue() == null || request.getActive() == null)) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+        DiscountType discountType = salesChannel == SalesChannel.PARTNER_DIRECT
+                ? parseDiscountType(request.getDiscountType()) : null;
 
         BillingPlan plan = BillingPlan.builder()
                 .name(request.getName())
@@ -99,28 +111,32 @@ public class BillingPlanService {
                         ? request.getSubscriptionPeriodMonths() : null)
                 .subscriptionAllowedCount(planType == BillingPlanType.SUBSCRIPTION
                         ? request.getSubscriptionAllowedCount() : null)
+                .salesChannel(salesChannel)
                 .build();
         billingPlanRepository.save(plan);
         saveUnitProducts(plan, lines, unitProducts);
         recordPlanHistory(plan);
 
-        BillingPlanDiscountPeriod period = BillingPlanDiscountPeriod.builder()
-                .billingPlan(plan)
-                .discountType(discountType)
-                .discountValue(request.getDiscountValue())
-                .active(request.getActive())
-                .effectiveFrom(effectiveFrom)
-                .effectiveTo(request.getEffectiveTo())
-                .build();
-        billingPlanDiscountPeriodRepository.save(period);
-        recordPeriodHistory(plan, period, false);
+        // 플랫폼 수주 경로 플랜은 할인 기간이 없다 — 고객 패키지 가격은 고객 가격표에서 온다(U05).
+        if (!plan.isPlatformOrder()) {
+            BillingPlanDiscountPeriod period = BillingPlanDiscountPeriod.builder()
+                    .billingPlan(plan)
+                    .discountType(discountType)
+                    .discountValue(request.getDiscountValue())
+                    .active(request.getActive())
+                    .effectiveFrom(effectiveFrom)
+                    .effectiveTo(request.getEffectiveTo())
+                    .build();
+            billingPlanDiscountPeriodRepository.save(period);
+            recordPeriodHistory(plan, period, false);
+        }
 
         platformAdminAuditLogRecorder.record(
                 adminUserId,
                 PlatformAdminAction.CREATE_BILLING_PLAN,
                 null,
                 null,
-                "planId=" + plan.getId() + ", name=" + plan.getName()
+                "planId=" + plan.getId() + ", name=" + plan.getName() + ", salesChannel=" + plan.getSalesChannel()
         );
 
         return toSummary(plan);
@@ -140,7 +156,7 @@ public class BillingPlanService {
 
         List<BillingPlanDto.Request.PlanUnitProductLine> lines = request.getUnitProducts() == null
                 ? List.of() : request.getUnitProducts();
-        Map<Long, UnitProduct> unitProducts = resolveUnitProducts(lines);
+        Map<Long, UnitProduct> unitProducts = resolveUnitProducts(lines, plan.getSalesChannel());
 
         String detail = "planId=" + planId + ", name: " + plan.getName() + " -> " + request.getName();
 
@@ -211,6 +227,7 @@ public class BillingPlanService {
      */
     private boolean hasAnyUsage(Long planId) {
         return ceremonyBillingUsagePort.isBillingPlanUsed(planId)
+                || orderCatalogUsagePort.isBillingPlanUsed(planId)
                 || organizationSubscriptionRepository.existsByBillingPlanId(planId)
                 || organizationBillingPlanDiscountRepository.existsByBillingPlanId(planId)
                 || organizationBillingPlanDiscountHistoryRepository.existsByBillingPlanId(planId);
@@ -227,6 +244,9 @@ public class BillingPlanService {
         checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
         BillingPlan plan = billingPlanRepository.findById(planId)
                 .orElseThrow(() -> new ApplicationException(BillingErrorCode.BILLING_PLAN_NOT_FOUND));
+        if (plan.isPlatformOrder()) {
+            throw new ApplicationException(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+        }
         LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
         checkPeriodValid(effectiveFrom, request.getEffectiveTo());
         checkNoOverlap(planId, null, effectiveFrom, request.getEffectiveTo());
@@ -332,7 +352,13 @@ public class BillingPlanService {
     }
 
     public List<BillingPlanDto.Response.BillingPlanSummary> findPlans() {
+        return findPlans(null);
+    }
+
+    /** {@code salesChannel}이 null이면 두 경로 모두. */
+    public List<BillingPlanDto.Response.BillingPlanSummary> findPlans(SalesChannel salesChannel) {
         return billingPlanRepository.findAll().stream()
+                .filter(plan -> salesChannel == null || plan.getSalesChannel() == salesChannel)
                 .map(this::toSummary)
                 .toList();
     }
@@ -381,10 +407,12 @@ public class BillingPlanService {
     }
 
     /**
-     * 요청 줄들을 검증하고(id 존재, 수량 0 이상, 토글형 상한, 중복 없음) {@code UnitProduct} 맵으로
-     * 정규화한다.
+     * 요청 줄들을 검증하고(id 존재, 수량 0 이상, 토글형 상한, 중복 없음, 플랜과 같은 판매 경로)
+     * {@code UnitProduct} 맵으로 정규화한다.
      */
-    private Map<Long, UnitProduct> resolveUnitProducts(List<BillingPlanDto.Request.PlanUnitProductLine> lines) {
+    private Map<Long, UnitProduct> resolveUnitProducts(
+            List<BillingPlanDto.Request.PlanUnitProductLine> lines, SalesChannel salesChannel
+    ) {
         if (lines.isEmpty()) {
             return Map.of();
         }
@@ -401,6 +429,9 @@ public class BillingPlanService {
         if (found.size() != ids.size()) {
             throw new ApplicationException(BillingErrorCode.UNIT_PRODUCT_NOT_FOUND);
         }
+        if (found.stream().anyMatch(unitProduct -> unitProduct.getSalesChannel() != salesChannel)) {
+            throw new ApplicationException(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+        }
         Map<Long, UnitProduct> byId = new HashMap<>();
         found.forEach(unitProduct -> byId.put(unitProduct.getId(), unitProduct));
 
@@ -415,10 +446,21 @@ public class BillingPlanService {
         return byId;
     }
 
+    private SalesChannel parseSalesChannel(String salesChannel) {
+        if (salesChannel == null) {
+            return SalesChannel.PARTNER_DIRECT;
+        }
+        try {
+            return SalesChannel.valueOf(salesChannel);
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
     private DiscountType parseDiscountType(String discountType) {
         try {
             return DiscountType.valueOf(discountType);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | NullPointerException e) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
     }
@@ -540,7 +582,8 @@ public class BillingPlanService {
                 effective.map(BillingPlanDiscountPeriod::getEffectiveFrom).orElse(null),
                 effective.map(BillingPlanDiscountPeriod::getEffectiveTo).orElse(null),
                 effective.map(p -> computeStatus(p.isActive(), p.getEffectiveFrom(), p.getEffectiveTo())).orElse("NO_ACTIVE_PERIOD"),
-                !hasAnyUsage(plan.getId())
+                !hasAnyUsage(plan.getId()),
+                plan.getSalesChannel().name()
         );
     }
 

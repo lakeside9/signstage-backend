@@ -13,6 +13,7 @@ import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.entity.TaxPolicy;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
@@ -90,7 +91,7 @@ class OrderPricingServiceTest {
         RegionSurcharge surcharge = OrderFixtures.regionSurcharge(ServiceRegion.YEONGNAM_HONAM, 200_000, 150_000);
         ReflectionTestUtils.setField(surcharge, "id", 301L);
         given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY)).willReturn(Optional.of(planPrice));
-        given(billingCatalogQueryService.findUnitProductOrThrow(11L)).willReturn(tablet);
+        given(billingCatalogQueryService.findUnitProductOrThrow(11L, SalesChannel.PLATFORM_ORDER)).willReturn(tablet);
         given(customerPriceRepository.findEffectiveForUnitProduct(11L, OrderFixtures.TODAY)).willReturn(Optional.of(tabletPrice));
         given(regionSurchargeRepository.findEffective(ServiceRegion.YEONGNAM_HONAM, OrderFixtures.TODAY))
                 .willReturn(Optional.of(surcharge));
@@ -156,7 +157,7 @@ class OrderPricingServiceTest {
         given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of());
         given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY))
                 .willReturn(Optional.of(customerPrice(plan, null, 3_000_000)));
-        given(billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT)).willReturn(Optional.of(staff));
+        given(billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT, SalesChannel.PLATFORM_ORDER)).willReturn(Optional.of(staff));
         given(customerPriceRepository.findEffectiveForUnitProduct(12L, OrderFixtures.TODAY))
                 .willReturn(Optional.of(customerPrice(null, staff, 250_000)));
         given(regionSurchargeRepository.findEffective(ServiceRegion.JEJU_ISLAND, OrderFixtures.TODAY))

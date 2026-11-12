@@ -69,14 +69,13 @@ public final class BillingPlanDto {
             /** 이 플랜이 포함하는 단위 상품 구성 전체(생략하면 빈 목록). */
             private List<PlanUnitProductLine> unitProducts;
 
-            @NotBlank
+            /** 직접 수주 경로에서만 필수 — 플랫폼 수주 경로 플랜은 할인 기간을 만들지 않는다. */
             private String discountType;
 
-            @NotNull
+            /** 직접 수주 경로에서만 필수. */
             private BigDecimal discountValue;
 
-            /** 최초 기간의 사용여부(보통 true). */
-            @NotNull
+            /** 최초 기간의 사용여부(보통 true). 직접 수주 경로에서만 필수. */
             private Boolean active;
 
             /**
@@ -106,6 +105,14 @@ public final class BillingPlanDto {
 
             /** planType이 SUBSCRIPTION일 때만 필수 — 이 플랜으로 만들 수 있는 Ceremony 최대 건수. */
             private Integer subscriptionAllowedCount;
+
+            /**
+             * 판매 경로({@code PARTNER_DIRECT}/{@code PLATFORM_ORDER}). 생략하면(null) 직접 수주.
+             * 생성 후 바꿀 수 없고, 포함 단위 상품도 같은 경로여야 한다 — signstage-docs
+             * business/platform-order-unit-product-composition-review.md U01·U03 결정(2026-11-12).
+             * 플랫폼 수주 플랜은 일반(STANDARD)만 되고 할인 기간이 없다(U05).
+             */
+            private String salesChannel;
         }
 
         /**
@@ -231,6 +238,8 @@ public final class BillingPlanDto {
              * 보다 훨씬 넓은 범위를 본다.
              */
             private final boolean canDelete;
+            /** 판매 경로 — {@code PARTNER_DIRECT}(직접 수주) 또는 {@code PLATFORM_ORDER}(플랫폼 수주). */
+            private final String salesChannel;
         }
 
         /** 플랜 이름/단위 상품 구성 변경 이력 한 행(할인/사용여부는 {@link BillingPlanPeriodSummary} 쪽 이력 참고). */

@@ -139,7 +139,7 @@ class PartnerOrderResponseServiceTest {
         assertThat(command.title()).isEqualTo("협약식");
         assertThat(command.organizingInstitution()).isEqualTo("고객사");
         assertThat(command.contactName()).isEqualTo("홍길동");
-        assertThat(command.options()).containsExactly(new PlatformOrderCeremonyCommand.ScopeOption(11L, 2));
+        assertThat(command.options()).containsExactly(new PlatformOrderCeremonyCommand.ScopeOption(11L, 2, "KR_VAT_STANDARD"));
         assertThat(issued.getStatus()).isEqualTo(PartnerOrderStatus.ACCEPTED);
         assertThat(issued.getCeremony()).isSameAs(ceremony);
         assertThat(issued.getRespondedBy()).isEqualTo(USER_ID);

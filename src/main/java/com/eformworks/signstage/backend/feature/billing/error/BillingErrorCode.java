@@ -12,6 +12,18 @@ import org.springframework.http.HttpStatus;
 public enum BillingErrorCode implements ErrorCode {
 
     BILLING_PLAN_NOT_FOUND("BILLING_PLAN_NOT_FOUND", HttpStatus.NOT_FOUND, "과금 플랜을 찾을 수 없습니다."),
+    /** 판매 경로(U01)가 맞지 않는 플랜·단위 상품을 쓰려 했다 — 두 경로의 카탈로그는 섞지 않는다. */
+    SALES_CHANNEL_MISMATCH(
+            "BILLING_SALES_CHANNEL_MISMATCH",
+            HttpStatus.CONFLICT,
+            "이 기능에서 쓸 수 없는 판매 경로의 플랜 또는 단위 상품입니다."
+    ),
+    /** 플랫폼 수주 카탈로그에서 허용하지 않는 구성(U02·U05). */
+    PLATFORM_ORDER_CATALOG_INVALID(
+            "BILLING_PLATFORM_ORDER_CATALOG_INVALID",
+            HttpStatus.CONFLICT,
+            "플랫폼 수주 카탈로그에서 허용하지 않는 구성입니다. 현장 인력은 하나만, 현장지원 요청형은 등록할 수 없고, 판매 가격·할인 기간과 구독 조건은 두지 않습니다."
+    ),
     BILLING_PLAN_IN_USE(
             "BILLING_PLAN_IN_USE",
             HttpStatus.CONFLICT,

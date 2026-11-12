@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyOnsiteSupportRequestDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOnsiteSupportRequest;
@@ -162,7 +163,7 @@ class CeremonyOnsiteSupportRequestServiceTest {
     void acceptRequest_createsPurchaseWithQuotedAmountAndApproves() {
         CeremonyOnsiteSupportRequest request = quotedRequest();
         given(ceremonyOnsiteSupportRequestRepository.findById(500L)).willReturn(Optional.of(request));
-        given(billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT_REQUEST))
+        given(billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT_REQUEST, SalesChannel.PARTNER_DIRECT))
                 .willReturn(Optional.of(anchor));
         UnitProductPricePeriod period = UnitProductPricePeriod.builder()
                 .unitProduct(anchor).currencyCode("KRW").salePrice(BigDecimal.ZERO).taxCode("KR_VAT_STANDARD")

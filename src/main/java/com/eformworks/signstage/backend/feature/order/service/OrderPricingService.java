@@ -6,9 +6,11 @@ import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.entity.TaxPolicy;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.billing.error.BillingErrorCode;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.billing.service.TaxPolicyResolver;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerPrice;
@@ -73,6 +75,9 @@ public class OrderPricingService {
             LocalDate asOfDate
     ) {
         checkExtras(extras);
+        if (!plan.isPlatformOrder()) {
+            throw new ApplicationException(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+        }
         List<SalesQuoteCalculation.Line> lines = new ArrayList<>();
         List<BillingPlanUnitProduct> planUnitProducts = billingCatalogQueryService.findPlanUnitProducts(plan.getId());
         int tabletCount = sumIncluded(planUnitProducts, UnitProductType.TABLETS);
@@ -89,7 +94,7 @@ public class OrderPricingService {
             if (!seenUnitProductIds.add(option.unitProductId())) {
                 throw new ApplicationException(OrderErrorCode.OPTION_DUPLICATED);
             }
-            UnitProduct unitProduct = billingCatalogQueryService.findUnitProductOrThrow(option.unitProductId());
+            UnitProduct unitProduct = billingCatalogQueryService.findUnitProductOrThrow(option.unitProductId(), SalesChannel.PLATFORM_ORDER);
             int quantity = unitProduct.getType().isToggle() ? 1 : option.quantity();
             if (quantity < 1) {
                 throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
@@ -113,7 +118,7 @@ public class OrderPricingService {
                     surcharge.getCustomerAmount(), surcharge.getTaxCode(), null, currencyPolicy, asOfDate));
         }
         if (extras.rehearsalStaffPersonDays() > 0) {
-            UnitProduct onsiteSupport = billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT)
+            UnitProduct onsiteSupport = billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT, SalesChannel.PLATFORM_ORDER)
                     .orElseThrow(() -> new ApplicationException(OrderErrorCode.CUSTOMER_PRICE_NOT_FOUND));
             CustomerPrice staffPrice = customerPriceRepository.findEffectiveForUnitProduct(onsiteSupport.getId(), asOfDate)
                     .orElseThrow(() -> new ApplicationException(OrderErrorCode.CUSTOMER_PRICE_NOT_FOUND));

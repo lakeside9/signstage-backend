@@ -4,8 +4,10 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import com.eformworks.signstage.backend.core.web.DisplayOrderRequest;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.error.BillingErrorCode;
 import com.eformworks.signstage.backend.feature.billing.port.CeremonyBillingUsagePort;
+import com.eformworks.signstage.backend.feature.billing.port.OrderCatalogUsagePort;
 import com.eformworks.signstage.backend.feature.billing.port.UnitProductEffectPort;
 import com.eformworks.signstage.backend.feature.billing.dto.UnitProductDto;
 import com.eformworks.signstage.backend.feature.billing.entity.ProductPriceInfo;
@@ -76,6 +78,7 @@ public class UnitProductService {
     private final BillingPlanUnitProductRepository billingPlanUnitProductRepository;
     private final BillingPlanHistoryUnitProductRepository billingPlanHistoryUnitProductRepository;
     private final CeremonyBillingUsagePort ceremonyBillingUsagePort;
+    private final OrderCatalogUsagePort orderCatalogUsagePort;
     private final UnitProductEffectPort unitProductEffectPort;
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     private final RolePermissionService rolePermissionService;
@@ -89,10 +92,16 @@ public class UnitProductService {
         checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
 
         UnitProductType type = parseType(request.getType());
+        SalesChannel salesChannel = parseSalesChannel(request.getSalesChannel());
         checkEffectDefinitionIdsAllowed(type, request.getEffectDefinitionIds());
         LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
         checkPeriodValid(effectiveFrom, request.getEffectiveTo());
         checkSaleUnitQuantityDivides(request.getMaxPurchaseQuantity(), request.getSaleUnitQuantity());
+        if (salesChannel == SalesChannel.PLATFORM_ORDER) {
+            checkPlatformOrderType(type);
+        } else if (request.getSalePrice() == null || request.getActive() == null) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
 
         UnitProduct unitProduct = UnitProduct.builder()
                 .type(type)
@@ -103,11 +112,32 @@ public class UnitProductService {
                 .maxPurchaseQuantity(request.getMaxPurchaseQuantity())
                 .saleUnitQuantity(request.getSaleUnitQuantity())
                 .platformUsageFee(request.getPlatformUsageFee())
+                .salesChannel(salesChannel)
                 .build();
         unitProductRepository.save(unitProduct);
         recordProductHistory(unitProduct);
         unitProductEffectPort.linkEffectDefinitions(unitProduct, request.getEffectDefinitionIds());
 
+        // 플랫폼 수주 경로 상품은 판매 가격 기간이 없다 — 고객 가격은 고객 가격표에서 온다(U05).
+        if (!unitProduct.isPlatformOrder()) {
+            createInitialPeriod(unitProduct, request, effectiveFrom);
+        }
+
+        platformAdminAuditLogRecorder.record(
+                adminUserId,
+                PlatformAdminAction.CREATE_UNIT_PRODUCT,
+                null,
+                null,
+                "unitProductId=" + unitProduct.getId() + ", type=" + unitProduct.getType()
+                        + ", salesChannel=" + unitProduct.getSalesChannel()
+        );
+
+        return toSummary(unitProduct);
+    }
+
+    private void createInitialPeriod(
+            UnitProduct unitProduct, UnitProductDto.Request.CreateUnitProduct request, LocalDate effectiveFrom
+    ) {
         UnitProductPricePeriod period = UnitProductPricePeriod.builder()
                 .unitProduct(unitProduct)
                 .currencyCode(request.getCurrencyCode())
@@ -120,16 +150,20 @@ public class UnitProductService {
                 .build();
         unitProductPricePeriodRepository.save(period);
         recordPeriodHistory(unitProduct, period, false);
+    }
 
-        platformAdminAuditLogRecorder.record(
-                adminUserId,
-                PlatformAdminAction.CREATE_UNIT_PRODUCT,
-                null,
-                null,
-                "unitProductId=" + unitProduct.getId() + ", type=" + unitProduct.getType()
-        );
-
-        return toSummary(unitProduct);
+    /**
+     * 플랫폼 수주 경로에 둘 수 없는 종류를 거부한다 — 현장지원 요청은 직접 수주 기능이고,
+     * 현장 인력(인·일)은 경로 안에 하나만 둔다(리허설 인력 단가의 출처, U02 결정).
+     */
+    private void checkPlatformOrderType(UnitProductType type) {
+        if (type == UnitProductType.ONSITE_SUPPORT_REQUEST) {
+            throw new ApplicationException(BillingErrorCode.PLATFORM_ORDER_CATALOG_INVALID);
+        }
+        if (type == UnitProductType.ONSITE_SUPPORT
+                && unitProductRepository.existsByTypeAndSalesChannel(type, SalesChannel.PLATFORM_ORDER)) {
+            throw new ApplicationException(BillingErrorCode.PLATFORM_ORDER_CATALOG_INVALID);
+        }
     }
 
     @Transactional
@@ -210,6 +244,9 @@ public class UnitProductService {
         checkAllowed(actingPlatformRole, "ACTION_BILLING_CATALOG_MANAGE");
         UnitProduct unitProduct = unitProductRepository.findById(unitProductId)
                 .orElseThrow(() -> new ApplicationException(BillingErrorCode.UNIT_PRODUCT_NOT_FOUND));
+        if (unitProduct.isPlatformOrder()) {
+            throw new ApplicationException(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+        }
         LocalDate effectiveFrom = resolveEffectiveFrom(request.getEffectiveFrom());
         checkPeriodValid(effectiveFrom, request.getEffectiveTo());
         checkNoOverlap(unitProductId, null, effectiveFrom, request.getEffectiveTo());
@@ -333,7 +370,13 @@ public class UnitProductService {
     }
 
     public List<UnitProductDto.Response.UnitProductSummary> findUnitProducts() {
+        return findUnitProducts(null);
+    }
+
+    /** {@code salesChannel}이 null이면 두 경로 모두. */
+    public List<UnitProductDto.Response.UnitProductSummary> findUnitProducts(SalesChannel salesChannel) {
         return unitProductRepository.findAllByOrderByDisplayOrderAscIdAsc().stream()
+                .filter(unitProduct -> salesChannel == null || unitProduct.getSalesChannel() == salesChannel)
                 .map(this::toSummary)
                 .toList();
     }
@@ -400,6 +443,17 @@ public class UnitProductService {
     private UnitProductType parseType(String type) {
         try {
             return UnitProductType.valueOf(type);
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    private SalesChannel parseSalesChannel(String salesChannel) {
+        if (salesChannel == null) {
+            return SalesChannel.PARTNER_DIRECT;
+        }
+        try {
+            return SalesChannel.valueOf(salesChannel);
         } catch (IllegalArgumentException e) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
@@ -486,7 +540,8 @@ public class UnitProductService {
     private boolean hasAnyUsage(Long unitProductId) {
         return billingPlanUnitProductRepository.existsByUnitProductId(unitProductId)
                 || billingPlanHistoryUnitProductRepository.existsByUnitProductId(unitProductId)
-                || ceremonyBillingUsagePort.isUnitProductUsed(unitProductId);
+                || ceremonyBillingUsagePort.isUnitProductUsed(unitProductId)
+                || orderCatalogUsagePort.isUnitProductUsed(unitProductId);
     }
 
     private String describe(UnitProductPricePeriod period) {
@@ -520,7 +575,8 @@ public class UnitProductService {
                 effective.map(UnitProductPricePeriod::getEffectiveTo).orElse(null),
                 effective.map(p -> computeStatus(p.isActive(), p.getEffectiveFrom(), p.getEffectiveTo())).orElse("NO_ACTIVE_PERIOD"),
                 unitProduct.getDisplayOrder(),
-                !hasAnyUsage(unitProduct.getId())
+                !hasAnyUsage(unitProduct.getId()),
+                unitProduct.getSalesChannel().name()
         );
     }
 

@@ -7,6 +7,7 @@ import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminPartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminSalesOrderDto;
@@ -208,6 +209,15 @@ public class SalesOrderService {
                 .toList();
     }
 
+    /** 수주 패키지(플랜) 줄의 세금 코드 — 발주 수락 때 행사 플랜 스냅샷에 쓴다. */
+    String findPlanTaxCode(Long salesOrderId) {
+        return salesOrderLineRepository.findAllBySalesOrderIdOrderByDisplayOrder(salesOrderId).stream()
+                .filter(line -> line.getLineType() == SalesOrderLineType.BILLING_PLAN)
+                .map(SalesOrderLine::getTaxCode)
+                .findFirst()
+                .orElseThrow(() -> new ApplicationException(OrderErrorCode.SALES_ORDER_NOT_FOUND));
+    }
+
     private void applyQuote(SalesOrder salesOrder, PlatformAdminSalesOrderDto.Request.SaveQuote request, boolean isNew) {
         if (request.getStartsAt() != null && request.getEndsAt() != null && request.getEndsAt().isBefore(request.getStartsAt())) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
@@ -220,7 +230,7 @@ public class SalesOrderService {
             throw new ApplicationException(OrderErrorCode.SALES_QUOTE_EXPIRED);
         }
 
-        BillingPlan plan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId());
+        BillingPlan plan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId(), SalesChannel.PLATFORM_ORDER);
         CurrencyPolicy currencyPolicy = salesOrder.currencyPolicy();
         List<SalesQuoteOption> options = request.getOptions() == null
                 ? List.of()

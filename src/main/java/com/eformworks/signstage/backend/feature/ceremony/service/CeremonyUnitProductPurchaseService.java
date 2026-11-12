@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import com.eformworks.signstage.backend.feature.billing.dto.UnitProductDto;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductPricePeriod;
@@ -80,7 +81,7 @@ public class CeremonyUnitProductPurchaseService {
         ceremonyAccessService.checkCeremonyEditable(ceremony);
         ceremonyAccessService.checkCeremonyPlanConfirmed(ceremony);
 
-        UnitProduct unitProduct = billingCatalogQueryService.findUnitProductOrThrow(request.getUnitProductId());
+        UnitProduct unitProduct = billingCatalogQueryService.findUnitProductOrThrow(request.getUnitProductId(), SalesChannel.PARTNER_DIRECT);
         checkPurchasable(ceremony, unitProduct);
 
         Optional<CeremonyUnitProductCartLine> existingLine =
@@ -339,7 +340,7 @@ public class CeremonyUnitProductPurchaseService {
 
         if (ceremony.getBillingPlan() == null) {
             return billingCatalogQueryService.findAllUnitProducts().stream()
-                    .filter(UnitProduct::isPlatformUsageFee)
+                    .filter(unitProduct -> !unitProduct.isPlatformOrder() && unitProduct.isPlatformUsageFee())
                     .map(this::toUnitProductSummaryForPurchase)
                     .toList();
         }
@@ -348,7 +349,11 @@ public class CeremonyUnitProductPurchaseService {
         if (availableIds.isEmpty()) {
             return List.of();
         }
-        return billingCatalogQueryService.findUnitProducts(availableIds).stream().map(this::toUnitProductSummaryForPurchase).toList();
+        // 추가구매 후보는 직접 수주 경로 상품뿐이다(플랫폼 수주 행사의 범위 변경은 수주 쪽에서 한다).
+        return billingCatalogQueryService.findUnitProducts(availableIds).stream()
+                .filter(unitProduct -> !unitProduct.isPlatformOrder())
+                .map(this::toUnitProductSummaryForPurchase)
+                .toList();
     }
 
     private UnitProductDto.Response.UnitProductSummary toUnitProductSummaryForPurchase(UnitProduct unitProduct) {
@@ -379,7 +384,8 @@ public class CeremonyUnitProductPurchaseService {
                 // canDelete는 카탈로그 관리 화면 전용 필드다(UnitProductService#toSummary만 실제
                 // 6곳 조회로 계산한다) — 이 조직 사용자 화면(구매 후보 목록)은 어차피 이 값을
                 // 쓰지 않으므로 보수적으로 false를 채운다.
-                false
+                false,
+                unitProduct.getSalesChannel().name()
         );
     }
 

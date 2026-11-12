@@ -34,6 +34,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -374,15 +375,19 @@ public class SalesOrderChangeService {
         Map<Long, Integer> previous = previousLines.stream()
                 .filter(line -> line.getLineType() == SalesOrderLineType.UNIT_PRODUCT)
                 .collect(Collectors.toMap(line -> line.getUnitProduct().getId(), SalesOrderLine::getQuantity, Integer::sum));
-        Map<Long, Integer> next = new HashMap<>();
+        Map<Long, Integer> next = new LinkedHashMap<>();
+        Map<Long, String> taxCodes = new HashMap<>();
         newLines.stream()
                 .filter(line -> line.getLineType() == SalesOrderLineType.UNIT_PRODUCT)
-                .forEach(line -> next.merge(line.getUnitProduct().getId(), line.getQuantity(), Integer::sum));
+                .forEach(line -> {
+                    next.merge(line.getUnitProduct().getId(), line.getQuantity(), Integer::sum);
+                    taxCodes.putIfAbsent(line.getUnitProduct().getId(), line.getTaxCode());
+                });
         List<PlatformOrderCeremonyCommand.ScopeOption> added = new ArrayList<>();
         next.forEach((unitProductId, quantity) -> {
             int delta = quantity - previous.getOrDefault(unitProductId, 0);
             if (delta > 0) {
-                added.add(new PlatformOrderCeremonyCommand.ScopeOption(unitProductId, delta));
+                added.add(new PlatformOrderCeremonyCommand.ScopeOption(unitProductId, delta, taxCodes.get(unitProductId)));
             }
         });
         return added;

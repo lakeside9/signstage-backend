@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.order.service;
 
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCategory;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
@@ -29,7 +30,7 @@ final class OrderFixtures {
     }
 
     static BillingPlan plan(Long id) {
-        BillingPlan plan = BillingPlan.builder().name("소형 패키지").build();
+        BillingPlan plan = BillingPlan.builder().name("소형 패키지").salesChannel(SalesChannel.PLATFORM_ORDER).build();
         ReflectionTestUtils.setField(plan, "id", id);
         return plan;
     }
@@ -39,6 +40,7 @@ final class OrderFixtures {
                 .type(type)
                 .name(name)
                 .category(UnitProductCategory.EQUIPMENT)
+                .salesChannel(SalesChannel.PLATFORM_ORDER)
                 .build();
         ReflectionTestUtils.setField(unitProduct, "id", id);
         return unitProduct;

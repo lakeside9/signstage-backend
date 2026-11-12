@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.billing.repository;
 
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import java.util.List;
@@ -18,5 +19,7 @@ public interface UnitProductRepository extends JpaRepository<UnitProduct, Long> 
      * 는 정확히 1행만 존재해야 한다(마이그레이션이 시딩, 관리자 카탈로그 등록 화면에서 새로
      * 만들 수 없음). 여러 행이 있으면 id가 가장 작은 것을 쓴다.
      */
-    Optional<UnitProduct> findFirstByTypeOrderByIdAsc(UnitProductType type);
+    Optional<UnitProduct> findFirstByTypeAndSalesChannelOrderByIdAsc(UnitProductType type, SalesChannel salesChannel);
+
+    boolean existsByTypeAndSalesChannel(UnitProductType type, SalesChannel salesChannel);
 }

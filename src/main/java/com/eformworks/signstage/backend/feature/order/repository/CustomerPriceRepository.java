@@ -64,4 +64,8 @@ public interface CustomerPriceRepository extends JpaRepository<CustomerPrice, Lo
             @Param("to") LocalDate to,
             @Param("excludeId") Long excludeId
     );
+
+    boolean existsByBillingPlanId(Long billingPlanId);
+
+    boolean existsByUnitProductId(Long unitProductId);
 }

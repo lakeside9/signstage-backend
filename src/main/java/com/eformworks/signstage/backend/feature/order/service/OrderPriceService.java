@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.billing.service.TaxPolicyResolver;
@@ -78,12 +79,12 @@ public class OrderPriceService {
         UnitProduct unitProduct = null;
         boolean overlaps;
         if (request.getBillingPlanId() != null) {
-            plan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId());
+            plan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId(), SalesChannel.PLATFORM_ORDER);
             overlaps = customerPriceRepository.existsOverlapForPlan(
                     plan.getId(), period.getEffectiveFrom(), period.effectiveToOrOpenEnd(), null
             );
         } else {
-            unitProduct = billingCatalogQueryService.findUnitProductOrThrow(request.getUnitProductId());
+            unitProduct = billingCatalogQueryService.findUnitProductOrThrow(request.getUnitProductId(), SalesChannel.PLATFORM_ORDER);
             overlaps = customerPriceRepository.existsOverlapForUnitProduct(
                     unitProduct.getId(), period.getEffectiveFrom(), period.effectiveToOrOpenEnd(), null
             );

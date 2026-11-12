@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CustomerQuoteDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CustomerQuote;
@@ -375,7 +376,7 @@ class CustomerQuoteServiceTest {
         Ceremony ceremony = ceremony();
         stubCommon(ceremony);
         UnitProduct tablet = unitProduct(901L, "태블릿", UnitProductCategory.EQUIPMENT, null);
-        given(billingCatalogQueryService.findUnitProductOrThrow(901L)).willReturn(tablet);
+        given(billingCatalogQueryService.findUnitProductOrThrow(901L, SalesChannel.PARTNER_DIRECT)).willReturn(tablet);
         willThrow(new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_INACTIVE))
                 .given(ceremonyCatalogService).resolveSellableUnitProductPeriod(eq(tablet), any(LocalDate.class));
 
@@ -397,8 +398,8 @@ class CustomerQuoteServiceTest {
         stubCommon(ceremony);
         UnitProduct near = unitProduct(902L, "근거리 현장지원", UnitProductCategory.PERSONNEL, "ONSITE_SUPPORT_TIER");
         UnitProduct far = unitProduct(903L, "원거리 현장지원", UnitProductCategory.PERSONNEL, "ONSITE_SUPPORT_TIER");
-        given(billingCatalogQueryService.findUnitProductOrThrow(902L)).willReturn(near);
-        given(billingCatalogQueryService.findUnitProductOrThrow(903L)).willReturn(far);
+        given(billingCatalogQueryService.findUnitProductOrThrow(902L, SalesChannel.PARTNER_DIRECT)).willReturn(near);
+        given(billingCatalogQueryService.findUnitProductOrThrow(903L, SalesChannel.PARTNER_DIRECT)).willReturn(far);
         willThrow(new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_GROUP_CONFLICT))
                 .given(ceremonyCatalogService).checkExclusivityGroups(List.of(near, far));
 
@@ -420,7 +421,7 @@ class CustomerQuoteServiceTest {
         Ceremony ceremony = ceremony();
         stubCommon(ceremony);
         UnitProduct tablet = unitProduct(901L, "태블릿", UnitProductCategory.EQUIPMENT, null);
-        given(billingCatalogQueryService.findUnitProductOrThrow(901L)).willReturn(tablet);
+        given(billingCatalogQueryService.findUnitProductOrThrow(901L, SalesChannel.PARTNER_DIRECT)).willReturn(tablet);
         given(customerQuoteRepository.findMaxVersion(CEREMONY_ID)).willReturn(0);
         given(customerQuoteRepository.findByIdAndCeremonyId(any(), eq(CEREMONY_ID)))
                 .willAnswer(invocation -> Optional.of(
@@ -479,7 +480,7 @@ class CustomerQuoteServiceTest {
                 customerQuoteService.generateCustomerQuote(ORGANIZATION_ID, CEREMONY_ID, CURRENT_USER_ID, request);
 
         assertThat(result).isNotNull();
-        verify(billingCatalogQueryService, never()).findUnitProductOrThrow(any());
+        verify(billingCatalogQueryService, never()).findUnitProductOrThrow(any(), any());
         verify(ceremonyCatalogService, never()).resolveSellableUnitProductPeriod(any(), any(LocalDate.class));
         ArgumentCaptor<List<UnitProduct>> captor = ArgumentCaptor.forClass(List.class);
         verify(ceremonyCatalogService).checkExclusivityGroups(captor.capture());

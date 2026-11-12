@@ -57,6 +57,7 @@ public class BillingSimulatorService {
         LocalDate today = LocalDate.now(ZoneId.of(organization.getDefaultTimeZoneId()));
         List<BillingSimulatorDto.Response.Plan> plans = new ArrayList<>();
         for (var plan : billingPlanRepository.findAll()) {
+            if (plan.isPlatformOrder()) continue;
             var period = billingPlanDiscountPeriodRepository.findEffective(plan.getId(), today);
             if (period.isEmpty() || !period.get().isActive()) continue;
             List<BillingSimulatorDto.Response.Product> products = new ArrayList<>();
@@ -93,7 +94,7 @@ public class BillingSimulatorService {
         }
         List<BillingSimulatorDto.Response.Product> additionalProducts = new ArrayList<>();
         for (var product : unitProductRepository.findAllByOrderByDisplayOrderAscIdAsc()) {
-            if (!product.isPlatformUsageFee()) continue;
+            if (product.isPlatformOrder() || !product.isPlatformUsageFee()) continue;
             var price = unitProductPricePeriodRepository.findEffective(product.getId(), today);
             if (price.isEmpty() || !price.get().isActive()
                     || !currency.equals(price.get().getPriceInfo().getCurrencyCode())) continue;

@@ -11,13 +11,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.web.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.billing.dto.UnitProductDto;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCategory;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.billing.error.BillingErrorCode;
 import com.eformworks.signstage.backend.feature.billing.port.CeremonyBillingUsagePort;
+import com.eformworks.signstage.backend.feature.billing.port.OrderCatalogUsagePort;
 import com.eformworks.signstage.backend.feature.billing.port.UnitProductEffectPort;
 import com.eformworks.signstage.backend.feature.billing.repository.BillingPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.billing.repository.BillingPlanUnitProductRepository;
@@ -62,6 +65,8 @@ class UnitProductServiceTest {
     private BillingPlanHistoryUnitProductRepository billingPlanHistoryUnitProductRepository;
     @Mock
     private CeremonyBillingUsagePort ceremonyBillingUsagePort;
+    @Mock
+    private OrderCatalogUsagePort orderCatalogUsagePort;
     @Mock
     private UnitProductEffectPort unitProductEffectPort;
     @Mock
@@ -182,7 +187,7 @@ class UnitProductServiceTest {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "EVENT_EFFECT_BUNDLE", "3종 묶음", null, "APPLICATION", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
-                null, null, java.util.List.of(10L, 20L)
+                null, null, java.util.List.of(10L, 20L), null
         );
 
         unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request);
@@ -196,7 +201,7 @@ class UnitProductServiceTest {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "SIGNERS", "서명자", null, "ESSENTIAL", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
-                null, null, java.util.List.of(10L)
+                null, null, java.util.List.of(10L), null
         );
 
         assertThatThrownBy(() -> unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request))
@@ -217,7 +222,7 @@ class UnitProductServiceTest {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "TEMPLATES", "템플릿 문서", null, "ESSENTIAL", null, null, 10, null, "KRW",
                 java.math.BigDecimal.valueOf(500), java.math.BigDecimal.valueOf(1000), "KR_VAT_STANDARD", true,
-                null, null, null
+                null, null, null, null
         );
 
         UnitProductDto.Response.UnitProductSummary result = unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request);
@@ -231,7 +236,7 @@ class UnitProductServiceTest {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "TEMPLATES", "템플릿 문서", null, "ESSENTIAL", null, 25, 10, null, "KRW",
                 java.math.BigDecimal.valueOf(500), java.math.BigDecimal.valueOf(1000), "KR_VAT_STANDARD", true,
-                null, null, null
+                null, null, null, null
         );
 
         assertThatThrownBy(() -> unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request))
@@ -246,7 +251,7 @@ class UnitProductServiceTest {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "SIGNERS", "서명자", "행사장 서명자 한도를 늘립니다.", "ESSENTIAL", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
-                null, null, null
+                null, null, null, null
         );
 
         UnitProductDto.Response.UnitProductSummary result = unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request);
@@ -259,11 +264,11 @@ class UnitProductServiceTest {
     void createUnitProduct_platformUsageFeeOmitted_defaultsFromCategory() {
         UnitProductDto.Request.CreateUnitProduct essential = new UnitProductDto.Request.CreateUnitProduct(
                 "SIGNERS", "서명자", null, "ESSENTIAL", null, null, null, null, "KRW",
-                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null
+                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null, null
         );
         UnitProductDto.Request.CreateUnitProduct personnel = new UnitProductDto.Request.CreateUnitProduct(
                 "ONSITE_SUPPORT", "현장지원", null, "PERSONNEL", null, null, null, null, "KRW",
-                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null
+                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null, null
         );
 
         UnitProductDto.Response.UnitProductSummary essentialResult = unitProductService.createUnitProduct("PLATFORM_OPS", 1L, essential);
@@ -278,7 +283,7 @@ class UnitProductServiceTest {
     void createUnitProduct_platformUsageFeeExplicit_overridesCategoryDefault() {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "ONSITE_SUPPORT", "현장지원(요청형·관리자 견적)", null, "PERSONNEL", null, null, null, true, "KRW",
-                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null
+                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null, null
         );
 
         UnitProductDto.Response.UnitProductSummary result = unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request);
@@ -400,5 +405,84 @@ class UnitProductServiceTest {
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(BillingErrorCode.UNIT_PRODUCT_NOT_FOUND);
+    }
+
+    private static UnitProductDto.Request.CreateUnitProduct platformOrderProduct(String type) {
+        UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct();
+        request.setType(type);
+        request.setName("현장 인력(인·일)");
+        request.setCategory("PERSONNEL");
+        request.setSalesChannel("PLATFORM_ORDER");
+        return request;
+    }
+
+    @Test
+    @DisplayName("플랫폼 수주 경로 — 판매 가격 없이 등록하고 판매 가격 기간을 만들지 않는다")
+    void createUnitProduct_platformOrder_createsNoPricePeriod() {
+        UnitProductDto.Response.UnitProductSummary result =
+                unitProductService.createUnitProduct("PLATFORM_OPS", 1L, platformOrderProduct("TABLETS"));
+
+        assertThat(result.getSalesChannel()).isEqualTo("PLATFORM_ORDER");
+        assertThat(result.getSalePrice()).isNull();
+        verify(unitProductPricePeriodRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("플랫폼 수주 경로 — 현장 인력은 하나만, 현장지원 요청 종류는 둘 수 없다")
+    void createUnitProduct_platformOrder_rejectsSecondOnsiteSupportAndOnsiteSupportRequest() {
+        given(unitProductRepository.existsByTypeAndSalesChannel(UnitProductType.ONSITE_SUPPORT, SalesChannel.PLATFORM_ORDER))
+                .willReturn(true);
+
+        assertThatThrownBy(() -> unitProductService.createUnitProduct("PLATFORM_OPS", 1L, platformOrderProduct("ONSITE_SUPPORT")))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(BillingErrorCode.PLATFORM_ORDER_CATALOG_INVALID);
+        assertThatThrownBy(() -> unitProductService.createUnitProduct(
+                "PLATFORM_OPS", 1L, platformOrderProduct("ONSITE_SUPPORT_REQUEST")))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(BillingErrorCode.PLATFORM_ORDER_CATALOG_INVALID);
+        verify(unitProductRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("직접 수주 경로 — 판매 가격이 없으면 거부한다")
+    void createUnitProduct_partnerDirect_requiresSalePrice() {
+        UnitProductDto.Request.CreateUnitProduct request = platformOrderProduct("TABLETS");
+        request.setSalesChannel(null);
+        request.setActive(true);
+
+        assertThatThrownBy(() -> unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CommonErrorCode.INVALID_REQUEST);
+    }
+
+    @Test
+    @DisplayName("플랫폼 수주 경로 상품에는 판매 가격 기간을 추가할 수 없다")
+    void createPeriod_rejectsPlatformOrderProduct() {
+        UnitProduct product = UnitProduct.builder()
+                .type(UnitProductType.TABLETS).name("태블릿").category(UnitProductCategory.EQUIPMENT)
+                .salesChannel(SalesChannel.PLATFORM_ORDER).build();
+        given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(product));
+
+        assertThatThrownBy(() -> unitProductService.createPeriod(
+                UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, new UnitProductDto.Request.CreatePeriod()))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+    }
+
+    @Test
+    @DisplayName("삭제 — 고객 가격표나 수주 견적이 참조하면 거부한다")
+    void deleteUnitProduct_rejectsWhenUsedByPlatformOrder() {
+        given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(unitProduct()));
+        given(orderCatalogUsagePort.isUnitProductUsed(UNIT_PRODUCT_ID)).willReturn(true);
+
+        assertThatThrownBy(() -> unitProductService.deleteUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(BillingErrorCode.UNIT_PRODUCT_IN_USE);
+        verify(unitProductRepository, never()).delete(any());
     }
 }

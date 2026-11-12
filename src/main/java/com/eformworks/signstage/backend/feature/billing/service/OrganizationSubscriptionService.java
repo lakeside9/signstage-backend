@@ -98,6 +98,9 @@ public class OrganizationSubscriptionService {
 
         BillingPlan plan = billingPlanRepository.findById(request.getBillingPlanId())
                 .orElseThrow(() -> new ApplicationException(BillingErrorCode.BILLING_PLAN_NOT_FOUND));
+        if (plan.isPlatformOrder()) {
+            throw new ApplicationException(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+        }
         if (!plan.isSubscription()) {
             throw new ApplicationException(BillingErrorCode.SUBSCRIPTION_PLAN_NOT_SUBSCRIPTION_TYPE);
         }

@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CustomerQuoteDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
@@ -319,7 +320,7 @@ public class CustomerQuoteService {
                 resolvedLines.add(new ResolvedLine(line, null));
                 continue;
             }
-            UnitProduct unitProduct = billingCatalogQueryService.findUnitProductOrThrow(line.getUnitProductId());
+            UnitProduct unitProduct = billingCatalogQueryService.findUnitProductOrThrow(line.getUnitProductId(), SalesChannel.PARTNER_DIRECT);
             if (unitProduct.isPlatformUsageFee()) {
                 throw new ApplicationException(CeremonyErrorCode.CUSTOMER_QUOTE_ITEM_NOT_EQUIPMENT_PERSONNEL);
             }

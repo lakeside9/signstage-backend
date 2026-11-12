@@ -12,14 +12,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCategory;
 import com.eformworks.signstage.backend.feature.billing.error.BillingErrorCode;
 import com.eformworks.signstage.backend.feature.billing.dto.BillingPlanDto;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanType;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
-import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCategory;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.billing.port.CeremonyBillingUsagePort;
+import com.eformworks.signstage.backend.feature.billing.port.OrderCatalogUsagePort;
 import com.eformworks.signstage.backend.feature.billing.repository.BillingPlanDiscountPeriodHistoryRepository;
 import com.eformworks.signstage.backend.feature.billing.repository.BillingPlanDiscountPeriodRepository;
 import com.eformworks.signstage.backend.feature.billing.repository.BillingPlanHistoryRepository;
@@ -71,6 +73,8 @@ class BillingPlanServiceTest {
     private UnitProductPricePeriodRepository unitProductPricePeriodRepository;
     @Mock
     private CeremonyBillingUsagePort ceremonyBillingUsagePort;
+    @Mock
+    private OrderCatalogUsagePort orderCatalogUsagePort;
     @Mock
     private OrganizationSubscriptionRepository organizationSubscriptionRepository;
     @Mock
@@ -235,5 +239,55 @@ class BillingPlanServiceTest {
         order.verify(billingPlanUnitProductRepository).deleteAllByBillingPlanId(PLAN_ID);
         order.verify(billingPlanUnitProductRepository).flush();
         order.verify(billingPlanUnitProductRepository).save(any());
+    }
+
+    private static BillingPlanDto.Request.CreatePlan platformOrderPlan(Long unitProductId) {
+        BillingPlanDto.Request.CreatePlan request = new BillingPlanDto.Request.CreatePlan();
+        request.setName("기본 패키지");
+        request.setSalesChannel("PLATFORM_ORDER");
+        request.setUnitProducts(java.util.List.of(new BillingPlanDto.Request.PlanUnitProductLine(unitProductId, 1)));
+        return request;
+    }
+
+    private UnitProduct unitProduct(Long id, SalesChannel salesChannel) {
+        UnitProduct unitProduct = UnitProduct.builder()
+                .type(UnitProductType.SIGNERS).name("서명자").category(UnitProductCategory.ESSENTIAL)
+                .salesChannel(salesChannel).build();
+        ReflectionTestUtils.setField(unitProduct, "id", id);
+        given(unitProductRepository.findAllByIdIn(java.util.List.of(id))).willReturn(java.util.List.of(unitProduct));
+        return unitProduct;
+    }
+
+    @Test
+    @DisplayName("플랫폼 수주 경로 — 할인 없이 등록하고 할인 기간을 만들지 않는다")
+    void createPlan_platformOrder_createsNoDiscountPeriod() {
+        unitProduct(55L, SalesChannel.PLATFORM_ORDER);
+
+        BillingPlanDto.Response.BillingPlanSummary result =
+                billingPlanService.createPlan("PLATFORM_OPS", 1L, platformOrderPlan(55L));
+
+        assertThat(result.getSalesChannel()).isEqualTo("PLATFORM_ORDER");
+        verify(billingPlanDiscountPeriodRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("플랫폼 수주 경로 — 직접 수주 단위 상품을 담거나 구독형이면 거부한다")
+    void createPlan_platformOrder_rejectsMixedChannelAndSubscription() {
+        unitProduct(56L, SalesChannel.PARTNER_DIRECT);
+        assertThatThrownBy(() -> billingPlanService.createPlan("PLATFORM_OPS", 1L, platformOrderPlan(56L)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+
+        unitProduct(55L, SalesChannel.PLATFORM_ORDER);
+        BillingPlanDto.Request.CreatePlan subscription = platformOrderPlan(55L);
+        subscription.setPlanType("SUBSCRIPTION");
+        subscription.setSubscriptionType("COUNT_ONLY");
+        subscription.setSubscriptionAllowedCount(3);
+        assertThatThrownBy(() -> billingPlanService.createPlan("PLATFORM_OPS", 1L, subscription))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(BillingErrorCode.PLATFORM_ORDER_CATALOG_INVALID);
+        verify(billingPlanRepository, never()).save(any());
     }
 }

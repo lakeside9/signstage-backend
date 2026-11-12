@@ -91,7 +91,9 @@ public class PartnerOrderResponseService {
         }
 
         List<PlatformOrderCeremonyCommand.ScopeOption> options = salesOrderService.findOptionLines(salesOrder.getId()).stream()
-                .map(line -> new PlatformOrderCeremonyCommand.ScopeOption(line.getUnitProduct().getId(), line.getQuantity()))
+                .map(line -> new PlatformOrderCeremonyCommand.ScopeOption(
+                        line.getUnitProduct().getId(), line.getQuantity(), line.getTaxCode()
+                ))
                 .toList();
         Ceremony ceremony = platformOrderCeremonyService.createPlatformOrderCeremony(new PlatformOrderCeremonyCommand(
                 organizationId,
@@ -105,7 +107,9 @@ public class PartnerOrderResponseService {
                 customer.getContactName(),
                 customer.getContactPhone(),
                 customer.getContactEmail(),
-                options
+                options,
+                salesOrder.getCurrencyCode(),
+                salesOrderService.findPlanTaxCode(salesOrder.getId())
         ));
         partnerOrder.accept(currentUserId, ceremony);
         orderNotificationService.partnerOrderResponded(partnerOrder);

@@ -9,6 +9,7 @@ import static org.mockito.BDDMockito.given;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.order.dto.MarginSimulationDto;
 import com.eformworks.signstage.backend.feature.order.dto.PartnerEvaluationDto;
@@ -44,7 +45,7 @@ class MarginSimulationServiceTest {
     @DisplayName("발주 가능한 파트너만 금액 오름차순으로 계산하고, 단가표가 없는 파트너는 금액 없이 둔다")
     void simulate_quotesEligiblePartners() {
         BillingPlan plan = OrderFixtures.plan(1L);
-        given(billingCatalogQueryService.findBillingPlanOrThrow(1L)).willReturn(plan);
+        given(billingCatalogQueryService.findBillingPlanOrThrow(1L, SalesChannel.PLATFORM_ORDER)).willReturn(plan);
         given(orderPricingService.calculateSalesQuote(eq(plan), any(), eq(ServiceRegion.CAPITAL), any(), any(), any(), any()))
                 .willReturn(new SalesQuoteCalculation(List.of(), new BigDecimal("1000000"), new BigDecimal("100000"), 10, 2, ScopeExtras.NONE, null));
         given(orderPricingService.minimumMarginRate()).willReturn(new BigDecimal("0.20"));

@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.i18n.InternationalizationDefaults;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.order.dto.MarginSimulationDto;
 import com.eformworks.signstage.backend.feature.order.dto.PartnerEvaluationDto;
@@ -44,7 +45,7 @@ public class MarginSimulationService {
         CurrencyPolicy currencyPolicy = new CurrencyPolicy(
                 currencyCode, Currency.getInstance(currencyCode).getDefaultFractionDigits(), RoundingMode.HALF_UP
         );
-        BillingPlan plan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId());
+        BillingPlan plan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId(), SalesChannel.PLATFORM_ORDER);
         List<SalesQuoteOption> options = request.getOptions() == null
                 ? List.of()
                 : request.getOptions().stream()

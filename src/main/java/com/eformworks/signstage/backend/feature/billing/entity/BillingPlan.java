@@ -58,6 +58,14 @@ public class BillingPlan extends BaseEntity {
     @Column(name = "plan_type", nullable = false, length = 20)
     private BillingPlanType planType;
 
+    /**
+     * 판매 경로(U01) — 생성 후 불변. 플랜에는 같은 경로의 단위 상품만 넣는다. 플랫폼 수주 플랜은 제공 범위만
+     * 정하고 할인 기간·구독 조건을 갖지 않는다(가격은 고객 가격표에서 온다).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sales_channel", nullable = false, length = 20)
+    private SalesChannel salesChannel;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "subscription_type", length = 20)
     private SubscriptionType subscriptionType;
@@ -76,9 +84,11 @@ public class BillingPlan extends BaseEntity {
             BillingPlanType planType,
             SubscriptionType subscriptionType,
             Integer subscriptionPeriodMonths,
-            Integer subscriptionAllowedCount
+            Integer subscriptionAllowedCount,
+            SalesChannel salesChannel
     ) {
         this.name = name;
+        this.salesChannel = salesChannel != null ? salesChannel : SalesChannel.PARTNER_DIRECT;
         this.planType = planType != null ? planType : BillingPlanType.STANDARD;
         this.subscriptionType = subscriptionType;
         this.subscriptionPeriodMonths = subscriptionPeriodMonths;
@@ -87,6 +97,10 @@ public class BillingPlan extends BaseEntity {
 
     public boolean isSubscription() {
         return planType == BillingPlanType.SUBSCRIPTION;
+    }
+
+    public boolean isPlatformOrder() {
+        return salesChannel == SalesChannel.PLATFORM_ORDER;
     }
 
     /**

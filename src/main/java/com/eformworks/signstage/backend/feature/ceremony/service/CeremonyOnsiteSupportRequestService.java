@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.ceremony.dto.CeremonyOnsiteSupportRequestDto;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOnsiteSupportRequest;
@@ -142,7 +143,7 @@ public class CeremonyOnsiteSupportRequestService {
      * 재사용해 견적을 매긴 관리자를 {@code reviewedBy}로 남긴다.
      */
     private CeremonyUnitProductPurchase createPurchaseFromQuote(Ceremony ceremony, CeremonyOnsiteSupportRequest onsiteSupportRequest) {
-        UnitProduct anchor = billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT_REQUEST)
+        UnitProduct anchor = billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT_REQUEST, SalesChannel.PARTNER_DIRECT)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CEREMONY_ONSITE_SUPPORT_REQUEST_ANCHOR_NOT_FOUND));
         LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
         UnitProductPricePeriod period = ceremonyCatalogService.resolveSellableUnitProductPeriod(anchor, asOfDate);

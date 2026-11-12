@@ -1,7 +1,9 @@
 package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
+import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanDiscountPeriod;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
@@ -18,6 +20,7 @@ import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyPlanHistoryUnitProductRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -61,7 +64,7 @@ public class CeremonyPlanService {
         ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
         checkCeremonyPlanChangeable(ceremony);
 
-        BillingPlan newPlan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId());
+        BillingPlan newPlan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId(), SalesChannel.PARTNER_DIRECT);
         LocalDate asOfDate = LocalDate.now(ZoneId.of(ceremony.getTimeZoneId()));
         BillingPlanDiscountPeriod newPlanPeriod = ceremonyCatalogService.resolveSellablePlanPeriod(newPlan, asOfDate);
         ceremonyCatalogService.checkCurrencyMatches(ceremony.getCurrencyCode(), ceremonyCatalogService.resolvePlanCurrency(newPlan, asOfDate));
@@ -228,6 +231,36 @@ public class CeremonyPlanService {
                             .build()
             );
         });
+    }
+
+    /**
+     * 플랫폼 수주 행사의 플랜 스냅샷 — 플랫폼 수주 플랜·단위 상품에는 할인·판매 가격 기간이 없고 파트너는
+     * 플랫폼 이용료를 내지 않으므로, 할인은 0원 정액, 포함 단위 상품은 0원·행사 통화·수주 패키지 줄의
+     * 세금 코드로 남긴다(signstage-docs business/platform-order-unit-product-composition-review.md U05).
+     */
+    void recordPlatformOrderPlanHistory(Ceremony ceremony, BillingPlan plan, String taxCode) {
+        CeremonyPlanHistory history = ceremonyPlanHistoryRepository.save(
+                CeremonyPlanHistory.builder()
+                        .ceremony(ceremony)
+                        .billingPlan(plan)
+                        .catalogDiscountType(DiscountType.FIXED_AMOUNT)
+                        .catalogDiscountValue(BigDecimal.ZERO)
+                        .discountType(DiscountType.FIXED_AMOUNT)
+                        .discountValue(BigDecimal.ZERO)
+                        .build()
+        );
+        billingCatalogQueryService.findPlanUnitProducts(plan.getId()).forEach(source ->
+                ceremonyPlanHistoryUnitProductRepository.save(
+                        CeremonyPlanHistoryUnitProduct.builder()
+                                .ceremonyPlanHistory(history)
+                                .unitProduct(source.getUnitProduct())
+                                .includedQuantity(source.getIncludedQuantity())
+                                .currencyCode(ceremony.getCurrencyCode())
+                                .snapshotSalePrice(BigDecimal.ZERO)
+                                .snapshotTaxCode(taxCode)
+                                .build()
+                )
+        );
     }
 
     private CeremonyDto.Response.PlanHistorySummary toPlanHistorySummary(CeremonyPlanHistory history) {

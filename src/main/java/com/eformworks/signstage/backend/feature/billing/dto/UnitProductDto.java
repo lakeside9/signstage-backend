@@ -90,13 +90,12 @@ public final class UnitProductDto {
             /** nullable — 원가 미상 상태를 표현할 수 있다(signstage-docs business/billing-catalog-zero-base-schema-redesign-review.md 결정, 2026-09-08, 항목 G). */
             private BigDecimal supplyPrice;
 
-            @NotNull
+            /** 직접 수주 경로에서만 필수 — 플랫폼 수주 경로 상품은 판매 가격 기간을 만들지 않는다. */
             private BigDecimal salePrice;
 
             private String taxCode;
 
-            /** 최초 기간의 사용여부(보통 true). */
-            @NotNull
+            /** 최초 기간의 사용여부(보통 true). 직접 수주 경로에서만 필수. */
             private Boolean active;
 
             /**
@@ -117,6 +116,13 @@ public final class UnitProductDto {
              * 빈 묶음으로 시작한다(2026-09-08 결정).
              */
             private List<Long> effectDefinitionIds;
+
+            /**
+             * 판매 경로({@code PARTNER_DIRECT}/{@code PLATFORM_ORDER}). 생략하면(null) 직접 수주.
+             * 생성 후 바꿀 수 없다 — signstage-docs
+             * business/platform-order-unit-product-composition-review.md U01 결정(2026-11-12).
+             */
+            private String salesChannel;
         }
 
         /**
@@ -279,6 +285,8 @@ public final class UnitProductDto {
              * usageCount는 승인된 구매만 세지만, 이건 어떤 흔적이라도 있으면 false다.
              */
             private final boolean canDelete;
+            /** 판매 경로 — {@code PARTNER_DIRECT}(직접 수주) 또는 {@code PLATFORM_ORDER}(플랫폼 수주). */
+            private final String salesChannel;
         }
 
         /** 단위 상품 이름/설명/분류/배타그룹/최대 구매 수량 변경 이력 한 행(가격/사용여부는 판매가격 기간 이력 참고). */

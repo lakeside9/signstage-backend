@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanDiscountPeriod;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductPricePeriod;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
@@ -59,6 +60,24 @@ public class BillingCatalogQueryService {
                 .orElseThrow(() -> new ApplicationException(BillingErrorCode.UNIT_PRODUCT_NOT_FOUND));
     }
 
+    /** 판매 경로(U01)가 맞는 플랜만 — 아니면 {@code BILLING_SALES_CHANNEL_MISMATCH}. */
+    public BillingPlan findBillingPlanOrThrow(Long billingPlanId, SalesChannel salesChannel) {
+        BillingPlan plan = findBillingPlanOrThrow(billingPlanId);
+        if (plan.getSalesChannel() != salesChannel) {
+            throw new ApplicationException(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+        }
+        return plan;
+    }
+
+    /** 판매 경로(U01)가 맞는 단위 상품만 — 아니면 {@code BILLING_SALES_CHANNEL_MISMATCH}. */
+    public UnitProduct findUnitProductOrThrow(Long unitProductId, SalesChannel salesChannel) {
+        UnitProduct unitProduct = findUnitProductOrThrow(unitProductId);
+        if (unitProduct.getSalesChannel() != salesChannel) {
+            throw new ApplicationException(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+        }
+        return unitProduct;
+    }
+
     /** 없는 id는 결과에서 빠진다. 순서는 보장하지 않는다. */
     public List<UnitProduct> findUnitProducts(List<Long> unitProductIds) {
         return unitProductRepository.findAllById(unitProductIds);
@@ -68,9 +87,9 @@ public class BillingCatalogQueryService {
         return unitProductRepository.findAll();
     }
 
-    /** 해당 종류의 단위 상품 중 id가 가장 작은 것. */
-    public Optional<UnitProduct> findFirstUnitProductByType(UnitProductType type) {
-        return unitProductRepository.findFirstByTypeOrderByIdAsc(type);
+    /** 해당 판매 경로·종류의 단위 상품 중 id가 가장 작은 것. */
+    public Optional<UnitProduct> findFirstUnitProductByType(UnitProductType type, SalesChannel salesChannel) {
+        return unitProductRepository.findFirstByTypeAndSalesChannelOrderByIdAsc(type, salesChannel);
     }
 
     /** {@code asOfDate}에 유효한 단위 상품 가격 기간. 판매 기간이 아니면 비어 있다. */

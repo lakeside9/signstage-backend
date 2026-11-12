@@ -194,7 +194,7 @@ class SalesOrderChangeServiceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<PlatformOrderCeremonyCommand.ScopeOption>> additions = ArgumentCaptor.forClass(List.class);
         verify(platformOrderCeremonyService).applyScopeChange(eq(accepted.getCeremony()), any(), any(), any(), additions.capture());
-        assertThat(additions.getValue()).containsExactly(new PlatformOrderCeremonyCommand.ScopeOption(11L, 2));
+        assertThat(additions.getValue()).containsExactly(new PlatformOrderCeremonyCommand.ScopeOption(11L, 2, "KR_VAT_STANDARD"));
         verify(orderNotificationService).scopeChangeApplied(change);
         verify(orderNotificationService).scopeChangeResponded(change);
     }

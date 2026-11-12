@@ -130,7 +130,8 @@ public class CeremonyCatalogService {
                             // 관리 화면 전용 필드라 이 조직 사용자 화면에서는 어차피 안 쓰지만, 값
                             // 자체는 정확하게 false로 채운다(UnitProductService#toSummary만 실제
                             // 6곳 조회로 계산한다).
-                            false
+                            false,
+                            unitProduct.getSalesChannel().name()
                     );
                 })
                 .toList();

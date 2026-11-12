@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.error.BillingErrorCode;
 import com.eformworks.signstage.backend.feature.billing.repository.BillingPlanDiscountPeriodRepository;
@@ -68,5 +69,24 @@ class BillingCatalogQueryServiceTest {
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(BillingErrorCode.UNIT_PRODUCT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("경로를 지정한 조회 — 판매 경로가 다르면 SALES_CHANNEL_MISMATCH")
+    void findWithSalesChannel_rejectsOtherChannel() {
+        BillingPlan platformPlan = BillingPlan.builder().salesChannel(SalesChannel.PLATFORM_ORDER).build();
+        UnitProduct directProduct = UnitProduct.builder().build();
+        given(billingPlanRepository.findById(1L)).willReturn(Optional.of(platformPlan));
+        given(unitProductRepository.findById(1L)).willReturn(Optional.of(directProduct));
+
+        assertThat(billingCatalogQueryService.findBillingPlanOrThrow(1L, SalesChannel.PLATFORM_ORDER)).isSameAs(platformPlan);
+        assertThatThrownBy(() -> billingCatalogQueryService.findBillingPlanOrThrow(1L, SalesChannel.PARTNER_DIRECT))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+        assertThatThrownBy(() -> billingCatalogQueryService.findUnitProductOrThrow(1L, SalesChannel.PLATFORM_ORDER))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(BillingErrorCode.SALES_CHANNEL_MISMATCH);
     }
 }

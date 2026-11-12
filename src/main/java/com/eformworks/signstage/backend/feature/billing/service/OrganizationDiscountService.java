@@ -75,6 +75,9 @@ public class OrganizationDiscountService {
         Organization organization = findOrganizationOrThrow(organizationId);
         BillingPlan plan = billingPlanRepository.findById(billingPlanId)
                 .orElseThrow(() -> new ApplicationException(BillingErrorCode.BILLING_PLAN_NOT_FOUND));
+        if (plan.isPlatformOrder()) {
+            throw new ApplicationException(BillingErrorCode.SALES_CHANNEL_MISMATCH);
+        }
         DiscountType newType = parseDiscountType(request.getDiscountType());
         LocalDate effectiveFrom = resolveEffectiveFrom(organization, request.getEffectiveFrom());
         checkPeriodValid(effectiveFrom, request.getEffectiveTo());

@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.billing.dto.BillingPlanDto;
+import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanDiscountPeriod;
@@ -86,7 +87,7 @@ public class CeremonyService {
         // Ceremony가 없으니 organization에서 같은 값을 미리 계산해 쓴다.
         LocalDate asOfDate = LocalDate.now(ZoneId.of(organization.getDefaultTimeZoneId()));
         if (request.getBillingPlanId() != null) {
-            plan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId());
+            plan = billingCatalogQueryService.findBillingPlanOrThrow(request.getBillingPlanId(), SalesChannel.PARTNER_DIRECT);
             planPeriod = ceremonyCatalogService.resolveSellablePlanPeriod(plan, asOfDate);
             ceremonyCatalogService.checkCurrencyMatches(organization.getBillingCurrencyCode(), ceremonyCatalogService.resolvePlanCurrency(plan, asOfDate));
         }
