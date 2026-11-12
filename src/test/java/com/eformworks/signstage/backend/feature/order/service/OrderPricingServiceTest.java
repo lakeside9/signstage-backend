@@ -276,6 +276,37 @@ class OrderPricingServiceTest {
     }
 
     @Test
+    @DisplayName("고객 견적 — 묶음 판매 상품은 개당 단가 × 개수로 계산하고, 판매 단위의 배수가 아니면 거부한다")
+    void calculateSalesQuote_checksSaleUnitQuantity() {
+        BillingPlan plan = OrderFixtures.plan(1L);
+        UnitProduct templates = OrderFixtures.unitProduct(17L, UnitProductType.TEMPLATES, "템플릿 문서");
+        ReflectionTestUtils.setField(templates, "saleUnitQuantity", 10);
+        given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of());
+        given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY))
+                .willReturn(Optional.of(customerPrice(plan, null, 3_000_000)));
+        given(billingCatalogQueryService.findUnitProductOrThrow(17L, SalesChannel.PLATFORM_ORDER)).willReturn(templates);
+        given(customerPriceRepository.findEffectiveForUnitProduct(17L, OrderFixtures.TODAY))
+                .willReturn(Optional.of(customerPrice(null, templates, 1_000)));
+        given(regionSurchargeRepository.findEffective(ServiceRegion.CAPITAL, OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
+        stubVat();
+
+        SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
+                plan, List.of(new SalesQuoteOption(17L, 20)), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW,
+                OrderFixtures.TODAY
+        );
+
+        // 3,000,000 + 1,000 × 20개(10개 묶음 2개)
+        assertThat(calculation.supplyAmount()).isEqualByComparingTo("3020000");
+        assertThatThrownBy(() -> orderPricingService.calculateSalesQuote(
+                plan, List.of(new SalesQuoteOption(17L, 15)), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW,
+                OrderFixtures.TODAY
+        )).isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(OrderErrorCode.OPTION_SALE_UNIT_MISMATCH);
+    }
+
+    @Test
     @DisplayName("직접 입력 항목은 이름이 있고 금액이 음수가 아니어야 한다")
     void calculateSalesQuote_rejectsInvalidCustomItem() {
         BillingPlan plan = OrderFixtures.plan(1L);

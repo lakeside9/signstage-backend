@@ -46,6 +46,10 @@ public enum OrderErrorCode implements ErrorCode {
             "고객 공급가에서 발주 금액을 뺀 마진이 최소 마진 기준보다 작습니다."
     ),
     OPTION_DUPLICATED("ORDER_OPTION_DUPLICATED", HttpStatus.BAD_REQUEST, "같은 단위 상품을 옵션에 두 번 넣을 수 없습니다."),
+    OPTION_SALE_UNIT_MISMATCH(
+            "ORDER_OPTION_SALE_UNIT_MISMATCH", HttpStatus.BAD_REQUEST,
+            "옵션 수량은 단위 상품의 판매 단위 수량의 배수여야 합니다(예: 10개 단위면 10, 20, 30)."
+    ),
     SALES_ORDER_NOT_FOUND("ORDER_SALES_ORDER_NOT_FOUND", HttpStatus.NOT_FOUND, "수주를 찾을 수 없습니다."),
     SALES_ORDER_NOT_QUOTED(
             "ORDER_SALES_ORDER_NOT_QUOTED",

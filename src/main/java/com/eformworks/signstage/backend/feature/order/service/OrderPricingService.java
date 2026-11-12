@@ -102,6 +102,10 @@ public class OrderPricingService {
             if (quantity < 1) {
                 throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
             }
+            // 고객 가격은 개당 단가이고 수량은 개수다 — 묶음 판매 상품은 판매 단위의 배수로만 넣는다(직접 수주 추가구매와 같은 규칙).
+            if (quantity % unitProduct.getSaleUnitQuantity() != 0) {
+                throw new ApplicationException(OrderErrorCode.OPTION_SALE_UNIT_MISMATCH);
+            }
             CustomerPrice optionPrice = customerPriceRepository.findEffectiveForUnitProduct(unitProduct.getId(), asOfDate)
                     .orElseThrow(() -> new ApplicationException(OrderErrorCode.CUSTOMER_PRICE_NOT_FOUND));
             checkCurrency(optionPrice.getCurrencyCode(), currencyPolicy);
