@@ -77,6 +77,7 @@ public class MarginSimulationService {
                 calculation.supplyAmount().add(calculation.vatAmount()),
                 calculation.tabletCount(),
                 calculation.onsiteStaffPersonDays(),
+                calculation.wifiCount(),
                 orderPricingService.minimumMarginRate().multiply(HUNDRED).stripTrailingZeros(),
                 defaultQuote,
                 partnerQuotes
@@ -101,7 +102,8 @@ public class MarginSimulationService {
         BigDecimal partnerAmount;
         try {
             partnerAmount = orderPricingService.calculatePartnerOrderAmount(
-                    organizationId, calculation.tabletCount(), calculation.onsiteStaffPersonDays(), calculation.extras(), region,
+                    organizationId, calculation.tabletCount(), calculation.wifiCount(), calculation.onsiteStaffPersonDays(),
+                    calculation.extras(), region,
                     adjustmentAmount, currencyPolicy, today
             ).totalAmount();
         } catch (ApplicationException ex) {

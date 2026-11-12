@@ -145,7 +145,9 @@ public class SalesOrderChangeService {
         BigDecimal partnerAmount = null;
         BigDecimal estimatedPartnerAmount;
         if (acceptedOrder != null) {
-            partnerAmount = acceptedOrder.amountFor(calculation.tabletCount(), calculation.onsiteStaffPersonDays(), calculation.extras());
+            partnerAmount = acceptedOrder.amountFor(
+                    calculation.tabletCount(), calculation.wifiCount(), calculation.onsiteStaffPersonDays(), calculation.extras()
+            );
             orderPricingService.checkPartnerOrderMargin(calculation.supplyAmount(), partnerAmount);
             estimatedPartnerAmount = partnerAmount;
         } else {
@@ -159,6 +161,7 @@ public class SalesOrderChangeService {
                 .partnerOrder(acceptedOrder)
                 .reason(request.getReason().trim())
                 .tabletCount(calculation.tabletCount())
+                .wifiCount(calculation.wifiCount())
                 .onsiteStaffPersonDays(calculation.onsiteStaffPersonDays())
                 .extras(calculation.extras())
                 .supplyAmount(calculation.supplyAmount())
@@ -356,7 +359,8 @@ public class SalesOrderChangeService {
         PartnerOrder partnerOrder = change.getPartnerOrder();
         if (partnerOrder != null) {
             partnerOrder.applyScopeChange(
-                    change.getTabletCount(), change.getOnsiteStaffPersonDays(), change.scopeExtras(), change.getPartnerAmount()
+                    change.getTabletCount(), change.getWifiCount(), change.getOnsiteStaffPersonDays(), change.scopeExtras(),
+                    change.getPartnerAmount()
             );
             platformOrderCeremonyService.applyScopeChange(
                     partnerOrder.getCeremony(), change.getLocation(), change.getStartsAt(), change.getEndsAt(),

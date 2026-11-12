@@ -82,6 +82,8 @@ public final class PlatformAdminPartnerOrderDto {
             private final BigDecimal baseFee;
             private final int tabletCount;
             private final BigDecimal tabletUnitRate;
+            private final int wifiCount;
+            private final BigDecimal wifiUnitRate;
             private final int onsiteStaffPersonDays;
             private final BigDecimal onsiteStaffDayRate;
             private final BigDecimal regionSurcharge;
@@ -113,6 +115,8 @@ public final class PlatformAdminPartnerOrderDto {
                         partnerOrder.getBaseFee(),
                         partnerOrder.getTabletCount(),
                         partnerOrder.getTabletUnitRate(),
+                        partnerOrder.getWifiCount(),
+                        partnerOrder.getWifiUnitRate(),
                         partnerOrder.getOnsiteStaffPersonDays(),
                         partnerOrder.getOnsiteStaffDayRate(),
                         partnerOrder.getRegionSurcharge(),
@@ -146,6 +150,8 @@ public final class PlatformAdminPartnerOrderDto {
             private final BigDecimal baseFee;
             private final int tabletCount;
             private final BigDecimal tabletUnitRate;
+            private final int wifiCount;
+            private final BigDecimal wifiUnitRate;
             private final int onsiteStaffPersonDays;
             private final BigDecimal onsiteStaffDayRate;
             private final BigDecimal regionSurcharge;
@@ -173,6 +179,8 @@ public final class PlatformAdminPartnerOrderDto {
                         amount.baseFee(),
                         amount.tabletCount(),
                         amount.tabletUnitRate(),
+                        amount.wifiCount(),
+                        amount.wifiUnitRate(),
                         amount.onsiteStaffPersonDays(),
                         amount.onsiteStaffDayRate(),
                         amount.regionSurcharge(),

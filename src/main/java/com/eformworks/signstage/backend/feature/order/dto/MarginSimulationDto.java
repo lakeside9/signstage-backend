@@ -90,6 +90,7 @@ public final class MarginSimulationDto {
             private final BigDecimal totalAmount;
             private final int tabletCount;
             private final int onsiteStaffPersonDays;
+            private final int wifiCount;
             private final BigDecimal minimumMarginRatePercent;
             private final PartnerQuote defaultQuote;
             private final List<PartnerQuote> partnerQuotes;

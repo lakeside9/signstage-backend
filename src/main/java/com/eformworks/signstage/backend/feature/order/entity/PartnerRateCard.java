@@ -22,7 +22,7 @@ import lombok.NoArgsConstructor;
 /**
  * 파트너 발주 단가표 — D05·D28 안 A. {@code organization}이 없으면 기본 단가표이고, 있으면 그
  * 파트너의 예외 단가표다(예외가 있으면 우선한다). 발주 금액은
- * {@code 기본 수행비 + 태블릿 대수 × 대당 단가 + 현장 인력 인·일 × 인·일 단가 + 지역 할증 ± 조정}이다.
+ * {@code 기본 수행비 + 태블릿 대수 × 대당 단가 + 와이파이 대수 × 대당 단가 + 현장 인력 인·일 × 인·일 단가 + 지역 할증 ± 조정}이다.
  */
 @Entity
 @Table(name = "partner_rate_cards")
@@ -47,6 +47,10 @@ public class PartnerRateCard extends BaseEntity {
     @Column(name = "tablet_unit_rate", nullable = false, precision = 19, scale = 4)
     private BigDecimal tabletUnitRate;
 
+    /** 와이파이 장비 대당 단가. */
+    @Column(name = "wifi_unit_rate", nullable = false, precision = 19, scale = 4)
+    private BigDecimal wifiUnitRate;
+
     @Column(name = "onsite_staff_day_rate", nullable = false, precision = 19, scale = 4)
     private BigDecimal onsiteStaffDayRate;
 
@@ -56,12 +60,13 @@ public class PartnerRateCard extends BaseEntity {
     @Builder
     private PartnerRateCard(
             Organization organization, String currencyCode, BigDecimal baseFee, BigDecimal tabletUnitRate,
-            BigDecimal onsiteStaffDayRate, EffectivePeriod period
+            BigDecimal wifiUnitRate, BigDecimal onsiteStaffDayRate, EffectivePeriod period
     ) {
         this.organization = organization;
         this.currencyCode = currencyCode;
         this.baseFee = baseFee;
         this.tabletUnitRate = tabletUnitRate;
+        this.wifiUnitRate = wifiUnitRate != null ? wifiUnitRate : BigDecimal.ZERO;
         this.onsiteStaffDayRate = onsiteStaffDayRate;
         this.period = period;
     }

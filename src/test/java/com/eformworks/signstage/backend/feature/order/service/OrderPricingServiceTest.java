@@ -141,7 +141,7 @@ class OrderPricingServiceTest {
                 .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
 
         PartnerOrderAmount amount = orderPricingService.calculatePartnerOrderAmount(
-                7L, 4, 1, ScopeExtras.NONE, ServiceRegion.CAPITAL, BigDecimal.valueOf(-50_000), KRW, OrderFixtures.TODAY
+                7L, 4, 0, 1, ScopeExtras.NONE, ServiceRegion.CAPITAL, BigDecimal.valueOf(-50_000), KRW, OrderFixtures.TODAY
         );
 
         // 500,000 + 4×100,000 + 1×400,000 + 0 − 50,000
@@ -185,7 +185,7 @@ class OrderPricingServiceTest {
                 .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.JEJU_ISLAND, 0, 0, 100_000, 80_000)));
 
         PartnerOrderAmount amount = orderPricingService.calculatePartnerOrderAmount(
-                null, 4, 1, new ScopeExtras(2, 1, 1, 2), ServiceRegion.JEJU_ISLAND, null, KRW, OrderFixtures.TODAY
+                null, 4, 0, 1, new ScopeExtras(2, 1, 1, 2), ServiceRegion.JEJU_ISLAND, null, KRW, OrderFixtures.TODAY
         );
 
         // 500,000 + (4+2)×100,000 + (1+1)×400,000 + 80,000×2
@@ -194,10 +194,55 @@ class OrderPricingServiceTest {
     }
 
     @Test
+    @DisplayName("고객 견적 — 와이파이 장비 대수는 플랜 포함분과 옵션 수량을 더한다")
+    void calculateSalesQuote_sumsWifiEquipment() {
+        BillingPlan plan = OrderFixtures.plan(1L);
+        UnitProduct wifi = OrderFixtures.unitProduct(13L, UnitProductType.WIFI_EQUIPMENT, "와이파이 장비 대여");
+        given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of(
+                OrderFixtures.planUnitProduct(plan, wifi, 2)
+        ));
+        given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY))
+                .willReturn(Optional.of(customerPrice(plan, null, 3_000_000)));
+        given(billingCatalogQueryService.findUnitProductOrThrow(13L, SalesChannel.PLATFORM_ORDER)).willReturn(wifi);
+        given(customerPriceRepository.findEffectiveForUnitProduct(13L, OrderFixtures.TODAY))
+                .willReturn(Optional.of(customerPrice(null, wifi, 30_000)));
+        given(regionSurchargeRepository.findEffective(ServiceRegion.CAPITAL, OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
+        stubVat();
+
+        SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
+                plan, List.of(new SalesQuoteOption(13L, 1)), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
+        );
+
+        // 3,000,000 + 30,000×1
+        assertThat(calculation.supplyAmount()).isEqualByComparingTo("3030000");
+        assertThat(calculation.wifiCount()).isEqualTo(3);
+        assertThat(calculation.tabletCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("발주 금액 — 와이파이 장비 대수 × 단가표 대당 단가를 더하고 발주에 대수·단가를 남긴다")
+    void calculatePartnerOrderAmount_includesWifiEquipment() {
+        given(partnerRateCardRepository.findEffectiveDefault(OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.rateCard(null, 500_000, 100_000, 20_000, 400_000)));
+        given(regionSurchargeRepository.findEffective(ServiceRegion.CAPITAL, OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
+
+        PartnerOrderAmount amount = orderPricingService.calculatePartnerOrderAmount(
+                null, 4, 3, 1, ScopeExtras.NONE, ServiceRegion.CAPITAL, null, KRW, OrderFixtures.TODAY
+        );
+
+        // 500,000 + 4×100,000 + 3×20,000 + 1×400,000
+        assertThat(amount.totalAmount()).isEqualByComparingTo("1360000");
+        assertThat(amount.wifiCount()).isEqualTo(3);
+        assertThat(amount.wifiUnitRate()).isEqualByComparingTo("20000");
+    }
+
+    @Test
     @DisplayName("숙박은 박수와 인원을 함께 넣어야 한다")
     void calculatePartnerOrderAmount_rejectsHalfLodging() {
         assertThatThrownBy(() -> orderPricingService.calculatePartnerOrderAmount(
-                null, 4, 1, new ScopeExtras(0, 0, 1, 0), ServiceRegion.CAPITAL, null, KRW, OrderFixtures.TODAY
+                null, 4, 0, 1, new ScopeExtras(0, 0, 1, 0), ServiceRegion.CAPITAL, null, KRW, OrderFixtures.TODAY
         )).isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CommonErrorCode.INVALID_REQUEST);
@@ -212,7 +257,7 @@ class OrderPricingServiceTest {
                 .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
         // 발주 1,300,000 / 공급가 1,500,000 → 마진 200,000 < 300,000(20%)
         SalesQuoteCalculation calculation = new SalesQuoteCalculation(
-                List.of(), BigDecimal.valueOf(1_500_000), BigDecimal.valueOf(150_000), 4, 1, ScopeExtras.NONE, null
+                List.of(), BigDecimal.valueOf(1_500_000), BigDecimal.valueOf(150_000), 4, 1, ScopeExtras.NONE, null, 0
         );
 
         assertThatThrownBy(() -> orderPricingService.estimatePartnerAmountWithinMargin(

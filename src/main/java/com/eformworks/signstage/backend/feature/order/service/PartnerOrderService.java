@@ -131,6 +131,8 @@ public class PartnerOrderService {
                 .baseFee(amount.baseFee())
                 .tabletCount(amount.tabletCount())
                 .tabletUnitRate(amount.tabletUnitRate())
+                .wifiCount(amount.wifiCount())
+                .wifiUnitRate(amount.wifiUnitRate())
                 .onsiteStaffPersonDays(amount.onsiteStaffPersonDays())
                 .onsiteStaffDayRate(amount.onsiteStaffDayRate())
                 .regionSurcharge(amount.regionSurcharge())
@@ -190,7 +192,7 @@ public class PartnerOrderService {
 
     private PartnerOrderAmount calculateAmount(SalesOrder salesOrder, Long organizationId, BigDecimal adjustmentAmount) {
         return orderPricingService.calculatePartnerOrderAmount(
-                organizationId, salesOrder.getTabletCount(), salesOrder.getOnsiteStaffPersonDays(), salesOrder.scopeExtras(),
+                organizationId, salesOrder.getTabletCount(), salesOrder.getWifiCount(), salesOrder.getOnsiteStaffPersonDays(), salesOrder.scopeExtras(),
                 salesOrder.getRegion(),
                 adjustmentAmount, salesOrder.currencyPolicy(), LocalDate.now(SalesOrderService.PLATFORM_ZONE)
         );

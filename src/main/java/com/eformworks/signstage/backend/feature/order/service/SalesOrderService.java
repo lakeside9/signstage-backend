@@ -249,8 +249,8 @@ public class SalesOrderService {
                 request.getEndsAt(), quoteValidUntil, request.getMemo()
         );
         salesOrder.applyAmounts(
-                calculation.tabletCount(), calculation.onsiteStaffPersonDays(), calculation.extras(), calculation.supplyAmount(),
-                calculation.vatAmount(), request.getDiscountReason(), estimatedPartnerAmount
+                calculation.tabletCount(), calculation.wifiCount(), calculation.onsiteStaffPersonDays(), calculation.extras(),
+                calculation.supplyAmount(), calculation.vatAmount(), request.getDiscountReason(), estimatedPartnerAmount
         );
         salesOrder.useRegionSurcharge(calculation.regionSurchargeId());
         if (isNew) {

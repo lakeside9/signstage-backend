@@ -171,6 +171,27 @@ class SalesOrderChangeServiceTest {
     }
 
     @Test
+    @DisplayName("범위 변경에 와이파이 장비가 늘면 발주 단가 스냅샷의 대당 단가로 발주 금액을 다시 계산한다")
+    void proposeChange_recalculatesWifiFromSnapshot() {
+        givenManageAllowed();
+        PartnerOrder accepted = acceptedOrder();
+        given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(SALES_ORDER_ID)).willReturn(List.of(accepted));
+        given(customerInvoiceRepository.findAllBySalesOrderIdOrderByIdAsc(SALES_ORDER_ID)).willReturn(List.of());
+        given(orderPricingService.calculateSalesQuote(any(), anyList(), any(), any(), any(), any(), any()))
+                .willReturn(calculation(4, 2, BigDecimal.valueOf(3_100_000)));
+        given(salesOrderChangeRepository.save(any(SalesOrderChange.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(salesOrderChangeLineRepository.save(any(SalesOrderChangeLine.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        SalesOrderChangeDto.Response.AdminChange change =
+                salesOrderChangeService.proposeChange(SALES_ORDER_ID, ADMIN_ID, ROLE, proposeRequest(4));
+
+        // 1,300,000 + 와이파이 2 × 20,000
+        assertThat(change.getPartnerAmount()).isEqualByComparingTo("1340000");
+        assertThat(change.getBeforeWifiCount()).isZero();
+        assertThat(change.getWifiCount()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("고객 수락과 파트너 동의를 모두 받으면 수주·발주·행사에 반영하고, 늘어난 옵션만 행사에 더한다")
     void acceptByPartner_appliesWhenCustomerAccepted() {
         PartnerOrder accepted = acceptedOrder();
@@ -256,7 +277,7 @@ class SalesOrderChangeServiceTest {
         return change;
     }
 
-    /** 단가 기본 500,000 · 태블릿 100,000 · 인력 400,000, 태블릿 4·인력 1 → 1,300,000. */
+    /** 단가 기본 500,000 · 태블릿 100,000 · 와이파이 20,000 · 인력 400,000, 태블릿 4·와이파이 0·인력 1 → 1,300,000. */
     private PartnerOrder acceptedOrder() {
         PartnerOrder order = PartnerOrder.builder()
                 .salesOrder(salesOrder)
@@ -265,6 +286,7 @@ class SalesOrderChangeServiceTest {
                 .baseFee(BigDecimal.valueOf(500_000))
                 .tabletCount(4)
                 .tabletUnitRate(BigDecimal.valueOf(100_000))
+                .wifiUnitRate(BigDecimal.valueOf(20_000))
                 .onsiteStaffPersonDays(1)
                 .onsiteStaffDayRate(BigDecimal.valueOf(400_000))
                 .regionSurcharge(BigDecimal.ZERO)
@@ -297,11 +319,15 @@ class SalesOrderChangeServiceTest {
     }
 
     private SalesQuoteCalculation calculation(int tabletCount, BigDecimal supplyAmount) {
+        return calculation(tabletCount, 0, supplyAmount);
+    }
+
+    private SalesQuoteCalculation calculation(int tabletCount, int wifiCount, BigDecimal supplyAmount) {
         SalesQuoteCalculation.Line line = new SalesQuoteCalculation.Line(
                 SalesOrderLineType.UNIT_PRODUCT, tablets, "태블릿", tabletCount - 2, BigDecimal.valueOf(100_000),
                 BigDecimal.valueOf(100_000L * (tabletCount - 2)), "KR_VAT_STANDARD", BigDecimal.TEN, BigDecimal.ZERO, 51L
         );
-        return new SalesQuoteCalculation(List.of(line), supplyAmount, supplyAmount.divide(BigDecimal.TEN), tabletCount, 1, ScopeExtras.NONE, 61L);
+        return new SalesQuoteCalculation(List.of(line), supplyAmount, supplyAmount.divide(BigDecimal.TEN), tabletCount, 1, ScopeExtras.NONE, 61L, wifiCount);
     }
 
     private SalesOrderLine salesOrderLine(int quantity) {

@@ -31,7 +31,7 @@ import lombok.NoArgsConstructor;
  * (ACCEPTED) 금액과 범위가 고정된다. 수락 후에는 범위 변경({@link SalesOrderChange}, D08)으로만 바꾼다.
  *
  * <p>범위는 플랜(제공 범위, D07)과 추가 옵션 줄({@link SalesOrderLine})로 표현한다.
- * {@code tabletCount}·{@code onsiteStaffPersonDays}는 플랜 포함 수량과 옵션 수량을 더한 값으로,
+ * {@code tabletCount}·{@code wifiCount}·{@code onsiteStaffPersonDays}는 플랜 포함 수량과 옵션 수량을 더한 값으로,
  * 발주 금액 계산(6.2절)의 입력이다. 금액은 공급가 합계(할인 포함)·부가세·합계를 스냅샷한다.
  * {@code estimatedPartnerAmount}는 견적 시점 기본 단가표로 계산한 예상 발주 금액(마진 검사용)이다.
  */
@@ -80,6 +80,9 @@ public class SalesOrder extends BaseEntity {
 
     @Column(name = "tablet_count", nullable = false)
     private int tabletCount;
+
+    @Column(name = "wifi_count", nullable = false)
+    private int wifiCount;
 
     @Column(name = "onsite_staff_person_days", nullable = false)
     private int onsiteStaffPersonDays;
@@ -174,10 +177,11 @@ public class SalesOrder extends BaseEntity {
     }
 
     public void applyAmounts(
-            int tabletCount, int onsiteStaffPersonDays, ScopeExtras extras, BigDecimal supplyAmount, BigDecimal vatAmount,
-            String discountReason, BigDecimal estimatedPartnerAmount
+            int tabletCount, int wifiCount, int onsiteStaffPersonDays, ScopeExtras extras, BigDecimal supplyAmount,
+            BigDecimal vatAmount, String discountReason, BigDecimal estimatedPartnerAmount
     ) {
         this.tabletCount = tabletCount;
+        this.wifiCount = wifiCount;
         this.onsiteStaffPersonDays = onsiteStaffPersonDays;
         this.spareTabletCount = extras.spareTabletCount();
         this.rehearsalStaffPersonDays = extras.rehearsalStaffPersonDays();
@@ -201,7 +205,7 @@ public class SalesOrder extends BaseEntity {
         this.startsAt = change.getStartsAt();
         this.endsAt = change.getEndsAt();
         applyAmounts(
-                change.getTabletCount(), change.getOnsiteStaffPersonDays(), change.scopeExtras(), change.getSupplyAmount(),
+                change.getTabletCount(), change.getWifiCount(), change.getOnsiteStaffPersonDays(), change.scopeExtras(), change.getSupplyAmount(),
                 change.getVatAmount(), change.getDiscountReason(), change.getEstimatedPartnerAmount()
         );
     }

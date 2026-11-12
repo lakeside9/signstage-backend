@@ -213,6 +213,7 @@ public final class PlatformAdminSalesOrderDto {
             private final String currencyCode;
             private final Short currencyFractionDigits;
             private final int tabletCount;
+            private final int wifiCount;
             private final int onsiteStaffPersonDays;
             private final int spareTabletCount;
             private final int rehearsalStaffPersonDays;
@@ -254,6 +255,7 @@ public final class PlatformAdminSalesOrderDto {
                         salesOrder.getCurrencyCode(),
                         salesOrder.getCurrencyFractionDigits(),
                         salesOrder.getTabletCount(),
+                        salesOrder.getWifiCount(),
                         salesOrder.getOnsiteStaffPersonDays(),
                         salesOrder.getSpareTabletCount(),
                         salesOrder.getRehearsalStaffPersonDays(),

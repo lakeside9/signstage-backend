@@ -63,6 +63,7 @@ public class PartnerRateCardService {
                 .currencyCode(OrderPriceService.resolveCurrencyCode(request.getCurrencyCode()))
                 .baseFee(request.getBaseFee())
                 .tabletUnitRate(request.getTabletUnitRate())
+                .wifiUnitRate(request.getWifiUnitRate())
                 .onsiteStaffDayRate(request.getOnsiteStaffDayRate())
                 .period(period)
                 .build());

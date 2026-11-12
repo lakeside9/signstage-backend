@@ -60,6 +60,12 @@ public class PartnerOrder extends BaseEntity {
     @Column(name = "tablet_unit_rate", nullable = false, precision = 19, scale = 4)
     private BigDecimal tabletUnitRate;
 
+    @Column(name = "wifi_count", nullable = false)
+    private int wifiCount;
+
+    @Column(name = "wifi_unit_rate", nullable = false, precision = 19, scale = 4)
+    private BigDecimal wifiUnitRate;
+
     @Column(name = "onsite_staff_person_days", nullable = false)
     private int onsiteStaffPersonDays;
 
@@ -143,7 +149,8 @@ public class PartnerOrder extends BaseEntity {
     @Builder
     private PartnerOrder(
             SalesOrder salesOrder, Organization organization, String currencyCode, BigDecimal baseFee,
-            int tabletCount, BigDecimal tabletUnitRate, int onsiteStaffPersonDays, BigDecimal onsiteStaffDayRate,
+            int tabletCount, BigDecimal tabletUnitRate, int wifiCount, BigDecimal wifiUnitRate,
+            int onsiteStaffPersonDays, BigDecimal onsiteStaffDayRate,
             BigDecimal regionSurcharge, ScopeExtras extras, BigDecimal lodgingNightRate, BigDecimal adjustmentAmount,
             String adjustmentReason, BigDecimal totalAmount, LocalDateTime responseDueAt, Long issuedBy,
             Long partnerRateCardId, Long regionSurchargeId
@@ -154,6 +161,8 @@ public class PartnerOrder extends BaseEntity {
         this.baseFee = baseFee;
         this.tabletCount = tabletCount;
         this.tabletUnitRate = tabletUnitRate;
+        this.wifiCount = wifiCount;
+        this.wifiUnitRate = wifiUnitRate != null ? wifiUnitRate : BigDecimal.ZERO;
         this.onsiteStaffPersonDays = onsiteStaffPersonDays;
         this.onsiteStaffDayRate = onsiteStaffDayRate;
         this.regionSurcharge = regionSurcharge;
@@ -171,9 +180,10 @@ public class PartnerOrder extends BaseEntity {
     }
 
     /** 발급 때 스냅샷한 단가로 다시 계산한 발주 금액 — 범위 변경(D08)에 쓴다. 단가는 이미 통화 단위로 맞춰져 있다. */
-    public BigDecimal amountFor(int tabletCount, int onsiteStaffPersonDays, ScopeExtras extras) {
+    public BigDecimal amountFor(int tabletCount, int wifiCount, int onsiteStaffPersonDays, ScopeExtras extras) {
         return baseFee
                 .add(tabletUnitRate.multiply(BigDecimal.valueOf(tabletCount + extras.spareTabletCount())))
+                .add(wifiUnitRate.multiply(BigDecimal.valueOf(wifiCount)))
                 .add(onsiteStaffDayRate.multiply(BigDecimal.valueOf(onsiteStaffPersonDays + extras.rehearsalStaffPersonDays())))
                 .add(regionSurcharge)
                 .add(lodgingNightRate.multiply(BigDecimal.valueOf(extras.lodgingPersonNights())))
@@ -181,8 +191,11 @@ public class PartnerOrder extends BaseEntity {
     }
 
     /** 범위 변경(D08)을 반영한다 — 파트너가 동의한 수량과 금액으로 바꾼다. */
-    public void applyScopeChange(int tabletCount, int onsiteStaffPersonDays, ScopeExtras extras, BigDecimal totalAmount) {
+    public void applyScopeChange(
+            int tabletCount, int wifiCount, int onsiteStaffPersonDays, ScopeExtras extras, BigDecimal totalAmount
+    ) {
         this.tabletCount = tabletCount;
+        this.wifiCount = wifiCount;
         this.onsiteStaffPersonDays = onsiteStaffPersonDays;
         applyExtras(extras);
         this.totalAmount = totalAmount;

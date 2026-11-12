@@ -43,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li>고객 견적: 패키지(플랜) 가격 + 옵션(단위 상품) 가격 × 수량 + 지역 할증 − 영업 할인. 줄마다
  *       세금 별도 부가세를 계산한다({@code CeremonyQuoteService}와 같은 세율 조회).</li>
- *   <li>범위 수량: 태블릿·현장 인력은 플랜 포함 수량과 옵션 수량을 더한다. 현장 인력
+ *   <li>범위 수량: 태블릿·와이파이 장비·현장 인력은 플랜 포함 수량과 옵션 수량을 더한다. 현장 인력
  *       ({@code ONSITE_SUPPORT}) 수량은 인·일로 본다.</li>
  *   <li>발주 금액: 파트너 예외 단가표가 있으면 그것을, 없으면 기본 단가표를 쓴다(D05·D28 안 A).</li>
  *   <li>추가 범위({@link ScopeExtras}): 리허설 별도일 인력은 고객에게 현장 인력 인·일 가격으로, 숙박은 권역 1박
@@ -81,6 +81,7 @@ public class OrderPricingService {
         List<SalesQuoteCalculation.Line> lines = new ArrayList<>();
         List<BillingPlanUnitProduct> planUnitProducts = billingCatalogQueryService.findPlanUnitProducts(plan.getId());
         int tabletCount = sumIncluded(planUnitProducts, UnitProductType.TABLETS);
+        int wifiCount = sumIncluded(planUnitProducts, UnitProductType.WIFI_EQUIPMENT);
         int onsiteStaffPersonDays = sumIncluded(planUnitProducts, UnitProductType.ONSITE_SUPPORT);
 
         CustomerPrice planPrice = customerPriceRepository.findEffectiveForPlan(plan.getId(), asOfDate)
@@ -106,6 +107,8 @@ public class OrderPricingService {
                     optionPrice.getUnitPrice(), optionPrice.getTaxCode(), optionPrice.getId(), currencyPolicy, asOfDate));
             if (unitProduct.getType() == UnitProductType.TABLETS) {
                 tabletCount += quantity;
+            } else if (unitProduct.getType() == UnitProductType.WIFI_EQUIPMENT) {
+                wifiCount += quantity;
             } else if (unitProduct.getType() == UnitProductType.ONSITE_SUPPORT) {
                 onsiteStaffPersonDays += quantity;
             }
@@ -151,7 +154,9 @@ public class OrderPricingService {
 
         BigDecimal supplyAmount = lines.stream().map(SalesQuoteCalculation.Line::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal vatAmount = lines.stream().map(SalesQuoteCalculation.Line::taxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new SalesQuoteCalculation(lines, supplyAmount, vatAmount, tabletCount, onsiteStaffPersonDays, extras, surcharge.getId());
+        return new SalesQuoteCalculation(
+                lines, supplyAmount, vatAmount, tabletCount, onsiteStaffPersonDays, extras, surcharge.getId(), wifiCount
+        );
     }
 
     /**
@@ -160,6 +165,7 @@ public class OrderPricingService {
     public PartnerOrderAmount calculatePartnerOrderAmount(
             Long organizationId,
             int tabletCount,
+            int wifiCount,
             int onsiteStaffPersonDays,
             ScopeExtras extras,
             ServiceRegion region,
@@ -179,6 +185,7 @@ public class OrderPricingService {
 
         BigDecimal baseFee = moneyCalculator.normalize(rateCard.getBaseFee(), currencyPolicy);
         BigDecimal tabletUnitRate = moneyCalculator.normalize(rateCard.getTabletUnitRate(), currencyPolicy);
+        BigDecimal wifiUnitRate = moneyCalculator.normalize(rateCard.getWifiUnitRate(), currencyPolicy);
         BigDecimal onsiteStaffDayRate = moneyCalculator.normalize(rateCard.getOnsiteStaffDayRate(), currencyPolicy);
         BigDecimal regionSurcharge = moneyCalculator.normalize(surcharge.getPartnerAmount(), currencyPolicy);
         BigDecimal lodgingNightRate = moneyCalculator.normalize(surcharge.getLodgingPartnerAmount(), currencyPolicy);
@@ -187,6 +194,7 @@ public class OrderPricingService {
         );
         BigDecimal total = baseFee
                 .add(tabletUnitRate.multiply(BigDecimal.valueOf(tabletCount + extras.spareTabletCount())))
+                .add(wifiUnitRate.multiply(BigDecimal.valueOf(wifiCount)))
                 .add(onsiteStaffDayRate.multiply(BigDecimal.valueOf(onsiteStaffPersonDays + extras.rehearsalStaffPersonDays())))
                 .add(regionSurcharge)
                 .add(lodgingNightRate.multiply(BigDecimal.valueOf(extras.lodgingPersonNights())))
@@ -198,7 +206,7 @@ public class OrderPricingService {
                 baseFee, tabletCount, tabletUnitRate, onsiteStaffPersonDays, onsiteStaffDayRate,
                 regionSurcharge, adjustment, moneyCalculator.normalize(total, currencyPolicy),
                 extras.spareTabletCount(), extras.rehearsalStaffPersonDays(), extras.lodgingPersonNights(), lodgingNightRate,
-                rateCard.getId(), surcharge.getId()
+                rateCard.getId(), surcharge.getId(), wifiCount, wifiUnitRate
         );
     }
 
@@ -213,7 +221,7 @@ public class OrderPricingService {
             LocalDate asOfDate
     ) {
         PartnerOrderAmount estimated = calculatePartnerOrderAmount(
-                null, calculation.tabletCount(), calculation.onsiteStaffPersonDays(), calculation.extras(), region, BigDecimal.ZERO,
+                null, calculation.tabletCount(), calculation.wifiCount(), calculation.onsiteStaffPersonDays(), calculation.extras(), region, BigDecimal.ZERO,
                 currencyPolicy, asOfDate
         );
         platformOrderMarginPolicy.checkMargin(calculation.supplyAmount(), estimated.totalAmount());

@@ -112,6 +112,10 @@ public final class PlatformAdminOrderPriceDto {
             @PositiveOrZero
             private BigDecimal tabletUnitRate;
 
+            /** 와이파이 장비 대당 단가. 생략하면 0이다. */
+            @PositiveOrZero
+            private BigDecimal wifiUnitRate;
+
             @NotNull
             @PositiveOrZero
             private BigDecimal onsiteStaffDayRate;
@@ -214,6 +218,7 @@ public final class PlatformAdminOrderPriceDto {
             private final String currencyCode;
             private final BigDecimal baseFee;
             private final BigDecimal tabletUnitRate;
+            private final BigDecimal wifiUnitRate;
             private final BigDecimal onsiteStaffDayRate;
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;
@@ -227,6 +232,7 @@ public final class PlatformAdminOrderPriceDto {
                         rateCard.getCurrencyCode(),
                         rateCard.getBaseFee(),
                         rateCard.getTabletUnitRate(),
+                        rateCard.getWifiUnitRate(),
                         rateCard.getOnsiteStaffDayRate(),
                         rateCard.getPeriod().getEffectiveFrom(),
                         rateCard.getPeriod().getEffectiveTo(),

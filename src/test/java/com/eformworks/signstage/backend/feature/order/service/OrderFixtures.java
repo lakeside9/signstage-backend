@@ -74,11 +74,16 @@ final class OrderFixtures {
     }
 
     static PartnerRateCard rateCard(Organization organization, long baseFee, long tabletRate, long staffDayRate) {
+        return rateCard(organization, baseFee, tabletRate, 0, staffDayRate);
+    }
+
+    static PartnerRateCard rateCard(Organization organization, long baseFee, long tabletRate, long wifiRate, long staffDayRate) {
         return PartnerRateCard.builder()
                 .organization(organization)
                 .currencyCode("KRW")
                 .baseFee(BigDecimal.valueOf(baseFee))
                 .tabletUnitRate(BigDecimal.valueOf(tabletRate))
+                .wifiUnitRate(BigDecimal.valueOf(wifiRate))
                 .onsiteStaffDayRate(BigDecimal.valueOf(staffDayRate))
                 .period(new EffectivePeriod(TODAY.minusDays(30), null))
                 .build();
@@ -111,7 +116,7 @@ final class OrderFixtures {
         SalesOrder salesOrder = SalesOrder.builder().customer(customer).currencyCode("KRW").quoteAccessToken("token-" + id).build();
         salesOrder.updateQuote("협약식", plan, ServiceRegion.CAPITAL, "서울", LocalDateTime.of(2026, 12, 1, 10, 0),
                 LocalDateTime.of(2026, 12, 1, 12, 0), TODAY.plusDays(30), null);
-        salesOrder.applyAmounts(4, 1, ScopeExtras.NONE, BigDecimal.valueOf(3_000_000), BigDecimal.valueOf(300_000), null,
+        salesOrder.applyAmounts(4, 0, 1, ScopeExtras.NONE, BigDecimal.valueOf(3_000_000), BigDecimal.valueOf(300_000), null,
                 BigDecimal.valueOf(1_300_000));
         ReflectionTestUtils.setField(salesOrder, "id", id);
         return salesOrder;

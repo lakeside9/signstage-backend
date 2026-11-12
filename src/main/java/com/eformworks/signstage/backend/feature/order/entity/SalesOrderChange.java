@@ -57,6 +57,9 @@ public class SalesOrderChange extends BaseEntity {
     @Column(name = "before_tablet_count", nullable = false)
     private int beforeTabletCount;
 
+    @Column(name = "before_wifi_count", nullable = false)
+    private int beforeWifiCount;
+
     @Column(name = "before_onsite_staff_person_days", nullable = false)
     private int beforeOnsiteStaffPersonDays;
 
@@ -83,6 +86,9 @@ public class SalesOrderChange extends BaseEntity {
 
     @Column(name = "tablet_count", nullable = false)
     private int tabletCount;
+
+    @Column(name = "wifi_count", nullable = false)
+    private int wifiCount;
 
     @Column(name = "onsite_staff_person_days", nullable = false)
     private int onsiteStaffPersonDays;
@@ -161,7 +167,7 @@ public class SalesOrderChange extends BaseEntity {
 
     @Builder
     private SalesOrderChange(
-            SalesOrder salesOrder, PartnerOrder partnerOrder, String reason, int tabletCount, int onsiteStaffPersonDays,
+            SalesOrder salesOrder, PartnerOrder partnerOrder, String reason, int tabletCount, int wifiCount, int onsiteStaffPersonDays,
             ScopeExtras extras, BigDecimal supplyAmount, BigDecimal vatAmount, String discountReason, BigDecimal estimatedPartnerAmount,
             BigDecimal partnerAmount, String location, LocalDateTime startsAt, LocalDateTime endsAt, Long proposedBy,
             Long regionSurchargeId
@@ -171,6 +177,7 @@ public class SalesOrderChange extends BaseEntity {
         this.status = SalesOrderChangeStatus.PROPOSED;
         this.reason = reason;
         this.beforeTabletCount = salesOrder.getTabletCount();
+        this.beforeWifiCount = salesOrder.getWifiCount();
         this.beforeOnsiteStaffPersonDays = salesOrder.getOnsiteStaffPersonDays();
         this.beforeSpareTabletCount = salesOrder.getSpareTabletCount();
         this.beforeRehearsalStaffPersonDays = salesOrder.getRehearsalStaffPersonDays();
@@ -180,6 +187,7 @@ public class SalesOrderChange extends BaseEntity {
         this.beforeTotalAmount = salesOrder.getTotalAmount();
         this.beforePartnerAmount = partnerOrder != null ? partnerOrder.getTotalAmount() : null;
         this.tabletCount = tabletCount;
+        this.wifiCount = wifiCount;
         this.onsiteStaffPersonDays = onsiteStaffPersonDays;
         ScopeExtras after = extras != null ? extras : ScopeExtras.NONE;
         this.spareTabletCount = after.spareTabletCount();

@@ -147,11 +147,13 @@ public final class SalesOrderChangeDto {
             private final String partnerOrganizationName;
             private final String currencyCode;
             private final int beforeTabletCount;
+            private final int beforeWifiCount;
             private final int beforeOnsiteStaffPersonDays;
             private final BigDecimal beforeSupplyAmount;
             private final BigDecimal beforeTotalAmount;
             private final BigDecimal beforePartnerAmount;
             private final int tabletCount;
+            private final int wifiCount;
             private final int onsiteStaffPersonDays;
             private final BigDecimal supplyAmount;
             private final BigDecimal vatAmount;
@@ -185,11 +187,13 @@ public final class SalesOrderChangeDto {
                         change.getPartnerOrder() != null ? change.getPartnerOrder().getOrganization().getName() : null,
                         change.getSalesOrder().getCurrencyCode(),
                         change.getBeforeTabletCount(),
+                        change.getBeforeWifiCount(),
                         change.getBeforeOnsiteStaffPersonDays(),
                         change.getBeforeSupplyAmount(),
                         change.getBeforeTotalAmount(),
                         change.getBeforePartnerAmount(),
                         change.getTabletCount(),
+                        change.getWifiCount(),
                         change.getOnsiteStaffPersonDays(),
                         change.getSupplyAmount(),
                         change.getVatAmount(),
@@ -227,9 +231,11 @@ public final class SalesOrderChangeDto {
             private final String reason;
             private final String currencyCode;
             private final int beforeTabletCount;
+            private final int beforeWifiCount;
             private final int beforeOnsiteStaffPersonDays;
             private final BigDecimal beforePartnerAmount;
             private final int tabletCount;
+            private final int wifiCount;
             private final int onsiteStaffPersonDays;
             private final BigDecimal partnerAmount;
             private final String location;
@@ -256,9 +262,11 @@ public final class SalesOrderChangeDto {
                         change.getReason(),
                         change.getSalesOrder().getCurrencyCode(),
                         change.getBeforeTabletCount(),
+                        change.getBeforeWifiCount(),
                         change.getBeforeOnsiteStaffPersonDays(),
                         change.getBeforePartnerAmount(),
                         change.getTabletCount(),
+                        change.getWifiCount(),
                         change.getOnsiteStaffPersonDays(),
                         change.getPartnerAmount(),
                         change.getLocation(),
