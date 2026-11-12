@@ -35,4 +35,14 @@ public interface PartnerOrderRepository extends JpaRepository<PartnerOrder, Long
     );
 
     Optional<PartnerOrder> findByIdAndOrganizationId(Long id, Long organizationId);
+
+    /** 검수를 만들 발주 — 수락했고 행사가 완료됐지만 아직 검수가 없는 건. */
+    @Query("""
+            select p from PartnerOrder p
+            join fetch p.ceremony c
+            where p.status = com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus.ACCEPTED
+              and c.completedAt is not null
+              and not exists (select 1 from OrderInspection i where i.partnerOrder = p)
+            """)
+    List<PartnerOrder> findAcceptedCompletedWithoutInspection();
 }

@@ -42,6 +42,7 @@ public class PartnerOrderResponseService {
     private final RolePermissionService rolePermissionService;
     private final SalesOrderService salesOrderService;
     private final PlatformOrderCeremonyService platformOrderCeremonyService;
+    private final OrderInspectionService orderInspectionService;
 
     public Page<PartnerOrderDto.Response.PartnerOrderSummary> findReceivedOrders(
             Long organizationId,
@@ -130,6 +131,7 @@ public class PartnerOrderResponseService {
         return PartnerOrderDto.Response.PartnerOrderDetail.of(
                 partnerOrder,
                 salesOrderService.findOptionLines(partnerOrder.getSalesOrder().getId()),
+                orderInspectionService.findByPartnerOrder(partnerOrder.getId()),
                 LocalDateTime.now(SalesOrderService.PLATFORM_ZONE)
         );
     }

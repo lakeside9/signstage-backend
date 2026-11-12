@@ -80,7 +80,36 @@ public enum OrderErrorCode implements ErrorCode {
             "ORDER_PARTNER_NOT_ELIGIBLE",
             HttpStatus.CONFLICT,
             "발주를 받을 수 없는 파트너입니다. 활성 조직이어야 하고 외주 정보(사업자·확인된 정산 계좌·계약 동의)를 모두 채워야 합니다."
-    );
+    ),
+    INSPECTION_NOT_FOUND("ORDER_INSPECTION_NOT_FOUND", HttpStatus.NOT_FOUND, "검수를 찾을 수 없습니다."),
+    INSPECTION_NOT_PENDING("ORDER_INSPECTION_NOT_PENDING", HttpStatus.CONFLICT, "검수 대기 중인 건만 승인할 수 있습니다."),
+    INSPECTION_DEADLINE_PASSED(
+            "ORDER_INSPECTION_DEADLINE_PASSED",
+            HttpStatus.CONFLICT,
+            "검수 기한이 지나 승인으로 간주된 건입니다. 하자·감액을 기록할 수 없습니다."
+    ),
+    INSPECTION_DEDUCTION_INVALID(
+            "ORDER_INSPECTION_DEDUCTION_INVALID",
+            HttpStatus.BAD_REQUEST,
+            "감액은 0 이상, 발주 금액 이하여야 합니다."
+    ),
+    INSPECTION_DEDUCTION_REASON_REQUIRED(
+            "ORDER_INSPECTION_DEDUCTION_REASON_REQUIRED",
+            HttpStatus.BAD_REQUEST,
+            "감액하면 사유를 입력해야 합니다."
+    ),
+    PAYOUT_NOT_FOUND("ORDER_PAYOUT_NOT_FOUND", HttpStatus.NOT_FOUND, "지급 건을 찾을 수 없습니다."),
+    PAYOUT_MONTH_NOT_CLOSED(
+            "ORDER_PAYOUT_MONTH_NOT_CLOSED",
+            HttpStatus.BAD_REQUEST,
+            "지난달까지만 정산할 수 있습니다."
+    ),
+    PAYOUT_NOT_CONFIRMED(
+            "ORDER_PAYOUT_NOT_CONFIRMED",
+            HttpStatus.CONFLICT,
+            "지급 대기 중인 건만 지급 완료·취소할 수 있습니다."
+    ),
+    PAYOUT_PAID_DATE_INVALID("ORDER_PAYOUT_PAID_DATE_INVALID", HttpStatus.BAD_REQUEST, "지급일은 오늘 이후일 수 없습니다.");
 
     private final String code;
     private final HttpStatus httpStatus;

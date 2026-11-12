@@ -100,8 +100,15 @@ public final class PartnerOrderDto {
             private final String adjustmentReason;
             private final LocalDateTime respondedAt;
             private final String rejectionReason;
+            /** 행사가 완료돼 검수가 생겼으면 그 상태(D11·D13). 그 전에는 null이다. */
+            private final OrderInspectionDto.Response.InspectionSummary inspection;
 
-            public static PartnerOrderDetail of(PartnerOrder partnerOrder, List<SalesOrderLine> optionLines, LocalDateTime now) {
+            public static PartnerOrderDetail of(
+                    PartnerOrder partnerOrder,
+                    List<SalesOrderLine> optionLines,
+                    OrderInspectionDto.Response.InspectionSummary inspection,
+                    LocalDateTime now
+            ) {
                 SalesOrder salesOrder = partnerOrder.getSalesOrder();
                 return new PartnerOrderDetail(
                         PartnerOrderSummary.from(partnerOrder, now),
@@ -120,7 +127,8 @@ public final class PartnerOrderDto {
                         partnerOrder.getAdjustmentAmount(),
                         partnerOrder.getAdjustmentReason(),
                         partnerOrder.getRespondedAt(),
-                        partnerOrder.getRejectionReason()
+                        partnerOrder.getRejectionReason(),
+                        inspection
                 );
             }
         }

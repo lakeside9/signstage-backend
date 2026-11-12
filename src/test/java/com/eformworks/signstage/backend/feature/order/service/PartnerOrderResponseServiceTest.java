@@ -61,6 +61,8 @@ class PartnerOrderResponseServiceTest {
     private SalesOrderService salesOrderService;
     @Mock
     private PlatformOrderCeremonyService platformOrderCeremonyService;
+    @Mock
+    private OrderInspectionService orderInspectionService;
 
     @InjectMocks
     private PartnerOrderResponseService partnerOrderResponseService;

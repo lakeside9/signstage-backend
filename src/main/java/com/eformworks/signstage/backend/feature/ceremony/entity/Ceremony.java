@@ -135,6 +135,14 @@ public class Ceremony extends BaseEntity {
     @Column(nullable = false, length = 20)
     private CeremonyStatus status;
 
+    /**
+     * 처음 COMPLETED가 된 시각(UTC). 플랫폼 수주 행사는 이 시각부터 검수 기한을 센다(signstage-docs
+     * business/platform-order-partner-subcontract-review.md D11). 관리자가 상태를 되돌렸다 다시 완료해도
+     * 처음 시각을 유지한다.
+     */
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
     /** 아래 6개 필드는 전부 description과 같은 이유로 nullable이다(생성 시엔 안 받고 수정 화면에서만 채운다). */
     @Column(name = "organizing_institution", length = 200)
     private String organizingInstitution;
@@ -228,6 +236,9 @@ public class Ceremony extends BaseEntity {
      */
     public void changeStatus(CeremonyStatus status) {
         this.status = status;
+        if (status == CeremonyStatus.COMPLETED && completedAt == null) {
+            completedAt = LocalDateTime.now();
+        }
     }
 
     /**

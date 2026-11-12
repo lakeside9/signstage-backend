@@ -72,5 +72,10 @@ public enum PlatformAdminAction {
     ACCEPT_SALES_ORDER,
     CANCEL_SALES_ORDER,
     ISSUE_PARTNER_ORDER,
-    CANCEL_PARTNER_ORDER
+    CANCEL_PARTNER_ORDER,
+    /** 검수·파트너 지급 — signstage-docs business/platform-order-partner-subcontract-review.md D11·D13. */
+    APPROVE_ORDER_INSPECTION,
+    CREATE_PARTNER_PAYOUTS,
+    MARK_PARTNER_PAYOUT_PAID,
+    CANCEL_PARTNER_PAYOUT
 }

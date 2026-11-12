@@ -19,3 +19,6 @@ signstage:
   platform-order:
     # 최소 마진율(고객 공급가 대비). 0이면 적자 수주만 막는다(D06 최소 마진 기준 미정).
     minimum-margin-rate: 0
+    # 검수 기한(행사 완료일 + N일, 지나면 승인 간주)과 지급 기한 상한(승인일 + N일) — D11.
+    inspection-days: 7
+    payment-max-days: 60

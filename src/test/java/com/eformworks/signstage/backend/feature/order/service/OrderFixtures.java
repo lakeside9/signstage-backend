@@ -7,6 +7,8 @@ import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCatego
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.order.entity.Customer;
 import com.eformworks.signstage.backend.feature.order.entity.EffectivePeriod;
+import com.eformworks.signstage.backend.feature.order.entity.OrderInspection;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerRateCard;
 import com.eformworks.signstage.backend.feature.order.entity.RegionSurcharge;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
@@ -97,5 +99,33 @@ final class OrderFixtures {
                 BigDecimal.valueOf(1_300_000));
         ReflectionTestUtils.setField(salesOrder, "id", id);
         return salesOrder;
+    }
+
+    /** 발주 금액 {@code totalAmount}인 파트너 발주(수주는 {@link #salesOrder}). */
+    static PartnerOrder partnerOrder(Long id, Organization partner, long totalAmount) {
+        PartnerOrder partnerOrder = PartnerOrder.builder()
+                .salesOrder(salesOrder(id + 1000, customer(1L), plan(1L)))
+                .organization(partner)
+                .currencyCode("KRW")
+                .baseFee(BigDecimal.valueOf(totalAmount))
+                .tabletUnitRate(BigDecimal.ZERO)
+                .onsiteStaffDayRate(BigDecimal.ZERO)
+                .regionSurcharge(BigDecimal.ZERO)
+                .adjustmentAmount(BigDecimal.ZERO)
+                .totalAmount(BigDecimal.valueOf(totalAmount))
+                .responseDueAt(LocalDateTime.of(2026, 11, 20, 18, 0))
+                .issuedBy(1L)
+                .build();
+        ReflectionTestUtils.setField(partnerOrder, "id", id);
+        return partnerOrder;
+    }
+
+    /** 검수 대기 건 — 발주 금액 {@code totalAmount}, 검수 기한 {@code dueDate}. */
+    static OrderInspection inspection(Long partnerOrderId, Organization partner, long totalAmount, LocalDate dueDate) {
+        return OrderInspection.builder()
+                .partnerOrder(partnerOrder(partnerOrderId, partner, totalAmount))
+                .ceremonyCompletedAt(dueDate.minusDays(7).atTime(3, 0))
+                .dueDate(dueDate)
+                .build();
     }
 }
