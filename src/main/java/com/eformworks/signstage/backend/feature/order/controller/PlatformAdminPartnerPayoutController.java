@@ -74,7 +74,23 @@ public class PlatformAdminPartnerPayoutController {
         return ApiResponse.success(partnerPayoutService.retrievePayout(partnerPayoutId), traceIdProvider.getTraceId());
     }
 
-    @Operation(summary = "지급 완료 기록", description = "시스템 밖에서 이체한 뒤 지급일·이체 금액을 기록한다.")
+    @Operation(
+            summary = "고액 지급 승인",
+            description = "기준 금액 이상 지급 건을 승인한다. ACTION_PARTNER_PAYOUT_LARGE_APPROVE(PLATFORM_SUPER) 권한이 필요하고, "
+                    + "정산을 만든 사람은 승인할 수 없다."
+    )
+    @PostMapping("/{partnerPayoutId}/approve")
+    public ApiResponse<PartnerPayoutDto.Response.PayoutDetail> approvePayout(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long partnerPayoutId
+    ) {
+        return ApiResponse.success(
+                partnerPayoutService.approvePayout(partnerPayoutId, currentUser.userId(), currentUser.platformRole()),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "지급 완료 기록", description = "시스템 밖에서 이체한 뒤 지급일·이체 금액을 기록한다. 고액 지급은 승인 후에만 기록한다.")
     @PostMapping("/{partnerPayoutId}/mark-paid")
     public ApiResponse<PartnerPayoutDto.Response.PayoutDetail> markPaid(
             @AuthenticationPrincipal CurrentUser currentUser,

@@ -73,6 +73,11 @@ final class OrderFixtures {
                 .build();
     }
 
+    /** 큰 감액 30%, 이의 기간 7일, 고액 지급 1,000만(기본값). */
+    static PartnerPaymentControlPolicy paymentControlPolicy() {
+        return new PartnerPaymentControlPolicy(new BigDecimal("0.3"), 7, BigDecimal.valueOf(10_000_000));
+    }
+
     static Organization organization(Long id) {
         Organization organization = Organization.builder().name("파트너" + id).code("P" + id).build();
         ReflectionTestUtils.setField(organization, "id", id);

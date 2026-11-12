@@ -4,6 +4,7 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
+import com.eformworks.signstage.backend.feature.order.dto.OrderInspectionDto;
 import com.eformworks.signstage.backend.feature.order.dto.PartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.service.PartnerOrderResponseService;
@@ -86,6 +87,23 @@ public class PartnerOrderController {
     ) {
         return ApiResponse.success(
                 partnerOrderResponseService.rejectOrder(organizationId, partnerOrderId, currentUser.userId(), request.getReason()),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(
+            summary = "감액 이의 제기",
+            description = "감액된 검수에 승인일부터 이의 기간(기본 7일) 안에 한 번 제기한다. 이의 중에는 해당 건을 정산하지 않는다."
+    )
+    @PostMapping("/{partnerOrderId}/inspection/dispute")
+    public ApiResponse<PartnerOrderDto.Response.PartnerOrderDetail> disputeInspection(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long organizationId,
+            @PathVariable Long partnerOrderId,
+            @Valid @RequestBody OrderInspectionDto.Request.Dispute request
+    ) {
+        return ApiResponse.success(
+                partnerOrderResponseService.disputeInspection(organizationId, partnerOrderId, currentUser.userId(), request.getReason()),
                 traceIdProvider.getTraceId()
         );
     }

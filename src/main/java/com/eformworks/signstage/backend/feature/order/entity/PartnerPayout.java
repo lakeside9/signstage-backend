@@ -51,6 +51,15 @@ public class PartnerPayout extends BaseEntity {
     private String currencyCode;
 
     /** 지급 대상 공급가 합계. */
+    /** 검수 지급 대상 금액 합계(공급가). */
+    @Column(name = "gross_amount", nullable = false, precision = 19, scale = 4)
+    private BigDecimal grossAmount;
+
+    /** 이번 지급에서 뺀 귀책 상계(D13). 합계를 넘는 상계는 다음 지급으로 이월한다. */
+    @Column(name = "offset_amount", nullable = false, precision = 19, scale = 4)
+    private BigDecimal offsetAmount;
+
+    /** 지급액(공급가) = 검수 합계 − 상계. */
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal amount;
 
@@ -60,6 +69,16 @@ public class PartnerPayout extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private PartnerPayoutStatus status;
+
+    /** 고액 지급(D19) — 기준 금액 이상이면 PLATFORM_SUPER가 승인해야 지급 완료로 기록할 수 있다. */
+    @Column(name = "approval_required", nullable = false)
+    private boolean approvalRequired;
+
+    @Column(name = "approved_by")
+    private Long approvedBy;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
 
     @Column(name = "bank_name", length = 50)
     private String bankName;
@@ -91,13 +110,17 @@ public class PartnerPayout extends BaseEntity {
 
     @Builder
     private PartnerPayout(
-            Organization organization, String settlementMonth, String currencyCode, BigDecimal amount, LocalDate dueDate,
-            String bankName, String bankAccountNumber, String accountHolderName
+            Organization organization, String settlementMonth, String currencyCode, BigDecimal grossAmount,
+            BigDecimal offsetAmount, LocalDate dueDate, String bankName, String bankAccountNumber,
+            String accountHolderName, boolean approvalRequired
     ) {
         this.organization = organization;
         this.settlementMonth = settlementMonth;
         this.currencyCode = currencyCode;
-        this.amount = amount;
+        this.grossAmount = grossAmount;
+        this.offsetAmount = offsetAmount == null ? BigDecimal.ZERO : offsetAmount;
+        this.amount = grossAmount.subtract(this.offsetAmount);
+        this.approvalRequired = approvalRequired;
         this.dueDate = dueDate;
         this.bankName = bankName;
         this.bankAccountNumber = bankAccountNumber;
@@ -107,6 +130,16 @@ public class PartnerPayout extends BaseEntity {
 
     public boolean isConfirmed() {
         return status == PartnerPayoutStatus.CONFIRMED;
+    }
+
+    /** 고액 지급인데 아직 승인되지 않았다. */
+    public boolean isAwaitingApproval() {
+        return approvalRequired && approvedAt == null;
+    }
+
+    public void approve(Long approvedBy) {
+        this.approvedBy = approvedBy;
+        this.approvedAt = LocalDateTime.now();
     }
 
     public void markPaid(Long paidBy, LocalDate paidDate, BigDecimal transferredAmount, String paymentMemo) {

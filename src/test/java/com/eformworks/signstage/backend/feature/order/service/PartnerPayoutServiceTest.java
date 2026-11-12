@@ -14,11 +14,14 @@ import com.eformworks.signstage.backend.feature.order.dto.PartnerPayoutDto;
 import com.eformworks.signstage.backend.feature.order.entity.OrderInspection;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerLedgerEntry;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerLedgerEntryType;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerOffset;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerOffsetStatus;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerPayout;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerPayoutStatus;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.repository.OrderInspectionRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerLedgerEntryRepository;
+import com.eformworks.signstage.backend.feature.order.repository.PartnerOffsetRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerPayoutRepository;
 import com.eformworks.signstage.backend.feature.organization.dto.PartnerSubcontractProfileDto;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
@@ -59,6 +62,8 @@ class PartnerPayoutServiceTest {
     @Mock
     private OrderInspectionService orderInspectionService;
     @Mock
+    private PartnerOffsetRepository partnerOffsetRepository;
+    @Mock
     private PartnerSubcontractProfileService partnerSubcontractProfileService;
     @Mock
     private MemberRepository memberRepository;
@@ -76,7 +81,8 @@ class PartnerPayoutServiceTest {
     void setUp() {
         partnerPayoutService = new PartnerPayoutService(
                 partnerPayoutRepository, orderInspectionRepository, partnerLedgerEntryRepository, orderInspectionService,
-                new PartnerSettlementPolicy(7, 60), partnerSubcontractProfileService, memberRepository,
+                partnerOffsetRepository, new PartnerSettlementPolicy(7, 60), OrderFixtures.paymentControlPolicy(),
+                partnerSubcontractProfileService, memberRepository,
                 rolePermissionService, auditLogRecorder
         );
         partnerA = OrderFixtures.organization(7L);
@@ -102,7 +108,7 @@ class PartnerPayoutServiceTest {
         OrderInspection a1 = approved(301L, partnerA, 1_000_000, lastMonth.atDay(3));
         OrderInspection a2 = approved(302L, partnerA, 500_000, lastMonth.atDay(20));
         OrderInspection b1 = approved(303L, partnerB, 800_000, lastMonth.atDay(10));
-        given(orderInspectionRepository.findUnsettledApprovedBetween(lastMonth.atDay(1), lastMonth.atEndOfMonth()))
+        given(orderInspectionRepository.findSettleableUntil(lastMonth.atEndOfMonth(), disputeWindowFrom()))
                 .willReturn(List.of(a1, a2, b1));
         PartnerSubcontractProfileDto.Response.Profile profileA = mock(PartnerSubcontractProfileDto.Response.Profile.class);
         given(profileA.getBankName()).willReturn("국민은행");
@@ -189,6 +195,90 @@ class PartnerPayoutServiceTest {
     }
 
     @Test
+    @DisplayName("귀책 상계를 지급액에서 빼고, 검수 합계를 넘는 상계는 이월한다")
+    void createPayouts_appliesOffsetsAndCarriesOver() {
+        allowPayment();
+        OrderInspection a1 = approved(301L, partnerA, 1_000_000, lastMonth.atDay(3));
+        given(orderInspectionRepository.findSettleableUntil(lastMonth.atEndOfMonth(), disputeWindowFrom()))
+                .willReturn(List.of(a1));
+        given(partnerSubcontractProfileService.retrieveProfileByPlatformAdmin(7L))
+                .willReturn(PartnerSubcontractProfileDto.Response.Profile.empty(7L));
+        given(partnerPayoutRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+        PartnerOffset first = offset(600_000, lastMonth.atDay(5));
+        PartnerOffset second = offset(700_000, lastMonth.atDay(9));
+        given(partnerOffsetRepository.findPendingForSettlement(7L, "KRW", lastMonth.atEndOfMonth()))
+                .willReturn(List.of(first, second));
+
+        PartnerPayoutDto.Response.PayoutSummary created =
+                partnerPayoutService.createPayouts(lastMonth.toString(), ADMIN_ID, ROLE).getFirst();
+
+        assertThat(created.getGrossAmount()).isEqualByComparingTo("1000000");
+        assertThat(created.getOffsetAmount()).isEqualByComparingTo("1000000");
+        assertThat(created.getAmount()).isEqualByComparingTo("0");
+        assertThat(first.getStatus()).isEqualTo(PartnerOffsetStatus.APPLIED);
+        assertThat(second.getStatus()).isEqualTo(PartnerOffsetStatus.APPLIED);
+        ArgumentCaptor<PartnerOffset> carry = ArgumentCaptor.forClass(PartnerOffset.class);
+        verify(partnerOffsetRepository).save(carry.capture());
+        assertThat(carry.getValue().getAmount()).isEqualByComparingTo("300000");
+        assertThat(carry.getValue().isCarryOver()).isTrue();
+        assertThat(carry.getValue().isPending()).isTrue();
+    }
+
+    @Test
+    @DisplayName("고액 지급은 정산을 만들지 않은 SUPER가 승인해야 지급 완료로 기록할 수 있다")
+    void largePayout_requiresApprovalByAnotherSuper() {
+        allowPayment();
+        PartnerPayout payout = givenLargePayout(ADMIN_ID);
+        PartnerPayoutDto.Request.MarkPaid markPaid = new PartnerPayoutDto.Request.MarkPaid(
+                LocalDate.now(SalesOrderService.PLATFORM_ZONE), BigDecimal.valueOf(13_200_000), null);
+
+        assertErrorCode(() -> partnerPayoutService.markPaid(900L, ADMIN_ID, ROLE, markPaid), OrderErrorCode.PAYOUT_APPROVAL_REQUIRED);
+
+        given(rolePermissionService.isAllowed("PLATFORM_SUPER", "ACTION_PARTNER_PAYOUT_LARGE_APPROVE")).willReturn(true);
+        assertErrorCode(() -> partnerPayoutService.approvePayout(900L, ADMIN_ID, "PLATFORM_SUPER"),
+                OrderErrorCode.PAYOUT_APPROVER_IS_CREATOR);
+
+        partnerPayoutService.approvePayout(900L, 2L, "PLATFORM_SUPER");
+        assertThat(payout.getApprovedBy()).isEqualTo(2L);
+        assertThat(payout.isAwaitingApproval()).isFalse();
+        assertErrorCode(() -> partnerPayoutService.approvePayout(900L, 2L, "PLATFORM_SUPER"),
+                OrderErrorCode.PAYOUT_APPROVAL_NOT_NEEDED);
+
+        partnerPayoutService.markPaid(900L, ADMIN_ID, ROLE, markPaid);
+        assertThat(payout.getStatus()).isEqualTo(PartnerPayoutStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("OPS는 고액 지급을 승인할 수 없다")
+    void approvePayout_requiresPermission() {
+        given(rolePermissionService.isAllowed(ROLE, "ACTION_PARTNER_PAYOUT_LARGE_APPROVE")).willReturn(false);
+
+        assertErrorCode(() -> partnerPayoutService.approvePayout(900L, 2L, ROLE), CommonErrorCode.ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("지급을 취소하면 상계는 대기로 돌아가고 이월 상계는 취소된다. 이월이 이미 반영됐으면 취소할 수 없다")
+    void cancelPayout_releasesOffsets() {
+        allowPayment();
+        PartnerPayout payout = givenPayout(PartnerPayoutStatus.CONFIRMED);
+        PartnerOffset applied = offset(600_000, lastMonth.atDay(5));
+        applied.applyTo(payout);
+        PartnerOffset carry = applied.carryOver(BigDecimal.valueOf(100_000), payout, lastMonth.atEndOfMonth());
+        given(partnerOffsetRepository.findAllByPartnerPayoutId(900L)).willReturn(List.of(applied));
+        given(partnerOffsetRepository.findAllByCarriedOverFromPayoutId(900L)).willReturn(List.of(carry));
+
+        carry.applyTo(mock(PartnerPayout.class));
+        assertErrorCode(() -> partnerPayoutService.cancelPayout(900L, ADMIN_ID, ROLE, "재정산"),
+                OrderErrorCode.PAYOUT_CARRY_OVER_APPLIED);
+
+        carry.release();
+        partnerPayoutService.cancelPayout(900L, ADMIN_ID, ROLE, "재정산");
+        assertThat(applied.isPending()).isTrue();
+        assertThat(applied.getPartnerPayout()).isNull();
+        assertThat(carry.getStatus()).isEqualTo(PartnerOffsetStatus.CANCELLED);
+    }
+
+    @Test
     @DisplayName("파트너 OPERATOR는 지급 내역을 볼 수 없다")
     void findReceivedPayouts_rejectsOperator() {
         Member member = Member.builder().organization(partnerA).role(MemberRole.OPERATOR).status(MemberStatus.ACTIVE).build();
@@ -210,7 +300,7 @@ class PartnerPayoutServiceTest {
                 .organization(partnerA)
                 .settlementMonth(lastMonth.toString())
                 .currencyCode("KRW")
-                .amount(BigDecimal.valueOf(1_500_000))
+                .grossAmount(BigDecimal.valueOf(1_500_000))
                 .dueDate(lastMonth.plusMonths(1).atEndOfMonth())
                 .build();
         ReflectionTestUtils.setField(payout, "id", 900L);
@@ -221,9 +311,37 @@ class PartnerPayoutServiceTest {
         return payout;
     }
 
+    private PartnerPayout givenLargePayout(Long createdBy) {
+        PartnerPayout payout = PartnerPayout.builder()
+                .organization(partnerA)
+                .settlementMonth(lastMonth.toString())
+                .currencyCode("KRW")
+                .grossAmount(BigDecimal.valueOf(12_000_000))
+                .dueDate(lastMonth.plusMonths(1).atEndOfMonth())
+                .approvalRequired(true)
+                .build();
+        ReflectionTestUtils.setField(payout, "id", 900L);
+        ReflectionTestUtils.setField(payout, "createdBy", createdBy);
+        given(partnerPayoutRepository.findById(900L)).willReturn(Optional.of(payout));
+        return payout;
+    }
+
+    private PartnerOffset offset(long amount, LocalDate occurredOn) {
+        return PartnerOffset.builder()
+                .partnerOrder(OrderFixtures.partnerOrder(310L, partnerA, 1_000_000))
+                .amount(BigDecimal.valueOf(amount))
+                .reason("고객 환불 귀책")
+                .occurredOn(occurredOn)
+                .build();
+    }
+
+    private static LocalDate disputeWindowFrom() {
+        return LocalDate.now(SalesOrderService.PLATFORM_ZONE).minusDays(7);
+    }
+
     private static OrderInspection approved(Long partnerOrderId, Organization partner, long amount, LocalDate approvedDate) {
         OrderInspection inspection = OrderFixtures.inspection(partnerOrderId, partner, amount, approvedDate.plusDays(2));
-        inspection.approve(ADMIN_ID, approvedDate, null, null, BigDecimal.ZERO, null, null);
+        inspection.approve(ADMIN_ID, approvedDate, null, null, BigDecimal.ZERO, null, null, null);
         return inspection;
     }
 

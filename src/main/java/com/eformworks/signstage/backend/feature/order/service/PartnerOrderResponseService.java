@@ -111,6 +111,20 @@ public class PartnerOrderResponseService {
         return toDetail(partnerOrder);
     }
 
+    /** 감액된 검수에 이의를 제기한다(D13). 발주 응답 권한(OWNER·ADMIN)이 필요하다. */
+    @Transactional
+    public PartnerOrderDto.Response.PartnerOrderDetail disputeInspection(
+            Long organizationId,
+            Long partnerOrderId,
+            Long currentUserId,
+            String reason
+    ) {
+        checkCanRespond(organizationId, currentUserId);
+        PartnerOrder partnerOrder = findInOrganizationOrThrow(organizationId, partnerOrderId);
+        orderInspectionService.openDispute(partnerOrder.getId(), currentUserId, reason);
+        return toDetail(partnerOrder);
+    }
+
     private PartnerOrder findRespondableOrThrow(Long organizationId, Long partnerOrderId) {
         PartnerOrder partnerOrder = findInOrganizationOrThrow(organizationId, partnerOrderId);
         if (partnerOrder.getStatus() != PartnerOrderStatus.ISSUED) {

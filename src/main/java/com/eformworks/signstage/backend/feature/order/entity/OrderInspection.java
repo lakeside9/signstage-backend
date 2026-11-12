@@ -77,6 +77,11 @@ public class OrderInspection extends BaseEntity {
     @Column(name = "deduction_reason", length = 500)
     private String deductionReason;
 
+    /** 감액 유형(계약 기준표, D13). 감액이 있으면 필수다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deduction_type", length = 40)
+    private InspectionDeductionType deductionType;
+
     /** 플랫폼이 매긴 수행 평점(1~5, 선택) — 파트너 평가에 쓴다. 승인 간주 건은 null이다. */
     @Column(name = "performance_rating")
     private Integer performanceRating;
@@ -98,6 +103,29 @@ public class OrderInspection extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "partner_payout_id")
     private PartnerPayout partnerPayout;
+
+    /** 파트너의 감액 이의 제기(D13). 제기 중(OPEN)이면 정산하지 않는다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "dispute_status", length = 20)
+    private InspectionDisputeStatus disputeStatus;
+
+    @Column(name = "dispute_reason", length = 1000)
+    private String disputeReason;
+
+    @Column(name = "disputed_at")
+    private LocalDateTime disputedAt;
+
+    @Column(name = "disputed_by")
+    private Long disputedBy;
+
+    @Column(name = "dispute_resolution_note", length = 1000)
+    private String disputeResolutionNote;
+
+    @Column(name = "dispute_resolved_at")
+    private LocalDateTime disputeResolvedAt;
+
+    @Column(name = "dispute_resolved_by")
+    private Long disputeResolvedBy;
 
     @Builder
     private OrderInspection(PartnerOrder partnerOrder, LocalDateTime ceremonyCompletedAt, LocalDate dueDate) {
@@ -124,9 +152,11 @@ public class OrderInspection extends BaseEntity {
             String delayNote,
             BigDecimal deductionAmount,
             String deductionReason,
+            InspectionDeductionType deductionType,
             Integer performanceRating
     ) {
         this.performanceRating = performanceRating;
+        this.deductionType = deductionType;
         this.defectNote = defectNote;
         this.delayNote = delayNote;
         this.deductionAmount = deductionAmount;
@@ -137,6 +167,54 @@ public class OrderInspection extends BaseEntity {
     /** 검수 기한이 지나 승인으로 본다 — 감액 없이 발주 금액 전부가 지급 대상이다. */
     public void approveAsDeemed() {
         markApproved(InspectionApprovalType.DEEMED, null, dueDate);
+    }
+
+    /** 이의 제기 마감일 — 승인일 + 이의 기간. 승인 전이거나 감액이 없으면 null(제기할 수 없다). */
+    public LocalDate disputeDeadline(int disputeDays) {
+        if (status != InspectionStatus.APPROVED || deductionAmount.signum() == 0) {
+            return null;
+        }
+        return approvedDate.plusDays(disputeDays);
+    }
+
+    /** 감액이 있고, 마감 전이고, 아직 제기하지 않았고, 정산에 묶이지 않았으면 이의를 제기할 수 있다. */
+    public boolean canDispute(LocalDate today, int disputeDays) {
+        LocalDate deadline = disputeDeadline(disputeDays);
+        return deadline != null && !today.isAfter(deadline) && disputeStatus == null && partnerPayout == null;
+    }
+
+    public boolean isDisputeOpen() {
+        return disputeStatus == InspectionDisputeStatus.OPEN;
+    }
+
+    public void openDispute(Long userId, String reason) {
+        this.disputeStatus = InspectionDisputeStatus.OPEN;
+        this.disputeReason = reason;
+        this.disputedBy = userId;
+        this.disputedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 이의를 조정해 감액을 다시 정한다. 지급 대상 금액이 바뀐 만큼(새 금액 − 이전 금액)을 돌려준다 —
+     * 원장에 조정으로 남긴다.
+     */
+    public BigDecimal resolveDispute(
+            Long userId,
+            BigDecimal deductionAmount,
+            String deductionReason,
+            InspectionDeductionType deductionType,
+            String resolutionNote
+    ) {
+        BigDecimal previousPayable = payableAmount;
+        this.deductionAmount = deductionAmount;
+        this.deductionReason = deductionReason;
+        this.deductionType = deductionType;
+        this.payableAmount = partnerOrder.getTotalAmount().subtract(deductionAmount);
+        this.disputeStatus = InspectionDisputeStatus.RESOLVED;
+        this.disputeResolutionNote = resolutionNote;
+        this.disputeResolvedBy = userId;
+        this.disputeResolvedAt = LocalDateTime.now();
+        return payableAmount.subtract(previousPayable);
     }
 
     public void assignPayout(PartnerPayout payout) {

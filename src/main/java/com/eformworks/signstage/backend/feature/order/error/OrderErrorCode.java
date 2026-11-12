@@ -98,6 +98,42 @@ public enum OrderErrorCode implements ErrorCode {
             HttpStatus.BAD_REQUEST,
             "감액하면 사유를 입력해야 합니다."
     ),
+    INSPECTION_DEDUCTION_TYPE_REQUIRED(
+            "ORDER_INSPECTION_DEDUCTION_TYPE_REQUIRED",
+            HttpStatus.BAD_REQUEST,
+            "감액하면 감액 유형(계약 기준표)을 골라야 합니다."
+    ),
+    INSPECTION_LARGE_DEDUCTION_FORBIDDEN(
+            "ORDER_INSPECTION_LARGE_DEDUCTION_FORBIDDEN",
+            HttpStatus.FORBIDDEN,
+            "발주 금액의 30%를 넘는 감액은 PLATFORM_SUPER만 승인할 수 있습니다."
+    ),
+    INSPECTION_NOT_DISPUTABLE(
+            "ORDER_INSPECTION_NOT_DISPUTABLE",
+            HttpStatus.CONFLICT,
+            "이의를 제기할 수 없는 검수입니다. 감액된 건에 한해 승인일부터 기간 안에 한 번 제기할 수 있습니다."
+    ),
+    INSPECTION_DISPUTE_NOT_OPEN(
+            "ORDER_INSPECTION_DISPUTE_NOT_OPEN",
+            HttpStatus.CONFLICT,
+            "이의 제기 중인 검수만 조정할 수 있습니다."
+    ),
+    OFFSET_NOT_FOUND("ORDER_OFFSET_NOT_FOUND", HttpStatus.NOT_FOUND, "상계를 찾을 수 없습니다."),
+    OFFSET_PARTNER_ORDER_INVALID(
+            "ORDER_OFFSET_PARTNER_ORDER_INVALID",
+            HttpStatus.CONFLICT,
+            "파트너가 수락한 발주에만 귀책 상계를 등록할 수 있습니다."
+    ),
+    OFFSET_AMOUNT_INVALID(
+            "ORDER_OFFSET_AMOUNT_INVALID",
+            HttpStatus.BAD_REQUEST,
+            "상계 금액은 0보다 크고 발주 금액 이하여야 합니다."
+    ),
+    OFFSET_NOT_CANCELLABLE(
+            "ORDER_OFFSET_NOT_CANCELLABLE",
+            HttpStatus.CONFLICT,
+            "정산에 반영되지 않은 상계만 취소할 수 있습니다. 이월 상계는 이월을 만든 지급 건을 취소하면 함께 취소됩니다."
+    ),
     PAYOUT_NOT_FOUND("ORDER_PAYOUT_NOT_FOUND", HttpStatus.NOT_FOUND, "지급 건을 찾을 수 없습니다."),
     PAYOUT_MONTH_NOT_CLOSED(
             "ORDER_PAYOUT_MONTH_NOT_CLOSED",
@@ -110,6 +146,26 @@ public enum OrderErrorCode implements ErrorCode {
             "지급 대기 중인 건만 지급 완료·취소할 수 있습니다."
     ),
     PAYOUT_PAID_DATE_INVALID("ORDER_PAYOUT_PAID_DATE_INVALID", HttpStatus.BAD_REQUEST, "지급일은 오늘 이후일 수 없습니다."),
+    PAYOUT_APPROVAL_REQUIRED(
+            "ORDER_PAYOUT_APPROVAL_REQUIRED",
+            HttpStatus.CONFLICT,
+            "고액 지급은 PLATFORM_SUPER가 승인한 뒤에 지급 완료로 기록할 수 있습니다."
+    ),
+    PAYOUT_APPROVAL_NOT_NEEDED(
+            "ORDER_PAYOUT_APPROVAL_NOT_NEEDED",
+            HttpStatus.CONFLICT,
+            "승인이 필요 없거나 이미 승인된 지급 건입니다."
+    ),
+    PAYOUT_APPROVER_IS_CREATOR(
+            "ORDER_PAYOUT_APPROVER_IS_CREATOR",
+            HttpStatus.CONFLICT,
+            "정산을 만든 사람은 그 지급을 승인할 수 없습니다. 다른 PLATFORM_SUPER가 승인해야 합니다."
+    ),
+    PAYOUT_CARRY_OVER_APPLIED(
+            "ORDER_PAYOUT_CARRY_OVER_APPLIED",
+            HttpStatus.CONFLICT,
+            "이 지급에서 이월된 상계가 이미 다른 지급에 반영됐습니다. 그 지급을 먼저 취소해주세요."
+    ),
     INVOICE_NOT_FOUND("ORDER_INVOICE_NOT_FOUND", HttpStatus.NOT_FOUND, "청구를 찾을 수 없습니다."),
     INVOICE_SALES_ORDER_NOT_ACCEPTED(
             "ORDER_INVOICE_SALES_ORDER_NOT_ACCEPTED",

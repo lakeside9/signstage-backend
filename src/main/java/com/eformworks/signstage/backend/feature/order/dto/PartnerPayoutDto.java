@@ -82,9 +82,20 @@ public final class PartnerPayoutDto {
             private final String organizationName;
             private final String settlementMonth;
             private final String currencyCode;
+            /** 검수 지급 대상 합계. */
+            private final BigDecimal grossAmount;
+            /** 이번 지급에서 뺀 귀책 상계. */
+            private final BigDecimal offsetAmount;
+            /** 지급액 = 검수 합계 − 상계. */
             private final BigDecimal amount;
             private final LocalDate dueDate;
             private final String status;
+            /** 고액 지급이라 PLATFORM_SUPER 승인이 필요한지(D19). */
+            private final boolean approvalRequired;
+            private final boolean awaitingApproval;
+            private final Long approvedBy;
+            private final LocalDateTime approvedAt;
+            private final Long createdBy;
             private final String bankName;
             private final String bankAccountNumber;
             private final String accountHolderName;
@@ -102,9 +113,16 @@ public final class PartnerPayoutDto {
                         payout.getOrganization().getName(),
                         payout.getSettlementMonth(),
                         payout.getCurrencyCode(),
+                        payout.getGrossAmount(),
+                        payout.getOffsetAmount(),
                         payout.getAmount(),
                         payout.getDueDate(),
                         payout.getStatus().name(),
+                        payout.isApprovalRequired(),
+                        payout.isAwaitingApproval(),
+                        payout.getApprovedBy(),
+                        payout.getApprovedAt(),
+                        payout.getCreatedBy(),
                         payout.getBankName(),
                         payout.getBankAccountNumber(),
                         payout.getAccountHolderName(),
@@ -124,6 +142,8 @@ public final class PartnerPayoutDto {
 
             private final PayoutSummary summary;
             private final List<OrderInspectionDto.Response.InspectionSummary> items;
+            /** 이번 지급에서 뺀 귀책 상계. */
+            private final List<PartnerOffsetDto.Response.OffsetSummary> offsets;
         }
 
         @Getter

@@ -109,4 +109,39 @@ public class PartnerLedgerEntry extends BaseEntity {
                 .occurredOn(payout.getPaidDate())
                 .build();
     }
+
+    /** 귀책 상계 등록(−) — 파트너에게 줄 금액이 그만큼 줄어든다. */
+    public static PartnerLedgerEntry offset(PartnerOffset offset) {
+        return offsetEntry(offset, offset.getAmount().negate(), "귀책 상계: " + offset.getReason(), offset.getOccurredOn());
+    }
+
+    /** 귀책 상계 취소(+). */
+    public static PartnerLedgerEntry offsetCancelled(PartnerOffset offset, LocalDate occurredOn) {
+        return offsetEntry(offset, offset.getAmount(), "귀책 상계 취소: " + offset.getCancellationReason(), occurredOn);
+    }
+
+    /** 이의 조정으로 지급 대상 금액이 바뀐 만큼(±). */
+    public static PartnerLedgerEntry adjustment(OrderInspection inspection, BigDecimal difference, LocalDate occurredOn) {
+        return PartnerLedgerEntry.builder()
+                .organization(inspection.getOrganization())
+                .entryType(PartnerLedgerEntryType.ADJUSTMENT)
+                .currencyCode(inspection.getPartnerOrder().getCurrencyCode())
+                .amount(difference)
+                .partnerOrder(inspection.getPartnerOrder())
+                .memo("감액 이의 조정: " + inspection.getDisputeResolutionNote())
+                .occurredOn(occurredOn)
+                .build();
+    }
+
+    private static PartnerLedgerEntry offsetEntry(PartnerOffset offset, BigDecimal amount, String memo, LocalDate occurredOn) {
+        return PartnerLedgerEntry.builder()
+                .organization(offset.getOrganization())
+                .entryType(PartnerLedgerEntryType.OFFSET)
+                .currencyCode(offset.getCurrencyCode())
+                .amount(amount)
+                .partnerOrder(offset.getPartnerOrder())
+                .memo(memo.length() > 500 ? memo.substring(0, 500) : memo)
+                .occurredOn(occurredOn)
+                .build();
+    }
 }

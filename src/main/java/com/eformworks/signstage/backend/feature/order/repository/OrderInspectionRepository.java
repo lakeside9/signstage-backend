@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.order.repository;
 
+import com.eformworks.signstage.backend.feature.order.entity.InspectionDisputeStatus;
 import com.eformworks.signstage.backend.feature.order.entity.InspectionStatus;
 import com.eformworks.signstage.backend.feature.order.entity.OrderInspection;
 import com.eformworks.signstage.backend.feature.order.model.PartnerInspectionStats;
@@ -24,16 +25,19 @@ public interface OrderInspectionRepository extends JpaRepository<OrderInspection
                     join fetch i.organization
                     where (:status is null or i.status = :status)
                       and (:organizationId is null or i.organization.id = :organizationId)
+                      and (:disputeStatus is null or i.disputeStatus = :disputeStatus)
                     """,
             countQuery = """
                     select count(i) from OrderInspection i
                     where (:status is null or i.status = :status)
                       and (:organizationId is null or i.organization.id = :organizationId)
+                      and (:disputeStatus is null or i.disputeStatus = :disputeStatus)
                     """
     )
     Page<OrderInspection> search(
             @Param("status") InspectionStatus status,
             @Param("organizationId") Long organizationId,
+            @Param("disputeStatus") InspectionDisputeStatus disputeStatus,
             Pageable pageable
     );
 
@@ -45,17 +49,23 @@ public interface OrderInspectionRepository extends JpaRepository<OrderInspection
             """)
     List<OrderInspection> findPendingDueBefore(@Param("today") LocalDate today);
 
-    /** 정산할 검수 — 승인일이 기간 안이고 아직 지급에 묶이지 않은 건. */
+    /**
+     * 정산할 검수 — 정산월 말일까지 승인됐고 아직 지급에 묶이지 않은 건. 이의 제기 중인 건과, 감액됐는데
+     * 이의 기간(승인일 ≥ {@code disputeWindowFrom})이 남은 건은 빼고 다음 정산으로 넘긴다(D13).
+     */
     @Query("""
             select i from OrderInspection i
             join fetch i.partnerOrder
             join fetch i.organization
             where i.status = com.eformworks.signstage.backend.feature.order.entity.InspectionStatus.APPROVED
-              and i.approvedDate between :from and :to
+              and i.approvedDate <= :to
               and i.partnerPayout is null
+              and (i.disputeStatus is null
+                   or i.disputeStatus = com.eformworks.signstage.backend.feature.order.entity.InspectionDisputeStatus.RESOLVED)
+              and not (i.deductionAmount > 0 and i.disputeStatus is null and i.approvedDate >= :disputeWindowFrom)
             order by i.organization.id, i.approvedDate, i.id
             """)
-    List<OrderInspection> findUnsettledApprovedBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
+    List<OrderInspection> findSettleableUntil(@Param("to") LocalDate to, @Param("disputeWindowFrom") LocalDate disputeWindowFrom);
 
     @Query("""
             select i from OrderInspection i
