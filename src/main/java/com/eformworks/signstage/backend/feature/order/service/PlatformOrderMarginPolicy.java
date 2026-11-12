@@ -23,6 +23,10 @@ public class PlatformOrderMarginPolicy {
         this.minimumMarginRate = minimumMarginRate;
     }
 
+    public BigDecimal minimumMarginRate() {
+        return minimumMarginRate;
+    }
+
     public boolean isMarginSufficient(BigDecimal customerSupplyAmount, BigDecimal partnerAmount) {
         BigDecimal margin = customerSupplyAmount.subtract(partnerAmount);
         BigDecimal minimum = customerSupplyAmount.multiply(minimumMarginRate);

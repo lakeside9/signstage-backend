@@ -77,6 +77,10 @@ public class OrderInspection extends BaseEntity {
     @Column(name = "deduction_reason", length = 500)
     private String deductionReason;
 
+    /** 플랫폼이 매긴 수행 평점(1~5, 선택) — 파트너 평가에 쓴다. 승인 간주 건은 null이다. */
+    @Column(name = "performance_rating")
+    private Integer performanceRating;
+
     /** 지급 대상 공급가(발주 금액 − 감액). 승인 전에는 null이다. */
     @Column(name = "payable_amount", precision = 19, scale = 4)
     private BigDecimal payableAmount;
@@ -119,8 +123,10 @@ public class OrderInspection extends BaseEntity {
             String defectNote,
             String delayNote,
             BigDecimal deductionAmount,
-            String deductionReason
+            String deductionReason,
+            Integer performanceRating
     ) {
+        this.performanceRating = performanceRating;
         this.defectNote = defectNote;
         this.delayNote = delayNote;
         this.deductionAmount = deductionAmount;

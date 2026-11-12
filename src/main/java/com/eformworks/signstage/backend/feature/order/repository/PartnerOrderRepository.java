@@ -2,6 +2,8 @@ package com.eformworks.signstage.backend.feature.order.repository;
 
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
+import com.eformworks.signstage.backend.feature.order.model.PartnerOrderStats;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -55,4 +57,21 @@ public interface PartnerOrderRepository extends JpaRepository<PartnerOrder, Long
               and c.completedAt is not null
             """)
     boolean existsCompletedBySalesOrderId(@Param("salesOrderId") Long salesOrderId);
+
+    /** 파트너별 발주 응답 집계. 응답 기한이 지난 ISSUED는 만료로 센다. */
+    @Query("""
+            select new com.eformworks.signstage.backend.feature.order.model.PartnerOrderStats(
+                p.organization.id,
+                count(p),
+                sum(case when p.status = com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus.ACCEPTED then 1 else 0 end),
+                sum(case when p.status = com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus.REJECTED then 1 else 0 end),
+                sum(case when p.status = com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus.EXPIRED
+                          or (p.status = com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus.ISSUED
+                              and p.responseDueAt < :now) then 1 else 0 end),
+                max(p.issuedAt)
+            )
+            from PartnerOrder p
+            group by p.organization.id
+            """)
+    List<PartnerOrderStats> aggregateByOrganization(@Param("now") LocalDateTime now);
 }

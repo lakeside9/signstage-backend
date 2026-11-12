@@ -110,7 +110,7 @@ class OrderInspectionServiceTest {
 
         OrderInspectionDto.Response.InspectionSummary result = orderInspectionService.approveInspection(
                 INSPECTION_ID, ADMIN_ID, ROLE,
-                new OrderInspectionDto.Request.Approve(" 태블릿 1대 고장 ", null, BigDecimal.valueOf(100_000), "장비 하자")
+                new OrderInspectionDto.Request.Approve(" 태블릿 1대 고장 ", null, BigDecimal.valueOf(100_000), "장비 하자", 4)
         );
 
         assertThat(result.getStatus()).isEqualTo("APPROVED");
@@ -118,6 +118,8 @@ class OrderInspectionServiceTest {
         assertThat(inspection.getDefectNote()).isEqualTo("태블릿 1대 고장");
         assertThat(inspection.getPayableAmount()).isEqualByComparingTo("1400000");
         assertThat(inspection.getApprovedBy()).isEqualTo(ADMIN_ID);
+        assertThat(inspection.getPerformanceRating()).isEqualTo(4);
+        assertThat(result.getPerformanceRating()).isEqualTo(4);
         ArgumentCaptor<PartnerLedgerEntry> ledger = ArgumentCaptor.forClass(PartnerLedgerEntry.class);
         verify(partnerLedgerEntryRepository).save(ledger.capture());
         assertThat(ledger.getValue().getAmount()).isEqualByComparingTo("1400000");
@@ -131,7 +133,7 @@ class OrderInspectionServiceTest {
 
         assertErrorCode(
                 () -> orderInspectionService.approveInspection(INSPECTION_ID, ADMIN_ID, ROLE,
-                        new OrderInspectionDto.Request.Approve(null, null, BigDecimal.valueOf(1_500_001), "사유")),
+                        new OrderInspectionDto.Request.Approve(null, null, BigDecimal.valueOf(1_500_001), "사유", null)),
                 OrderErrorCode.INSPECTION_DEDUCTION_INVALID
         );
     }
@@ -143,7 +145,7 @@ class OrderInspectionServiceTest {
 
         assertErrorCode(
                 () -> orderInspectionService.approveInspection(INSPECTION_ID, ADMIN_ID, ROLE,
-                        new OrderInspectionDto.Request.Approve(null, null, BigDecimal.valueOf(10_000), "  ")),
+                        new OrderInspectionDto.Request.Approve(null, null, BigDecimal.valueOf(10_000), "  ", null)),
                 OrderErrorCode.INSPECTION_DEDUCTION_REASON_REQUIRED
         );
         verify(partnerLedgerEntryRepository, never()).save(any());
@@ -156,7 +158,7 @@ class OrderInspectionServiceTest {
 
         assertErrorCode(
                 () -> orderInspectionService.approveInspection(INSPECTION_ID, ADMIN_ID, ROLE,
-                        new OrderInspectionDto.Request.Approve(null, null, null, null)),
+                        new OrderInspectionDto.Request.Approve(null, null, null, null, null)),
                 OrderErrorCode.INSPECTION_DEADLINE_PASSED
         );
     }
@@ -168,9 +170,22 @@ class OrderInspectionServiceTest {
 
         assertErrorCode(
                 () -> orderInspectionService.approveInspection(INSPECTION_ID, ADMIN_ID, "PLATFORM_SUPPORT",
-                        new OrderInspectionDto.Request.Approve(null, null, null, null)),
+                        new OrderInspectionDto.Request.Approve(null, null, null, null, null)),
                 CommonErrorCode.ACCESS_DENIED
         );
+    }
+
+    @Test
+    @DisplayName("파트너 발주 상세의 검수에는 수행 평점을 넣지 않는다")
+    void findByPartnerOrder_hidesPerformanceRating() {
+        OrderInspection inspection = OrderFixtures.inspection(301L, partner, 1_500_000, LocalDate.now(SalesOrderService.PLATFORM_ZONE));
+        inspection.approve(ADMIN_ID, LocalDate.now(SalesOrderService.PLATFORM_ZONE), null, null, BigDecimal.ZERO, null, 5);
+        given(orderInspectionRepository.findByPartnerOrderId(301L)).willReturn(Optional.of(inspection));
+
+        OrderInspectionDto.Response.InspectionSummary result = orderInspectionService.findByPartnerOrder(301L);
+
+        assertThat(inspection.getPerformanceRating()).isEqualTo(5);
+        assertThat(result.getPerformanceRating()).isNull();
     }
 
     private OrderInspection givenPendingInspection(LocalDate dueDate) {

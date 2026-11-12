@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.order.dto;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLine;
 import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
+import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -253,6 +254,19 @@ public final class PlatformAdminSalesOrderDto {
             private final BigDecimal amount;
             private final BigDecimal taxRatePercent;
             private final BigDecimal taxAmount;
+
+            public static QuoteLine from(SalesQuoteCalculation.Line line) {
+                return new QuoteLine(
+                        line.lineType().name(),
+                        line.unitProduct() != null ? line.unitProduct().getId() : null,
+                        line.name(),
+                        line.quantity(),
+                        line.unitPrice(),
+                        line.amount(),
+                        line.taxRatePercent(),
+                        line.taxAmount()
+                );
+            }
 
             public static QuoteLine from(SalesOrderLine line) {
                 return new QuoteLine(

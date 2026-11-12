@@ -189,6 +189,15 @@ public class OrderPricingService {
         return estimated.totalAmount();
     }
 
+    /** 파트너 전용 단가표가 기준일에 있는지(없으면 기본 단가표로 계산한다). */
+    public boolean hasPartnerRateCard(Long organizationId, LocalDate asOfDate) {
+        return partnerRateCardRepository.findEffectiveForPartner(organizationId, asOfDate).isPresent();
+    }
+
+    public BigDecimal minimumMarginRate() {
+        return platformOrderMarginPolicy.minimumMarginRate();
+    }
+
     public boolean isPartnerOrderMarginSufficient(BigDecimal customerSupplyAmount, BigDecimal partnerOrderAmount) {
         return platformOrderMarginPolicy.isMarginSufficient(customerSupplyAmount, partnerOrderAmount);
     }

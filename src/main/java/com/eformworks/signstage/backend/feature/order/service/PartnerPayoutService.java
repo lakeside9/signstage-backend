@@ -193,7 +193,7 @@ public class PartnerPayoutService {
         checkCanViewReceived(organizationId, currentUserId);
         PartnerPayout payout = partnerPayoutRepository.findByIdAndOrganizationId(partnerPayoutId, organizationId)
                 .orElseThrow(() -> new ApplicationException(OrderErrorCode.PAYOUT_NOT_FOUND));
-        return toDetail(payout);
+        return toDetail(payout, false);
     }
 
     public PartnerPayoutDto.Response.Ledger retrieveReceivedLedger(
@@ -206,10 +206,17 @@ public class PartnerPayoutService {
     }
 
     private PartnerPayoutDto.Response.PayoutDetail toDetail(PartnerPayout payout) {
+        return toDetail(payout, true);
+    }
+
+    /** @param forPlatform false면 파트너용이라 수행 평점을 뺀다. */
+    private PartnerPayoutDto.Response.PayoutDetail toDetail(PartnerPayout payout, boolean forPlatform) {
         LocalDate today = LocalDate.now(SalesOrderService.PLATFORM_ZONE);
         List<OrderInspectionDto.Response.InspectionSummary> items = orderInspectionRepository
                 .findAllByPartnerPayoutId(payout.getId()).stream()
-                .map(inspection -> OrderInspectionDto.Response.InspectionSummary.from(inspection, today))
+                .map(inspection -> forPlatform
+                        ? OrderInspectionDto.Response.InspectionSummary.from(inspection, today)
+                        : OrderInspectionDto.Response.InspectionSummary.forPartner(inspection, today))
                 .toList();
         return new PartnerPayoutDto.Response.PayoutDetail(PartnerPayoutDto.Response.PayoutSummary.from(payout), items);
     }

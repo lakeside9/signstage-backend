@@ -80,10 +80,10 @@ public class OrderInspectionService {
                 .map(inspection -> OrderInspectionDto.Response.InspectionSummary.from(inspection, today));
     }
 
-    /** 파트너 발주 상세에 붙일 검수. 아직 행사가 완료되지 않았으면 null이다. */
+    /** 파트너 발주 상세에 붙일 검수(수행 평점 제외). 아직 행사가 완료되지 않았으면 null이다. */
     public OrderInspectionDto.Response.InspectionSummary findByPartnerOrder(Long partnerOrderId) {
         return orderInspectionRepository.findByPartnerOrderId(partnerOrderId)
-                .map(inspection -> OrderInspectionDto.Response.InspectionSummary.from(inspection, today()))
+                .map(inspection -> OrderInspectionDto.Response.InspectionSummary.forPartner(inspection, today()))
                 .orElse(null);
     }
 
@@ -120,7 +120,8 @@ public class OrderInspectionService {
                 trimToNull(request.getDefectNote()),
                 trimToNull(request.getDelayNote()),
                 deduction,
-                deduction.signum() > 0 ? deductionReason : null
+                deduction.signum() > 0 ? deductionReason : null,
+                request.getPerformanceRating()
         );
         partnerLedgerEntryRepository.save(PartnerLedgerEntry.payable(inspection));
 

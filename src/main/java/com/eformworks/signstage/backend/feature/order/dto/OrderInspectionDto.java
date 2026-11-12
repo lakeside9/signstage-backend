@@ -3,6 +3,8 @@ package com.eformworks.signstage.backend.feature.order.dto;
 import com.eformworks.signstage.backend.feature.order.entity.OrderInspection;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -42,6 +44,11 @@ public final class OrderInspectionDto {
 
             @Size(max = 500)
             private String deductionReason;
+
+            /** 수행 평점 1~5(선택). */
+            @Min(1)
+            @Max(5)
+            private Integer performanceRating;
         }
     }
 
@@ -74,12 +81,22 @@ public final class OrderInspectionDto {
             private final String delayNote;
             private final BigDecimal deductionAmount;
             private final String deductionReason;
+            private final Integer performanceRating;
             private final BigDecimal payableAmount;
             private final LocalDate approvedDate;
             private final LocalDateTime approvedAt;
             private final Long partnerPayoutId;
 
             public static InspectionSummary from(OrderInspection inspection, LocalDate today) {
+                return from(inspection, today, true);
+            }
+
+            /** 파트너에게 보낼 때는 수행 평점을 빼고 만든다 — 평점은 플랫폼 내부용이다(11장 8단계). */
+            public static InspectionSummary forPartner(OrderInspection inspection, LocalDate today) {
+                return from(inspection, today, false);
+            }
+
+            private static InspectionSummary from(OrderInspection inspection, LocalDate today, boolean includeRating) {
                 PartnerOrder partnerOrder = inspection.getPartnerOrder();
                 SalesOrder salesOrder = partnerOrder.getSalesOrder();
                 return new InspectionSummary(
@@ -103,6 +120,7 @@ public final class OrderInspectionDto {
                         inspection.getDelayNote(),
                         inspection.getDeductionAmount(),
                         inspection.getDeductionReason(),
+                        includeRating ? inspection.getPerformanceRating() : null,
                         inspection.getPayableAmount(),
                         inspection.getApprovedDate(),
                         inspection.getApprovedAt(),

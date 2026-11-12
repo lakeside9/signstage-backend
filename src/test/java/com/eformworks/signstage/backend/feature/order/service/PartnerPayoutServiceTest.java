@@ -223,7 +223,7 @@ class PartnerPayoutServiceTest {
 
     private static OrderInspection approved(Long partnerOrderId, Organization partner, long amount, LocalDate approvedDate) {
         OrderInspection inspection = OrderFixtures.inspection(partnerOrderId, partner, amount, approvedDate.plusDays(2));
-        inspection.approve(ADMIN_ID, approvedDate, null, null, BigDecimal.ZERO, null);
+        inspection.approve(ADMIN_ID, approvedDate, null, null, BigDecimal.ZERO, null, null);
         return inspection;
     }
 

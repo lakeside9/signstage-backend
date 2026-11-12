@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.order.repository;
 
 import com.eformworks.signstage.backend.feature.order.entity.InspectionStatus;
 import com.eformworks.signstage.backend.feature.order.entity.OrderInspection;
+import com.eformworks.signstage.backend.feature.order.model.PartnerInspectionStats;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -65,4 +66,23 @@ public interface OrderInspectionRepository extends JpaRepository<OrderInspection
             order by i.approvedDate, i.id
             """)
     List<OrderInspection> findAllByPartnerPayoutId(@Param("partnerPayoutId") Long partnerPayoutId);
+
+    /** 파트너별 승인된 검수 집계(감액·하자·지체·승인 간주·평점). */
+    @Query("""
+            select new com.eformworks.signstage.backend.feature.order.model.PartnerInspectionStats(
+                i.organization.id,
+                count(i),
+                sum(case when i.approvalType = com.eformworks.signstage.backend.feature.order.entity.InspectionApprovalType.DEEMED then 1 else 0 end),
+                sum(case when i.defectNote is not null then 1 else 0 end),
+                sum(case when i.delayNote is not null then 1 else 0 end),
+                sum(case when i.deductionAmount > 0 then 1 else 0 end),
+                sum(i.deductionAmount),
+                avg(i.performanceRating),
+                count(i.performanceRating)
+            )
+            from OrderInspection i
+            where i.status = com.eformworks.signstage.backend.feature.order.entity.InspectionStatus.APPROVED
+            group by i.organization.id
+            """)
+    List<PartnerInspectionStats> aggregateApprovedByOrganization();
 }

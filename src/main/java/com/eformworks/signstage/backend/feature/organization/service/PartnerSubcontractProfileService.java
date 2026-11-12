@@ -8,6 +8,7 @@ import com.eformworks.signstage.backend.feature.organization.dto.PartnerSubcontr
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
+import com.eformworks.signstage.backend.feature.organization.entity.OrganizationStatus;
 import com.eformworks.signstage.backend.feature.organization.entity.PartnerBusinessType;
 import com.eformworks.signstage.backend.feature.organization.entity.PartnerSubcontractProfile;
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
@@ -15,6 +16,7 @@ import com.eformworks.signstage.backend.feature.organization.repository.MemberRe
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import com.eformworks.signstage.backend.feature.organization.repository.PartnerSubcontractProfileRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -101,6 +103,16 @@ public class PartnerSubcontractProfileService {
                 "bankName=" + profile.getBankName() + ", accountHolderName=" + profile.getAccountHolderName()
         );
         return PartnerSubcontractProfileDto.Response.Profile.from(profile);
+    }
+
+    /** 지금 발주를 받을 수 있는 파트너 조직 — 활성·비데모이고 외주 정보 요건(D22)을 채웠다. */
+    public List<Long> findOrderEligibleOrganizationIds() {
+        return partnerSubcontractProfileRepository.findAll().stream()
+                .filter(PartnerSubcontractProfile::isOrderEligible)
+                .map(PartnerSubcontractProfile::getOrganization)
+                .filter(organization -> organization.getStatus() == OrganizationStatus.ACTIVE && !organization.isDemo())
+                .map(Organization::getId)
+                .toList();
     }
 
     /** 발주 발급 요건(D22)을 모두 채웠는지. 정보를 한 번도 입력하지 않았으면 false다. */
