@@ -39,6 +39,16 @@ public class CeremonyAccessService {
     private final RolePermissionService rolePermissionService;
 
     Ceremony findCeremonyInOrganizationOrThrow(Long organizationId, Long ceremonyId) {
+        Ceremony ceremony = findCeremonyInOrganizationForPlatformAdminOrThrow(organizationId, ceremonyId);
+        // 파트너 교체로 접근이 막힌 행사는 그 조직에 없는 것처럼 다룬다(D03·D18).
+        if (ceremony.isPartnerAccessSuspended()) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_NOT_FOUND);
+        }
+        return ceremony;
+    }
+
+    /** 플랫폼 관리자 조회·처리용 — 파트너 교체로 접근이 막힌 행사도 찾는다. */
+    Ceremony findCeremonyInOrganizationForPlatformAdminOrThrow(Long organizationId, Long ceremonyId) {
         Ceremony ceremony = ceremonyRepository.findById(ceremonyId)
                 .orElseThrow(() -> new ApplicationException(CeremonyErrorCode.CEREMONY_NOT_FOUND));
         if (!ceremony.getOrganization().getId().equals(organizationId)) {

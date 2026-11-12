@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.order.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
+import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -59,6 +60,18 @@ public class SalesOrderChange extends BaseEntity {
     @Column(name = "before_onsite_staff_person_days", nullable = false)
     private int beforeOnsiteStaffPersonDays;
 
+    @Column(name = "before_spare_tablet_count", nullable = false)
+    private int beforeSpareTabletCount;
+
+    @Column(name = "before_rehearsal_staff_person_days", nullable = false)
+    private int beforeRehearsalStaffPersonDays;
+
+    @Column(name = "before_lodging_nights", nullable = false)
+    private int beforeLodgingNights;
+
+    @Column(name = "before_lodging_persons", nullable = false)
+    private int beforeLodgingPersons;
+
     @Column(name = "before_supply_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal beforeSupplyAmount;
 
@@ -73,6 +86,19 @@ public class SalesOrderChange extends BaseEntity {
 
     @Column(name = "onsite_staff_person_days", nullable = false)
     private int onsiteStaffPersonDays;
+
+    /** 변경 후 예비 태블릿·리허설 별도일 인력·숙박(D23·D24·D26). */
+    @Column(name = "spare_tablet_count", nullable = false)
+    private int spareTabletCount;
+
+    @Column(name = "rehearsal_staff_person_days", nullable = false)
+    private int rehearsalStaffPersonDays;
+
+    @Column(name = "lodging_nights", nullable = false)
+    private int lodgingNights;
+
+    @Column(name = "lodging_persons", nullable = false)
+    private int lodgingPersons;
 
     @Column(name = "supply_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal supplyAmount;
@@ -132,7 +158,7 @@ public class SalesOrderChange extends BaseEntity {
     @Builder
     private SalesOrderChange(
             SalesOrder salesOrder, PartnerOrder partnerOrder, String reason, int tabletCount, int onsiteStaffPersonDays,
-            BigDecimal supplyAmount, BigDecimal vatAmount, String discountReason, BigDecimal estimatedPartnerAmount,
+            ScopeExtras extras, BigDecimal supplyAmount, BigDecimal vatAmount, String discountReason, BigDecimal estimatedPartnerAmount,
             BigDecimal partnerAmount, String location, LocalDateTime startsAt, LocalDateTime endsAt, Long proposedBy
     ) {
         this.salesOrder = salesOrder;
@@ -141,11 +167,20 @@ public class SalesOrderChange extends BaseEntity {
         this.reason = reason;
         this.beforeTabletCount = salesOrder.getTabletCount();
         this.beforeOnsiteStaffPersonDays = salesOrder.getOnsiteStaffPersonDays();
+        this.beforeSpareTabletCount = salesOrder.getSpareTabletCount();
+        this.beforeRehearsalStaffPersonDays = salesOrder.getRehearsalStaffPersonDays();
+        this.beforeLodgingNights = salesOrder.getLodgingNights();
+        this.beforeLodgingPersons = salesOrder.getLodgingPersons();
         this.beforeSupplyAmount = salesOrder.getSupplyAmount();
         this.beforeTotalAmount = salesOrder.getTotalAmount();
         this.beforePartnerAmount = partnerOrder != null ? partnerOrder.getTotalAmount() : null;
         this.tabletCount = tabletCount;
         this.onsiteStaffPersonDays = onsiteStaffPersonDays;
+        ScopeExtras after = extras != null ? extras : ScopeExtras.NONE;
+        this.spareTabletCount = after.spareTabletCount();
+        this.rehearsalStaffPersonDays = after.rehearsalStaffPersonDays();
+        this.lodgingNights = after.lodgingNights();
+        this.lodgingPersons = after.lodgingPersons();
         this.supplyAmount = supplyAmount;
         this.vatAmount = vatAmount;
         this.totalAmount = supplyAmount.add(vatAmount);
@@ -156,6 +191,14 @@ public class SalesOrderChange extends BaseEntity {
         this.startsAt = startsAt;
         this.endsAt = endsAt;
         this.proposedBy = proposedBy;
+    }
+
+    public ScopeExtras beforeScopeExtras() {
+        return new ScopeExtras(beforeSpareTabletCount, beforeRehearsalStaffPersonDays, beforeLodgingNights, beforeLodgingPersons);
+    }
+
+    public ScopeExtras scopeExtras() {
+        return new ScopeExtras(spareTabletCount, rehearsalStaffPersonDays, lodgingNights, lodgingPersons);
     }
 
     public boolean isProposed() {

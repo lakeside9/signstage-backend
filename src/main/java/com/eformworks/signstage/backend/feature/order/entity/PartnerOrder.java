@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.order.entity;
 
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -68,6 +69,24 @@ public class PartnerOrder extends BaseEntity {
     @Column(name = "region_surcharge", nullable = false, precision = 19, scale = 4)
     private BigDecimal regionSurcharge;
 
+    /** 예비 태블릿(D23) — {@code tabletUnitRate}로 지급한다. */
+    @Column(name = "spare_tablet_count", nullable = false)
+    private int spareTabletCount;
+
+    /** 리허설 별도일 현장 인력(D24) — {@code onsiteStaffDayRate}로 지급한다. */
+    @Column(name = "rehearsal_staff_person_days", nullable = false)
+    private int rehearsalStaffPersonDays;
+
+    /** 숙박 박수·인원(D26). 금액은 박수 × 인원 × {@code lodgingNightRate}다. */
+    @Column(name = "lodging_nights", nullable = false)
+    private int lodgingNights;
+
+    @Column(name = "lodging_persons", nullable = false)
+    private int lodgingPersons;
+
+    @Column(name = "lodging_night_rate", nullable = false, precision = 19, scale = 4)
+    private BigDecimal lodgingNightRate;
+
     @Column(name = "adjustment_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal adjustmentAmount;
 
@@ -118,8 +137,8 @@ public class PartnerOrder extends BaseEntity {
     private PartnerOrder(
             SalesOrder salesOrder, Organization organization, String currencyCode, BigDecimal baseFee,
             int tabletCount, BigDecimal tabletUnitRate, int onsiteStaffPersonDays, BigDecimal onsiteStaffDayRate,
-            BigDecimal regionSurcharge, BigDecimal adjustmentAmount, String adjustmentReason, BigDecimal totalAmount,
-            LocalDateTime responseDueAt, Long issuedBy
+            BigDecimal regionSurcharge, ScopeExtras extras, BigDecimal lodgingNightRate, BigDecimal adjustmentAmount,
+            String adjustmentReason, BigDecimal totalAmount, LocalDateTime responseDueAt, Long issuedBy
     ) {
         this.salesOrder = salesOrder;
         this.organization = organization;
@@ -130,6 +149,8 @@ public class PartnerOrder extends BaseEntity {
         this.onsiteStaffPersonDays = onsiteStaffPersonDays;
         this.onsiteStaffDayRate = onsiteStaffDayRate;
         this.regionSurcharge = regionSurcharge;
+        applyExtras(extras != null ? extras : ScopeExtras.NONE);
+        this.lodgingNightRate = lodgingNightRate != null ? lodgingNightRate : BigDecimal.ZERO;
         this.adjustmentAmount = adjustmentAmount;
         this.adjustmentReason = adjustmentReason;
         this.totalAmount = totalAmount;
@@ -140,19 +161,32 @@ public class PartnerOrder extends BaseEntity {
     }
 
     /** 발급 때 스냅샷한 단가로 다시 계산한 발주 금액 — 범위 변경(D08)에 쓴다. 단가는 이미 통화 단위로 맞춰져 있다. */
-    public BigDecimal amountFor(int tabletCount, int onsiteStaffPersonDays) {
+    public BigDecimal amountFor(int tabletCount, int onsiteStaffPersonDays, ScopeExtras extras) {
         return baseFee
-                .add(tabletUnitRate.multiply(BigDecimal.valueOf(tabletCount)))
-                .add(onsiteStaffDayRate.multiply(BigDecimal.valueOf(onsiteStaffPersonDays)))
+                .add(tabletUnitRate.multiply(BigDecimal.valueOf(tabletCount + extras.spareTabletCount())))
+                .add(onsiteStaffDayRate.multiply(BigDecimal.valueOf(onsiteStaffPersonDays + extras.rehearsalStaffPersonDays())))
                 .add(regionSurcharge)
+                .add(lodgingNightRate.multiply(BigDecimal.valueOf(extras.lodgingPersonNights())))
                 .add(adjustmentAmount);
     }
 
     /** 범위 변경(D08)을 반영한다 — 파트너가 동의한 수량과 금액으로 바꾼다. */
-    public void applyScopeChange(int tabletCount, int onsiteStaffPersonDays, BigDecimal totalAmount) {
+    public void applyScopeChange(int tabletCount, int onsiteStaffPersonDays, ScopeExtras extras, BigDecimal totalAmount) {
         this.tabletCount = tabletCount;
         this.onsiteStaffPersonDays = onsiteStaffPersonDays;
+        applyExtras(extras);
         this.totalAmount = totalAmount;
+    }
+
+    public ScopeExtras scopeExtras() {
+        return new ScopeExtras(spareTabletCount, rehearsalStaffPersonDays, lodgingNights, lodgingPersons);
+    }
+
+    private void applyExtras(ScopeExtras extras) {
+        this.spareTabletCount = extras.spareTabletCount();
+        this.rehearsalStaffPersonDays = extras.rehearsalStaffPersonDays();
+        this.lodgingNights = extras.lodgingNights();
+        this.lodgingPersons = extras.lodgingPersons();
     }
 
     public boolean isOverdue(LocalDateTime now) {

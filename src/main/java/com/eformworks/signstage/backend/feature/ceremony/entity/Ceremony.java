@@ -143,6 +143,13 @@ public class Ceremony extends BaseEntity {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    /**
+     * 수락한 발주가 취소(파트너 교체)되면 채운다 — 새 파트너가 수락해 행사를 옮길 때까지 행사 조직의
+     * 회원은 이 행사를 보지 못한다(signstage-docs business/platform-order-partner-subcontract-review.md D03·D18).
+     */
+    @Column(name = "partner_access_suspended_at")
+    private LocalDateTime partnerAccessSuspendedAt;
+
     /** 아래 6개 필드는 전부 description과 같은 이유로 nullable이다(생성 시엔 안 받고 수정 화면에서만 채운다). */
     @Column(name = "organizing_institution", length = 200)
     private String organizingInstitution;
@@ -290,6 +297,15 @@ public class Ceremony extends BaseEntity {
      */
     public void transferTo(Organization organization) {
         this.organization = organization;
+        this.partnerAccessSuspendedAt = null;
+    }
+
+    public void suspendPartnerAccess() {
+        this.partnerAccessSuspendedAt = LocalDateTime.now();
+    }
+
+    public boolean isPartnerAccessSuspended() {
+        return partnerAccessSuspendedAt != null;
     }
 
     public CurrencyPolicy currencyPolicy() {

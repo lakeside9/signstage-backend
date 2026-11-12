@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.order.entity;
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -83,6 +84,21 @@ public class SalesOrder extends BaseEntity {
     @Column(name = "onsite_staff_person_days", nullable = false)
     private int onsiteStaffPersonDays;
 
+    /** 예비 태블릿 — 발주에만 넣고 고객에게 청구하지 않는다(D23). */
+    @Column(name = "spare_tablet_count", nullable = false)
+    private int spareTabletCount;
+
+    /** 본행사와 다른 날 리허설의 현장 인력 인·일(D24). */
+    @Column(name = "rehearsal_staff_person_days", nullable = false)
+    private int rehearsalStaffPersonDays;
+
+    /** 관리자가 정한 숙박 박수·인원(D26). */
+    @Column(name = "lodging_nights", nullable = false)
+    private int lodgingNights;
+
+    @Column(name = "lodging_persons", nullable = false)
+    private int lodgingPersons;
+
     @Column(name = "supply_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal supplyAmount;
 
@@ -154,11 +170,15 @@ public class SalesOrder extends BaseEntity {
     }
 
     public void applyAmounts(
-            int tabletCount, int onsiteStaffPersonDays, BigDecimal supplyAmount, BigDecimal vatAmount,
+            int tabletCount, int onsiteStaffPersonDays, ScopeExtras extras, BigDecimal supplyAmount, BigDecimal vatAmount,
             String discountReason, BigDecimal estimatedPartnerAmount
     ) {
         this.tabletCount = tabletCount;
         this.onsiteStaffPersonDays = onsiteStaffPersonDays;
+        this.spareTabletCount = extras.spareTabletCount();
+        this.rehearsalStaffPersonDays = extras.rehearsalStaffPersonDays();
+        this.lodgingNights = extras.lodgingNights();
+        this.lodgingPersons = extras.lodgingPersons();
         this.supplyAmount = supplyAmount;
         this.vatAmount = vatAmount;
         this.totalAmount = supplyAmount.add(vatAmount);
@@ -172,9 +192,13 @@ public class SalesOrder extends BaseEntity {
         this.startsAt = change.getStartsAt();
         this.endsAt = change.getEndsAt();
         applyAmounts(
-                change.getTabletCount(), change.getOnsiteStaffPersonDays(), change.getSupplyAmount(),
+                change.getTabletCount(), change.getOnsiteStaffPersonDays(), change.scopeExtras(), change.getSupplyAmount(),
                 change.getVatAmount(), change.getDiscountReason(), change.getEstimatedPartnerAmount()
         );
+    }
+
+    public ScopeExtras scopeExtras() {
+        return new ScopeExtras(spareTabletCount, rehearsalStaffPersonDays, lodgingNights, lodgingPersons);
     }
 
     public void accept(String acceptedByName, SalesOrderAcceptanceChannel channel) {

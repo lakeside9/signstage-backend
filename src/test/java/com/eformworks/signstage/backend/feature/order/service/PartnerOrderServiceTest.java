@@ -147,9 +147,9 @@ class PartnerOrderServiceTest {
         given(partnerSubcontractProfileService.isOrderEligible(PARTNER_ID)).willReturn(true);
         PartnerOrderAmount amount = new PartnerOrderAmount(
                 BigDecimal.valueOf(500_000), 4, BigDecimal.valueOf(100_000), 1, BigDecimal.valueOf(400_000),
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.valueOf(1_300_000)
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.valueOf(1_300_000), 0, 0, 0, BigDecimal.ZERO
         );
-        given(orderPricingService.calculatePartnerOrderAmount(eq(PARTNER_ID), anyInt(), anyInt(), any(), any(), any(), any()))
+        given(orderPricingService.calculatePartnerOrderAmount(eq(PARTNER_ID), anyInt(), anyInt(), any(), any(), any(), any(), any()))
                 .willReturn(amount);
         given(partnerOrderRepository.save(any(PartnerOrder.class))).willAnswer(invocation -> invocation.getArgument(0));
 
@@ -214,7 +214,7 @@ class PartnerOrderServiceTest {
 
         assertThat(accepted.getStatus()).isEqualTo(PartnerOrderStatus.CANCELLED);
         assertThat(accepted.getCeremony()).isNotNull();
-        verify(platformOrderCeremonyService).releaseAssignments(900L);
+        verify(platformOrderCeremonyService).suspendPartnerAccess(accepted.getCeremony());
         verify(salesOrderChangeService).cancelProposedForPartnerOrder(eq(300L), any());
         verify(orderNotificationService).partnerOrderCancelled(accepted, "파트너 사정");
     }

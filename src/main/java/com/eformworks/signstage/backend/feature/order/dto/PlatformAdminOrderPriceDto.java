@@ -75,6 +75,14 @@ public final class PlatformAdminOrderPriceDto {
             @PositiveOrZero
             private BigDecimal partnerAmount;
 
+            /** 숙박 1박·1인 고객 금액(D26). 생략하면 0이다. */
+            @PositiveOrZero
+            private BigDecimal lodgingCustomerAmount;
+
+            /** 숙박 1박·1인 파트너 금액(D26). 생략하면 0이다. */
+            @PositiveOrZero
+            private BigDecimal lodgingPartnerAmount;
+
             @Size(max = 50)
             private String taxCode;
 
@@ -169,6 +177,8 @@ public final class PlatformAdminOrderPriceDto {
             private final String currencyCode;
             private final BigDecimal customerAmount;
             private final BigDecimal partnerAmount;
+            private final BigDecimal lodgingCustomerAmount;
+            private final BigDecimal lodgingPartnerAmount;
             private final String taxCode;
             private final LocalDate effectiveFrom;
             private final LocalDate effectiveTo;
@@ -180,6 +190,8 @@ public final class PlatformAdminOrderPriceDto {
                         surcharge.getCurrencyCode(),
                         surcharge.getCustomerAmount(),
                         surcharge.getPartnerAmount(),
+                        surcharge.getLodgingCustomerAmount(),
+                        surcharge.getLodgingPartnerAmount(),
                         surcharge.getTaxCode(),
                         surcharge.getPeriod().getEffectiveFrom(),
                         surcharge.getPeriod().getEffectiveTo()

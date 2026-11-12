@@ -134,6 +134,8 @@ public class PartnerOrderService {
                 .onsiteStaffPersonDays(amount.onsiteStaffPersonDays())
                 .onsiteStaffDayRate(amount.onsiteStaffDayRate())
                 .regionSurcharge(amount.regionSurcharge())
+                .extras(salesOrder.scopeExtras())
+                .lodgingNightRate(amount.lodgingNightRate())
                 .adjustmentAmount(amount.adjustmentAmount())
                 .adjustmentReason(adjustment.signum() != 0 ? request.getAdjustmentReason().trim() : null)
                 .totalAmount(amount.totalAmount())
@@ -171,7 +173,7 @@ public class PartnerOrderService {
         }
         partnerOrder.cancel(reason);
         if (afterAcceptance) {
-            platformOrderCeremonyService.releaseAssignments(partnerOrder.getCeremony().getId());
+            platformOrderCeremonyService.suspendPartnerAccess(partnerOrder.getCeremony());
             salesOrderChangeService.cancelProposedForPartnerOrder(partnerOrderId, "발주 취소(파트너 교체)");
         }
 
@@ -186,7 +188,8 @@ public class PartnerOrderService {
 
     private PartnerOrderAmount calculateAmount(SalesOrder salesOrder, Long organizationId, BigDecimal adjustmentAmount) {
         return orderPricingService.calculatePartnerOrderAmount(
-                organizationId, salesOrder.getTabletCount(), salesOrder.getOnsiteStaffPersonDays(), salesOrder.getRegion(),
+                organizationId, salesOrder.getTabletCount(), salesOrder.getOnsiteStaffPersonDays(), salesOrder.scopeExtras(),
+                salesOrder.getRegion(),
                 adjustmentAmount, salesOrder.currencyPolicy(), LocalDate.now(SalesOrderService.PLATFORM_ZONE)
         );
     }

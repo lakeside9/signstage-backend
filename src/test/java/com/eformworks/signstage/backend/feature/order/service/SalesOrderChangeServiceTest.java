@@ -31,6 +31,7 @@ import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLineType;
 import com.eformworks.signstage.backend.feature.order.entity.ScopeChangeRequest;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
+import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import com.eformworks.signstage.backend.feature.order.repository.CustomerInvoiceRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderChangeLineRepository;
@@ -143,7 +144,7 @@ class SalesOrderChangeServiceTest {
         PartnerOrder accepted = acceptedOrder();
         given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(SALES_ORDER_ID)).willReturn(List.of(accepted));
         given(customerInvoiceRepository.findAllBySalesOrderIdOrderByIdAsc(SALES_ORDER_ID)).willReturn(List.of());
-        given(orderPricingService.calculateSalesQuote(any(), anyList(), any(), any(), any(), any()))
+        given(orderPricingService.calculateSalesQuote(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(calculation(6, BigDecimal.valueOf(3_400_000)));
         given(salesOrderChangeRepository.save(any(SalesOrderChange.class))).willAnswer(invocation -> invocation.getArgument(0));
         given(salesOrderChangeLineRepository.save(any(SalesOrderChangeLine.class))).willAnswer(invocation -> invocation.getArgument(0));
@@ -297,7 +298,7 @@ class SalesOrderChangeServiceTest {
                 SalesOrderLineType.UNIT_PRODUCT, tablets, "태블릿", tabletCount - 2, BigDecimal.valueOf(100_000),
                 BigDecimal.valueOf(100_000L * (tabletCount - 2)), "KR_VAT_STANDARD", BigDecimal.TEN, BigDecimal.ZERO
         );
-        return new SalesQuoteCalculation(List.of(line), supplyAmount, supplyAmount.divide(BigDecimal.TEN), tabletCount, 1);
+        return new SalesQuoteCalculation(List.of(line), supplyAmount, supplyAmount.divide(BigDecimal.TEN), tabletCount, 1, ScopeExtras.NONE);
     }
 
     private SalesOrderLine salesOrderLine(int quantity) {
@@ -334,7 +335,7 @@ class SalesOrderChangeServiceTest {
         return new SalesOrderChangeDto.Request.Propose(
                 "고객 요청으로 태블릿 추가",
                 List.of(new PlatformAdminSalesOrderDto.Request.Option(11L, tablets - 2)),
-                null, null, null, null, null
+                null, null, null, null, null, null, null, null, null
         );
     }
 }

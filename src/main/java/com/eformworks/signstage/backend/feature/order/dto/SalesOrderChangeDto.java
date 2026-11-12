@@ -4,7 +4,9 @@ import com.eformworks.signstage.backend.feature.order.entity.SalesOrderChange;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderChangeLine;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLineType;
 import com.eformworks.signstage.backend.feature.order.entity.ScopeChangeRequest;
+import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -56,6 +58,32 @@ public final class SalesOrderChangeDto {
             private LocalDateTime startsAt;
 
             private LocalDateTime endsAt;
+
+            /** 예비 태블릿·리허설 별도일 인력·숙박(D23·D24·D26). 비워 보내면 지금 값을 그대로 둔다. */
+            @PositiveOrZero
+            @Max(999)
+            private Integer spareTabletCount;
+
+            @PositiveOrZero
+            @Max(999)
+            private Integer rehearsalStaffPersonDays;
+
+            @PositiveOrZero
+            @Max(999)
+            private Integer lodgingNights;
+
+            @PositiveOrZero
+            @Max(999)
+            private Integer lodgingPersons;
+
+            public ScopeExtras scopeExtrasOr(ScopeExtras current) {
+                return new ScopeExtras(
+                        spareTabletCount != null ? spareTabletCount : current.spareTabletCount(),
+                        rehearsalStaffPersonDays != null ? rehearsalStaffPersonDays : current.rehearsalStaffPersonDays(),
+                        lodgingNights != null ? lodgingNights : current.lodgingNights(),
+                        lodgingPersons != null ? lodgingPersons : current.lodgingPersons()
+                );
+            }
         }
 
         @Getter
@@ -145,6 +173,8 @@ public final class SalesOrderChangeDto {
             private final LocalDateTime cancelledAt;
             private final String cancellationReason;
             private final List<PlatformAdminSalesOrderDto.Response.QuoteLine> lines;
+            private final ExtrasView beforeExtras;
+            private final ExtrasView extras;
 
             public static AdminChange of(SalesOrderChange change, List<SalesOrderChangeLine> lines) {
                 return new AdminChange(
@@ -180,7 +210,9 @@ public final class SalesOrderChangeDto {
                         change.getAppliedAt(),
                         change.getCancelledAt(),
                         change.getCancellationReason(),
-                        lines.stream().map(PlatformAdminSalesOrderDto.Response.QuoteLine::from).toList()
+                        lines.stream().map(PlatformAdminSalesOrderDto.Response.QuoteLine::from).toList(),
+                        ExtrasView.from(change.beforeScopeExtras()),
+                        ExtrasView.from(change.scopeExtras())
                 );
             }
         }
@@ -214,6 +246,8 @@ public final class SalesOrderChangeDto {
             private final LocalDateTime cancelledAt;
             private final String cancellationReason;
             private final List<ScopeOption> options;
+            private final ExtrasView beforeExtras;
+            private final ExtrasView extras;
 
             public static PartnerChange of(SalesOrderChange change, List<SalesOrderChangeLine> lines) {
                 return new PartnerChange(
@@ -242,7 +276,26 @@ public final class SalesOrderChangeDto {
                         lines.stream()
                                 .filter(line -> line.getLineType() == SalesOrderLineType.UNIT_PRODUCT)
                                 .map(line -> new ScopeOption(line.getName(), line.getQuantity()))
-                                .toList()
+                                .toList(),
+                        ExtrasView.from(change.beforeScopeExtras()),
+                        ExtrasView.from(change.scopeExtras())
+                );
+            }
+        }
+
+        /** 예비 태블릿·리허설 별도일 인력·숙박(D23·D24·D26). */
+        @Getter
+        @AllArgsConstructor
+        public static class ExtrasView {
+
+            private final int spareTabletCount;
+            private final int rehearsalStaffPersonDays;
+            private final int lodgingNights;
+            private final int lodgingPersons;
+
+            public static ExtrasView from(ScopeExtras extras) {
+                return new ExtrasView(
+                        extras.spareTabletCount(), extras.rehearsalStaffPersonDays(), extras.lodgingNights(), extras.lodgingPersons()
                 );
             }
         }

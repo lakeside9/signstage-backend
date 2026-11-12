@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.ceremony.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -11,7 +12,10 @@ import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.OrganizationSubscription;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductCategory;
+import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOrderRoute;
+import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.model.QuoteCalculation;
 import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.billing.entity.TaxCategory;
@@ -132,5 +136,35 @@ class CeremonyQuoteServiceTest extends CeremonyServiceTestSupport {
         Ceremony ceremony = Ceremony.builder().organization(organization()).title("행사").build();
 
         assertThat(ceremonyQuoteService.calculateSubscriptionUsageCost(ceremony)).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("플랫폼 수주 행사는 예상 이용료를 조회할 수 없다")
+    void calculateEstimatedTotal_rejectsPlatformOrderCeremony() {
+        Ceremony ceremony = Ceremony.builder().organization(organization()).orderRoute(CeremonyOrderRoute.PLATFORM_ORDER).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+        given(memberRepository.findByOrganizationIdAndUserIdAndStatus(ORGANIZATION_ID, CURRENT_USER_ID, MemberStatus.ACTIVE))
+                .willReturn(Optional.of(Member.builder().role(MemberRole.OWNER).build()));
+
+        assertThatThrownBy(() -> ceremonyQuoteService.calculateEstimatedTotal(ORGANIZATION_ID, 10L, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting("errorCode").isEqualTo(CeremonyErrorCode.CEREMONY_PLATFORM_ORDER_RESTRICTED);
+    }
+
+    @Test
+    @DisplayName("파트너 교체로 접근이 막힌 행사는 조직 회원에게 없는 행사로 보인다(D03·D18)")
+    void findCeremony_hidesPartnerAccessSuspendedCeremony() {
+        Ceremony ceremony = Ceremony.builder().organization(organization()).orderRoute(CeremonyOrderRoute.PLATFORM_ORDER).title("행사").build();
+        ReflectionTestUtils.setField(ceremony, "id", 10L);
+        ceremony.suspendPartnerAccess();
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+
+        assertThatThrownBy(() -> ceremonyQuoteService.calculateEstimatedTotal(ORGANIZATION_ID, 10L, CURRENT_USER_ID))
+                .isInstanceOf(ApplicationException.class)
+                .extracting("errorCode").isEqualTo(CeremonyErrorCode.CEREMONY_NOT_FOUND);
+
+        ceremony.transferTo(organization());
+        assertThat(ceremony.isPartnerAccessSuspended()).isFalse();
     }
 }

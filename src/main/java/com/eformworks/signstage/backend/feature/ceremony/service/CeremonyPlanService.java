@@ -161,7 +161,7 @@ public class CeremonyPlanService {
      * business/unit-product-purchase-self-checkout-review.md 8.6절 결정, 2026-09-11).
      */
     public List<CeremonyDto.Response.PlanHistorySummary> findPlanHistoryByPlatformAdmin(Long organizationId, Long ceremonyId) {
-        ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        ceremonyAccessService.findCeremonyInOrganizationForPlatformAdminOrThrow(organizationId, ceremonyId);
         return ceremonyPlanHistoryRepository.findAllByCeremonyIdOrderByCreatedAtDesc(ceremonyId).stream()
                 .map(this::toPlanHistorySummary)
                 .toList();

@@ -134,7 +134,7 @@ public class CeremonyService {
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         Long assignedUserId = actingMember.getRole() == MemberRole.OPERATOR ? currentUserId : null;
 
-        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, assignedUserId, null, null, pageable);
+        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, assignedUserId, null, null, true, pageable);
         return ceremonies.map(CeremonyDto.Response.CeremonySummary::from);
     }
 
@@ -153,7 +153,7 @@ public class CeremonyService {
             Pageable pageable
     ) {
         findOrganizationOrThrow(organizationId);
-        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, null, null, null, pageable);
+        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, title, status, null, null, null, false, pageable);
         return ceremonies.map(CeremonyDto.Response.CeremonySummary::from);
     }
 
@@ -164,7 +164,7 @@ public class CeremonyService {
      * organizationId를 이미 알고 있는 상태(목록 행에서 넘어옴)로 호출한다.
      */
     public CeremonyDto.Response.CeremonySummary findCeremonyByPlatformAdmin(Long organizationId, Long ceremonyId) {
-        return CeremonyDto.Response.CeremonySummary.from(ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId));
+        return CeremonyDto.Response.CeremonySummary.from(ceremonyAccessService.findCeremonyInOrganizationForPlatformAdminOrThrow(organizationId, ceremonyId));
     }
 
     /**
@@ -176,7 +176,7 @@ public class CeremonyService {
     public Page<PlatformAdminCeremonyDiscountDto.Response.CeremonyDiscountSummary> findCeremonyDiscountsAcrossOrganizations(
             Long organizationId, CeremonyStatus status, Boolean hasFinalDiscount, Pageable pageable
     ) {
-        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, null, status, null, hasFinalDiscount, null, pageable);
+        Page<Ceremony> ceremonies = ceremonyRepository.search(organizationId, null, status, null, hasFinalDiscount, null, false, pageable);
         return ceremonies.map(ceremony -> new PlatformAdminCeremonyDiscountDto.Response.CeremonyDiscountSummary(
                 ceremony.getId(),
                 ceremony.getOrganization().getId(),
@@ -198,7 +198,7 @@ public class CeremonyService {
      * 이력)으로 이어간다.
      */
     public Page<BillingPlanDto.Response.CeremonyUsingPlanSummary> findCeremoniesByBillingPlan(Long billingPlanId, Pageable pageable) {
-        Page<Ceremony> ceremonies = ceremonyRepository.search(null, null, null, null, null, billingPlanId, pageable);
+        Page<Ceremony> ceremonies = ceremonyRepository.search(null, null, null, null, null, billingPlanId, false, pageable);
         return ceremonies.map(ceremony -> new BillingPlanDto.Response.CeremonyUsingPlanSummary(
                 ceremony.getId(),
                 ceremony.getOrganization().getId(),
@@ -263,7 +263,7 @@ public class CeremonyService {
     ) {
         checkAllowed(actingPlatformRole, "ACTION_CEREMONY_STATUS_CONTROL");
 
-        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationForPlatformAdminOrThrow(organizationId, ceremonyId);
         CeremonyStatus previousStatus = ceremony.getStatus();
         CeremonyStatus newStatus = parseCeremonyStatus(request.getStatus());
         if (newStatus == CeremonyStatus.DRAFT) {
@@ -305,7 +305,7 @@ public class CeremonyService {
     ) {
         checkAllowed(actingPlatformRole, "ACTION_CEREMONY_FINAL_DISCOUNT_MANAGE");
 
-        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
+        Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationForPlatformAdminOrThrow(organizationId, ceremonyId);
         checkCeremonyInProgress(ceremony);
 
         DiscountType previousType = ceremony.getFinalDiscount().getDiscountType();

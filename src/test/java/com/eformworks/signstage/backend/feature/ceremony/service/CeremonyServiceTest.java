@@ -174,7 +174,7 @@ class CeremonyServiceTest extends CeremonyServiceTestSupport {
         Page<Ceremony> page = new PageImpl<>(List.of(ceremony), pageable, 1);
 
         given(organizationRepository.findById(ORGANIZATION_ID)).willReturn(Optional.of(organization));
-        given(ceremonyRepository.search(ORGANIZATION_ID, null, null, null, null, null, pageable)).willReturn(page);
+        given(ceremonyRepository.search(ORGANIZATION_ID, null, null, null, null, null, false, pageable)).willReturn(page);
 
         // when
         Page<CeremonyDto.Response.CeremonySummary> result =

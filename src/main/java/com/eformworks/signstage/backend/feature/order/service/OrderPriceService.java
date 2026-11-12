@@ -136,12 +136,15 @@ public class OrderPriceService {
                 .currencyCode(resolveCurrencyCode(request.getCurrencyCode()))
                 .customerAmount(request.getCustomerAmount())
                 .partnerAmount(request.getPartnerAmount())
+                .lodgingCustomerAmount(request.getLodgingCustomerAmount())
+                .lodgingPartnerAmount(request.getLodgingPartnerAmount())
                 .taxCode(taxCode)
                 .period(period)
                 .build());
         auditLogRecorder.record(adminUserId, PlatformAdminAction.CREATE_REGION_SURCHARGE, null, null,
                 "regionSurchargeId=" + surcharge.getId() + ", region=" + surcharge.getRegion()
-                        + ", customerAmount=" + surcharge.getCustomerAmount() + ", partnerAmount=" + surcharge.getPartnerAmount());
+                        + ", customerAmount=" + surcharge.getCustomerAmount() + ", partnerAmount=" + surcharge.getPartnerAmount()
+                        + ", lodging=" + surcharge.getLodgingCustomerAmount() + "/" + surcharge.getLodgingPartnerAmount());
         return PlatformAdminOrderPriceDto.Response.AdminRegionSurcharge.from(surcharge);
     }
 

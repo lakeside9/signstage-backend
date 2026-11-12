@@ -100,6 +100,12 @@ public final class PartnerOrderDto {
             private final int onsiteStaffPersonDays;
             private final BigDecimal onsiteStaffDayRate;
             private final BigDecimal regionSurcharge;
+            /** 예비 태블릿(D23)·리허설 별도일 인력(D24)·숙박(D26). 단가는 태블릿·인력 단가와 1박 단가다. */
+            private final int spareTabletCount;
+            private final int rehearsalStaffPersonDays;
+            private final int lodgingNights;
+            private final int lodgingPersons;
+            private final BigDecimal lodgingNightRate;
             private final BigDecimal adjustmentAmount;
             private final String adjustmentReason;
             private final LocalDateTime respondedAt;
@@ -131,6 +137,11 @@ public final class PartnerOrderDto {
                         partnerOrder.getOnsiteStaffPersonDays(),
                         partnerOrder.getOnsiteStaffDayRate(),
                         partnerOrder.getRegionSurcharge(),
+                        partnerOrder.getSpareTabletCount(),
+                        partnerOrder.getRehearsalStaffPersonDays(),
+                        partnerOrder.getLodgingNights(),
+                        partnerOrder.getLodgingPersons(),
+                        partnerOrder.getLodgingNightRate(),
                         partnerOrder.getAdjustmentAmount(),
                         partnerOrder.getAdjustmentReason(),
                         partnerOrder.getRespondedAt(),

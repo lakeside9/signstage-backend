@@ -96,6 +96,11 @@ public final class PlatformAdminPartnerOrderDto {
             private final LocalDateTime cancelledAt;
             private final String cancellationReason;
             private final Long ceremonyId;
+            private final int spareTabletCount;
+            private final int rehearsalStaffPersonDays;
+            private final int lodgingNights;
+            private final int lodgingPersons;
+            private final BigDecimal lodgingNightRate;
 
             public static AdminPartnerOrderSummary from(PartnerOrder partnerOrder, LocalDateTime now) {
                 return new AdminPartnerOrderSummary(
@@ -121,7 +126,12 @@ public final class PlatformAdminPartnerOrderDto {
                         partnerOrder.getRejectionReason(),
                         partnerOrder.getCancelledAt(),
                         partnerOrder.getCancellationReason(),
-                        partnerOrder.getCeremony() != null ? partnerOrder.getCeremony().getId() : null
+                        partnerOrder.getCeremony() != null ? partnerOrder.getCeremony().getId() : null,
+                        partnerOrder.getSpareTabletCount(),
+                        partnerOrder.getRehearsalStaffPersonDays(),
+                        partnerOrder.getLodgingNights(),
+                        partnerOrder.getLodgingPersons(),
+                        partnerOrder.getLodgingNightRate()
                 );
             }
         }
@@ -142,6 +152,11 @@ public final class PlatformAdminPartnerOrderDto {
             private final BigDecimal adjustmentAmount;
             private final BigDecimal totalAmount;
             private final BigDecimal customerSupplyAmount;
+            /** 예비 태블릿(D23)·리허설 별도일 인력(D24)·숙박 인·박과 1박 단가(D26). */
+            private final int spareTabletCount;
+            private final int rehearsalStaffPersonDays;
+            private final int lodgingPersonNights;
+            private final BigDecimal lodgingNightRate;
             private final BigDecimal marginAmount;
             private final boolean marginSufficient;
 
@@ -164,6 +179,10 @@ public final class PlatformAdminPartnerOrderDto {
                         amount.adjustmentAmount(),
                         amount.totalAmount(),
                         customerSupplyAmount,
+                        amount.spareTabletCount(),
+                        amount.rehearsalStaffPersonDays(),
+                        amount.lodgingPersonNights(),
+                        amount.lodgingNightRate(),
                         customerSupplyAmount.subtract(amount.totalAmount()),
                         marginSufficient
                 );

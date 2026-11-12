@@ -5,7 +5,9 @@ import com.eformworks.signstage.backend.feature.order.entity.SalesOrderChangeLin
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLine;
 import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
+import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -27,6 +29,9 @@ public final class PlatformAdminSalesOrderDto {
     }
 
     public static final class Request {
+        /** 예비 태블릿·리허설 인·일·숙박 박수·인원의 상한. */
+        static final long MAX_EXTRA_QUANTITY = 999;
+
         private Request() {
         }
 
@@ -66,10 +71,33 @@ public final class PlatformAdminSalesOrderDto {
             @Size(max = 500)
             private String discountReason;
 
+            /** 예비 태블릿(D23, 발주에만). 생략하면 0이다. */
+            @PositiveOrZero
+            @Max(MAX_EXTRA_QUANTITY)
+            private Integer spareTabletCount;
+
+            /** 본행사와 다른 날 리허설 현장 인력 인·일(D24). 생략하면 0이다. */
+            @PositiveOrZero
+            @Max(MAX_EXTRA_QUANTITY)
+            private Integer rehearsalStaffPersonDays;
+
+            /** 숙박 박수·인원(D26). 함께 넣거나 함께 비운다. */
+            @PositiveOrZero
+            @Max(MAX_EXTRA_QUANTITY)
+            private Integer lodgingNights;
+
+            @PositiveOrZero
+            @Max(MAX_EXTRA_QUANTITY)
+            private Integer lodgingPersons;
+
             private LocalDate quoteValidUntil;
 
             @Size(max = 1000)
             private String memo;
+
+            public ScopeExtras scopeExtras() {
+                return ScopeExtras.of(spareTabletCount, rehearsalStaffPersonDays, lodgingNights, lodgingPersons);
+            }
         }
 
         @Getter
@@ -186,6 +214,10 @@ public final class PlatformAdminSalesOrderDto {
             private final Short currencyFractionDigits;
             private final int tabletCount;
             private final int onsiteStaffPersonDays;
+            private final int spareTabletCount;
+            private final int rehearsalStaffPersonDays;
+            private final int lodgingNights;
+            private final int lodgingPersons;
             private final BigDecimal supplyAmount;
             private final BigDecimal vatAmount;
             private final BigDecimal totalAmount;
@@ -223,6 +255,10 @@ public final class PlatformAdminSalesOrderDto {
                         salesOrder.getCurrencyFractionDigits(),
                         salesOrder.getTabletCount(),
                         salesOrder.getOnsiteStaffPersonDays(),
+                        salesOrder.getSpareTabletCount(),
+                        salesOrder.getRehearsalStaffPersonDays(),
+                        salesOrder.getLodgingNights(),
+                        salesOrder.getLodgingPersons(),
                         salesOrder.getSupplyAmount(),
                         salesOrder.getVatAmount(),
                         salesOrder.getTotalAmount(),

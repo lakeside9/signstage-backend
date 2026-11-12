@@ -73,6 +73,8 @@ public class CeremonyQuoteService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
         Member actingMember = ceremonyAccessService.findActiveMemberOrThrow(organizationId, currentUserId);
         ceremonyAccessService.checkCeremonyReadAccess(ceremony, actingMember, currentUserId);
+        // 플랫폼 수주 행사는 플랫폼 이용료가 없다(범위·가격은 수주·발주로 관리) — 카탈로그 플랜가를 보이지 않는다.
+        ceremonyAccessService.checkPartnerDirectCeremony(ceremony);
 
         QuoteCalculation calculation = buildQuoteCalculation(ceremony);
         return new CeremonyDto.Response.EstimatedTotal(

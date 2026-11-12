@@ -44,6 +44,13 @@ public class RegionSurcharge extends BaseEntity {
     @Column(name = "partner_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal partnerAmount;
 
+    /** 숙박 1박·1인 금액(D26) — 관리자가 숙박을 넣은 견적·발주에 박수 × 인원만큼 더한다. */
+    @Column(name = "lodging_customer_amount", nullable = false, precision = 19, scale = 4)
+    private BigDecimal lodgingCustomerAmount;
+
+    @Column(name = "lodging_partner_amount", nullable = false, precision = 19, scale = 4)
+    private BigDecimal lodgingPartnerAmount;
+
     @Column(name = "tax_code", nullable = false, length = 50)
     private String taxCode;
 
@@ -53,12 +60,14 @@ public class RegionSurcharge extends BaseEntity {
     @Builder
     private RegionSurcharge(
             ServiceRegion region, String currencyCode, BigDecimal customerAmount, BigDecimal partnerAmount,
-            String taxCode, EffectivePeriod period
+            BigDecimal lodgingCustomerAmount, BigDecimal lodgingPartnerAmount, String taxCode, EffectivePeriod period
     ) {
         this.region = region;
         this.currencyCode = currencyCode;
         this.customerAmount = customerAmount;
         this.partnerAmount = partnerAmount;
+        this.lodgingCustomerAmount = lodgingCustomerAmount != null ? lodgingCustomerAmount : BigDecimal.ZERO;
+        this.lodgingPartnerAmount = lodgingPartnerAmount != null ? lodgingPartnerAmount : BigDecimal.ZERO;
         this.taxCode = taxCode;
         this.period = period;
     }

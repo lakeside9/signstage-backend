@@ -105,7 +105,7 @@ public class PlatformOrderCeremonyService {
                 .orElseThrow(() -> new ApplicationException(OrganizationErrorCode.ORGANIZATION_NOT_FOUND));
         ceremonyCatalogService.checkCurrencyMatches(organization.getBillingCurrencyCode(), ceremony.getCurrencyCode());
         ceremony.transferTo(organization);
-        releaseAssignments(ceremony.getId());
+        ceremonyAssignmentRepository.deleteAllByCeremonyId(ceremony.getId());
         User acceptingUser = userRepository.findById(acceptingUserId)
                 .orElseThrow(() -> new ApplicationException(CommonErrorCode.ACCESS_DENIED));
         ceremonyAssignmentRepository.save(
@@ -114,10 +114,14 @@ public class PlatformOrderCeremonyService {
         return ceremony;
     }
 
-    /** 발주가 수락 후 취소되면 이전 파트너 담당자 배정을 지운다 — 운영 담당자(OPERATOR)가 더는 보지 못한다. */
+    /**
+     * 발주가 수락 후 취소되면 이전 파트너의 담당자 배정을 지우고 행사 접근을 막는다. 새 파트너가 수락해
+     * 행사를 옮기면({@link #transferPlatformOrderCeremony}) 다시 열린다.
+     */
     @Transactional
-    public void releaseAssignments(Long ceremonyId) {
-        ceremonyAssignmentRepository.deleteAllByCeremonyId(ceremonyId);
+    public void suspendPartnerAccess(Ceremony ceremony) {
+        ceremonyAssignmentRepository.deleteAllByCeremonyId(ceremony.getId());
+        ceremony.suspendPartnerAccess();
     }
 
     /**

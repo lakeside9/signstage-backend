@@ -13,6 +13,7 @@ import com.eformworks.signstage.backend.feature.order.entity.PartnerRateCard;
 import com.eformworks.signstage.backend.feature.order.entity.RegionSurcharge;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
+import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -52,11 +53,19 @@ final class OrderFixtures {
     }
 
     static RegionSurcharge regionSurcharge(ServiceRegion region, long customerAmount, long partnerAmount) {
+        return regionSurcharge(region, customerAmount, partnerAmount, 0, 0);
+    }
+
+    static RegionSurcharge regionSurcharge(
+            ServiceRegion region, long customerAmount, long partnerAmount, long lodgingCustomerAmount, long lodgingPartnerAmount
+    ) {
         return RegionSurcharge.builder()
                 .region(region)
                 .currencyCode("KRW")
                 .customerAmount(BigDecimal.valueOf(customerAmount))
                 .partnerAmount(BigDecimal.valueOf(partnerAmount))
+                .lodgingCustomerAmount(BigDecimal.valueOf(lodgingCustomerAmount))
+                .lodgingPartnerAmount(BigDecimal.valueOf(lodgingPartnerAmount))
                 .taxCode("KR_VAT_STANDARD")
                 .period(new EffectivePeriod(TODAY.minusDays(30), null))
                 .build();
@@ -100,7 +109,7 @@ final class OrderFixtures {
         SalesOrder salesOrder = SalesOrder.builder().customer(customer).currencyCode("KRW").quoteAccessToken("token-" + id).build();
         salesOrder.updateQuote("협약식", plan, ServiceRegion.CAPITAL, "서울", LocalDateTime.of(2026, 12, 1, 10, 0),
                 LocalDateTime.of(2026, 12, 1, 12, 0), TODAY.plusDays(30), null);
-        salesOrder.applyAmounts(4, 1, BigDecimal.valueOf(3_000_000), BigDecimal.valueOf(300_000), null,
+        salesOrder.applyAmounts(4, 1, ScopeExtras.NONE, BigDecimal.valueOf(3_000_000), BigDecimal.valueOf(300_000), null,
                 BigDecimal.valueOf(1_300_000));
         ReflectionTestUtils.setField(salesOrder, "id", id);
         return salesOrder;

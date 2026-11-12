@@ -51,7 +51,7 @@ public class MarginSimulationService {
                         .map(option -> new SalesQuoteOption(option.getUnitProductId(), option.getQuantity()))
                         .toList();
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                plan, options, request.getRegion(), request.getDiscountAmount(), currencyPolicy, today
+                plan, options, request.getRegion(), request.scopeExtras(), request.getDiscountAmount(), currencyPolicy, today
         );
 
         MarginSimulationDto.Response.PartnerQuote defaultQuote =
@@ -100,7 +100,7 @@ public class MarginSimulationService {
         BigDecimal partnerAmount;
         try {
             partnerAmount = orderPricingService.calculatePartnerOrderAmount(
-                    organizationId, calculation.tabletCount(), calculation.onsiteStaffPersonDays(), region,
+                    organizationId, calculation.tabletCount(), calculation.onsiteStaffPersonDays(), calculation.extras(), region,
                     adjustmentAmount, currencyPolicy, today
             ).totalAmount();
         } catch (ApplicationException ex) {

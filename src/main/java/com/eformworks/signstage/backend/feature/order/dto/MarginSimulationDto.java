@@ -1,7 +1,9 @@
 package com.eformworks.signstage.backend.feature.order.dto;
 
 import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
+import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.math.BigDecimal;
@@ -45,6 +47,27 @@ public final class MarginSimulationDto {
             private BigDecimal discountAmount;
 
             private BigDecimal adjustmentAmount;
+
+            /** 예비 태블릿·리허설 별도일 인력·숙박(D23·D24·D26). 생략하면 0이다. */
+            @PositiveOrZero
+            @Max(999)
+            private Integer spareTabletCount;
+
+            @PositiveOrZero
+            @Max(999)
+            private Integer rehearsalStaffPersonDays;
+
+            @PositiveOrZero
+            @Max(999)
+            private Integer lodgingNights;
+
+            @PositiveOrZero
+            @Max(999)
+            private Integer lodgingPersons;
+
+            public ScopeExtras scopeExtras() {
+                return ScopeExtras.of(spareTabletCount, rehearsalStaffPersonDays, lodgingNights, lodgingPersons);
+            }
         }
     }
 

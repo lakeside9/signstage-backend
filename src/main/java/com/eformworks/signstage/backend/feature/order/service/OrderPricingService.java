@@ -20,6 +20,7 @@ import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.PartnerOrderAmount;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteOption;
+import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import com.eformworks.signstage.backend.feature.order.repository.CustomerPriceRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerRateCardRepository;
 import com.eformworks.signstage.backend.feature.order.repository.RegionSurchargeRepository;
@@ -43,6 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>범위 수량: 태블릿·현장 인력은 플랜 포함 수량과 옵션 수량을 더한다. 현장 인력
  *       ({@code ONSITE_SUPPORT}) 수량은 인·일로 본다.</li>
  *   <li>발주 금액: 파트너 예외 단가표가 있으면 그것을, 없으면 기본 단가표를 쓴다(D05·D28 안 A).</li>
+ *   <li>추가 범위({@link ScopeExtras}): 리허설 별도일 인력은 고객에게 현장 인력 인·일 가격으로, 숙박은 권역 1박
+ *       금액으로 청구하고 발주에도 더한다. 예비 태블릿은 발주에만 더한다(D23·D24·D26).</li>
  * </ul>
  */
 @Service
@@ -64,10 +67,12 @@ public class OrderPricingService {
             BillingPlan plan,
             List<SalesQuoteOption> options,
             ServiceRegion region,
+            ScopeExtras extras,
             BigDecimal discountAmount,
             CurrencyPolicy currencyPolicy,
             LocalDate asOfDate
     ) {
+        checkExtras(extras);
         List<SalesQuoteCalculation.Line> lines = new ArrayList<>();
         List<BillingPlanUnitProduct> planUnitProducts = billingCatalogQueryService.findPlanUnitProducts(plan.getId());
         int tabletCount = sumIncluded(planUnitProducts, UnitProductType.TABLETS);
@@ -107,6 +112,20 @@ public class OrderPricingService {
             lines.add(buildLine(SalesOrderLineType.REGION_SURCHARGE, null, "지역 할증(" + region.label() + ")", 1,
                     surcharge.getCustomerAmount(), surcharge.getTaxCode(), currencyPolicy, asOfDate));
         }
+        if (extras.rehearsalStaffPersonDays() > 0) {
+            UnitProduct onsiteSupport = billingCatalogQueryService.findFirstUnitProductByType(UnitProductType.ONSITE_SUPPORT)
+                    .orElseThrow(() -> new ApplicationException(OrderErrorCode.CUSTOMER_PRICE_NOT_FOUND));
+            CustomerPrice staffPrice = customerPriceRepository.findEffectiveForUnitProduct(onsiteSupport.getId(), asOfDate)
+                    .orElseThrow(() -> new ApplicationException(OrderErrorCode.CUSTOMER_PRICE_NOT_FOUND));
+            checkCurrency(staffPrice.getCurrencyCode(), currencyPolicy);
+            lines.add(buildLine(SalesOrderLineType.REHEARSAL_STAFF, onsiteSupport, "리허설 현장 인력(별도일)",
+                    extras.rehearsalStaffPersonDays(), staffPrice.getUnitPrice(), staffPrice.getTaxCode(), currencyPolicy, asOfDate));
+        }
+        if (extras.lodgingPersonNights() > 0) {
+            lines.add(buildLine(SalesOrderLineType.LODGING, null,
+                    "숙박(" + extras.lodgingNights() + "박 × " + extras.lodgingPersons() + "명)", extras.lodgingPersonNights(),
+                    surcharge.getLodgingCustomerAmount(), surcharge.getTaxCode(), currencyPolicy, asOfDate));
+        }
 
         BigDecimal subtotal = lines.stream().map(SalesQuoteCalculation.Line::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal discount = discountAmount == null ? BigDecimal.ZERO : moneyCalculator.normalize(discountAmount, currencyPolicy);
@@ -126,7 +145,7 @@ public class OrderPricingService {
 
         BigDecimal supplyAmount = lines.stream().map(SalesQuoteCalculation.Line::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal vatAmount = lines.stream().map(SalesQuoteCalculation.Line::taxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new SalesQuoteCalculation(lines, supplyAmount, vatAmount, tabletCount, onsiteStaffPersonDays);
+        return new SalesQuoteCalculation(lines, supplyAmount, vatAmount, tabletCount, onsiteStaffPersonDays, extras);
     }
 
     /**
@@ -136,11 +155,13 @@ public class OrderPricingService {
             Long organizationId,
             int tabletCount,
             int onsiteStaffPersonDays,
+            ScopeExtras extras,
             ServiceRegion region,
             BigDecimal adjustmentAmount,
             CurrencyPolicy currencyPolicy,
             LocalDate asOfDate
     ) {
+        checkExtras(extras);
         PartnerRateCard rateCard = (organizationId == null
                 ? partnerRateCardRepository.findEffectiveDefault(asOfDate)
                 : partnerRateCardRepository.findEffectiveForPartner(organizationId, asOfDate)
@@ -154,20 +175,23 @@ public class OrderPricingService {
         BigDecimal tabletUnitRate = moneyCalculator.normalize(rateCard.getTabletUnitRate(), currencyPolicy);
         BigDecimal onsiteStaffDayRate = moneyCalculator.normalize(rateCard.getOnsiteStaffDayRate(), currencyPolicy);
         BigDecimal regionSurcharge = moneyCalculator.normalize(surcharge.getPartnerAmount(), currencyPolicy);
+        BigDecimal lodgingNightRate = moneyCalculator.normalize(surcharge.getLodgingPartnerAmount(), currencyPolicy);
         BigDecimal adjustment = moneyCalculator.normalize(
                 adjustmentAmount == null ? BigDecimal.ZERO : adjustmentAmount, currencyPolicy
         );
         BigDecimal total = baseFee
-                .add(tabletUnitRate.multiply(BigDecimal.valueOf(tabletCount)))
-                .add(onsiteStaffDayRate.multiply(BigDecimal.valueOf(onsiteStaffPersonDays)))
+                .add(tabletUnitRate.multiply(BigDecimal.valueOf(tabletCount + extras.spareTabletCount())))
+                .add(onsiteStaffDayRate.multiply(BigDecimal.valueOf(onsiteStaffPersonDays + extras.rehearsalStaffPersonDays())))
                 .add(regionSurcharge)
+                .add(lodgingNightRate.multiply(BigDecimal.valueOf(extras.lodgingPersonNights())))
                 .add(adjustment);
         if (total.signum() < 0) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
         return new PartnerOrderAmount(
                 baseFee, tabletCount, tabletUnitRate, onsiteStaffPersonDays, onsiteStaffDayRate,
-                regionSurcharge, adjustment, moneyCalculator.normalize(total, currencyPolicy)
+                regionSurcharge, adjustment, moneyCalculator.normalize(total, currencyPolicy),
+                extras.spareTabletCount(), extras.rehearsalStaffPersonDays(), extras.lodgingPersonNights(), lodgingNightRate
         );
     }
 
@@ -182,7 +206,7 @@ public class OrderPricingService {
             LocalDate asOfDate
     ) {
         PartnerOrderAmount estimated = calculatePartnerOrderAmount(
-                null, calculation.tabletCount(), calculation.onsiteStaffPersonDays(), region, BigDecimal.ZERO,
+                null, calculation.tabletCount(), calculation.onsiteStaffPersonDays(), calculation.extras(), region, BigDecimal.ZERO,
                 currencyPolicy, asOfDate
         );
         platformOrderMarginPolicy.checkMargin(calculation.supplyAmount(), estimated.totalAmount());
@@ -229,6 +253,12 @@ public class OrderPricingService {
                 .filter(source -> source.getUnitProduct().getType() == type)
                 .mapToInt(BillingPlanUnitProduct::getIncludedQuantity)
                 .sum();
+    }
+
+    private static void checkExtras(ScopeExtras extras) {
+        if (extras == null || !extras.isValid()) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
     }
 
     private static void checkCurrency(String priceCurrencyCode, CurrencyPolicy currencyPolicy) {

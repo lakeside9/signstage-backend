@@ -132,8 +132,8 @@ public class SalesOrderChangeService {
                         .map(option -> new SalesQuoteOption(option.getUnitProductId(), option.getQuantity()))
                         .toList();
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                salesOrder.getBillingPlan(), options, salesOrder.getRegion(), request.getDiscountAmount(),
-                salesOrder.currencyPolicy(), today
+                salesOrder.getBillingPlan(), options, salesOrder.getRegion(), request.scopeExtrasOr(salesOrder.scopeExtras()),
+                request.getDiscountAmount(), salesOrder.currencyPolicy(), today
         );
         BigDecimal invoicedSupply = activeInvoices.stream()
                 .map(CustomerInvoice::getSupplyAmount)
@@ -144,7 +144,7 @@ public class SalesOrderChangeService {
         BigDecimal partnerAmount = null;
         BigDecimal estimatedPartnerAmount;
         if (acceptedOrder != null) {
-            partnerAmount = acceptedOrder.amountFor(calculation.tabletCount(), calculation.onsiteStaffPersonDays());
+            partnerAmount = acceptedOrder.amountFor(calculation.tabletCount(), calculation.onsiteStaffPersonDays(), calculation.extras());
             orderPricingService.checkPartnerOrderMargin(calculation.supplyAmount(), partnerAmount);
             estimatedPartnerAmount = partnerAmount;
         } else {
@@ -159,6 +159,7 @@ public class SalesOrderChangeService {
                 .reason(request.getReason().trim())
                 .tabletCount(calculation.tabletCount())
                 .onsiteStaffPersonDays(calculation.onsiteStaffPersonDays())
+                .extras(calculation.extras())
                 .supplyAmount(calculation.supplyAmount())
                 .vatAmount(calculation.vatAmount())
                 .discountReason(request.getDiscountReason() == null || request.getDiscountReason().isBlank()
@@ -350,7 +351,9 @@ public class SalesOrderChangeService {
 
         PartnerOrder partnerOrder = change.getPartnerOrder();
         if (partnerOrder != null) {
-            partnerOrder.applyScopeChange(change.getTabletCount(), change.getOnsiteStaffPersonDays(), change.getPartnerAmount());
+            partnerOrder.applyScopeChange(
+                    change.getTabletCount(), change.getOnsiteStaffPersonDays(), change.scopeExtras(), change.getPartnerAmount()
+            );
             platformOrderCeremonyService.applyScopeChange(
                     partnerOrder.getCeremony(), change.getLocation(), change.getStartsAt(), change.getEndsAt(),
                     addedOptions(previousLines, newLines)

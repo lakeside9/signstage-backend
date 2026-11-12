@@ -26,7 +26,7 @@ public class CeremonyRepositoryImpl implements CeremonyRepositoryCustom {
     @Override
     public Page<Ceremony> search(
             Long organizationId, String title, CeremonyStatus status, Long assignedUserId,
-            Boolean hasFinalDiscount, Long billingPlanId, Pageable pageable
+            Boolean hasFinalDiscount, Long billingPlanId, boolean partnerVisibleOnly, Pageable pageable
     ) {
         // ceremony_assignments에 (ceremony_id, user_id) 유니크 제약이 있어(uq_ca_ceremony_user),
         // assignedUserId로 좁혀도 한 Ceremony당 조인 결과가 많아야 1행이다 — distinct 불필요.
@@ -36,6 +36,8 @@ public class CeremonyRepositoryImpl implements CeremonyRepositoryCustom {
                 statusEq(status),
                 hasFinalDiscountEq(hasFinalDiscount),
                 billingPlanIdEq(billingPlanId),
+                // 조직 회원 목록에서는 파트너 교체로 접근이 막힌 행사를 뺀다(D03·D18).
+                partnerVisibleOnly ? CEREMONY.partnerAccessSuspendedAt.isNull() : null,
         };
 
         List<Ceremony> content = joinAssignmentIfNeeded(queryFactory.selectFrom(CEREMONY), assignedUserId)

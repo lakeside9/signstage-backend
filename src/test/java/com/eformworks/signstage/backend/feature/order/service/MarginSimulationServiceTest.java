@@ -16,6 +16,7 @@ import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.PartnerOrderAmount;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
+import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -44,8 +45,8 @@ class MarginSimulationServiceTest {
     void simulate_quotesEligiblePartners() {
         BillingPlan plan = OrderFixtures.plan(1L);
         given(billingCatalogQueryService.findBillingPlanOrThrow(1L)).willReturn(plan);
-        given(orderPricingService.calculateSalesQuote(eq(plan), any(), eq(ServiceRegion.CAPITAL), any(), any(), any()))
-                .willReturn(new SalesQuoteCalculation(List.of(), new BigDecimal("1000000"), new BigDecimal("100000"), 10, 2));
+        given(orderPricingService.calculateSalesQuote(eq(plan), any(), eq(ServiceRegion.CAPITAL), any(), any(), any(), any()))
+                .willReturn(new SalesQuoteCalculation(List.of(), new BigDecimal("1000000"), new BigDecimal("100000"), 10, 2, ScopeExtras.NONE));
         given(orderPricingService.minimumMarginRate()).willReturn(new BigDecimal("0.20"));
         given(orderPricingService.isPartnerOrderMarginSufficient(any(), any())).willAnswer(invocation ->
                 ((BigDecimal) invocation.getArgument(1)).compareTo(new BigDecimal("800000")) <= 0);
@@ -54,17 +55,17 @@ class MarginSimulationServiceTest {
         ));
         given(orderPricingService.hasPartnerRateCard(any(), any())).willAnswer(invocation ->
                 invocation.getArgument(0).equals(8L));
-        given(orderPricingService.calculatePartnerOrderAmount(isNull(), anyInt(), anyInt(), any(), any(), any(), any()))
+        given(orderPricingService.calculatePartnerOrderAmount(isNull(), anyInt(), anyInt(), any(), any(), any(), any(), any()))
                 .willReturn(amount(700000));
-        given(orderPricingService.calculatePartnerOrderAmount(eq(7L), anyInt(), anyInt(), any(), any(), any(), any()))
+        given(orderPricingService.calculatePartnerOrderAmount(eq(7L), anyInt(), anyInt(), any(), any(), any(), any(), any()))
                 .willReturn(amount(700000));
-        given(orderPricingService.calculatePartnerOrderAmount(eq(8L), anyInt(), anyInt(), any(), any(), any(), any()))
+        given(orderPricingService.calculatePartnerOrderAmount(eq(8L), anyInt(), anyInt(), any(), any(), any(), any(), any()))
                 .willReturn(amount(850000));
-        given(orderPricingService.calculatePartnerOrderAmount(eq(9L), anyInt(), anyInt(), any(), any(), any(), any()))
+        given(orderPricingService.calculatePartnerOrderAmount(eq(9L), anyInt(), anyInt(), any(), any(), any(), any(), any()))
                 .willThrow(new ApplicationException(OrderErrorCode.PARTNER_RATE_CARD_NOT_FOUND));
 
         MarginSimulationDto.Response.Simulation simulation = marginSimulationService.simulate(
-                new MarginSimulationDto.Request.Simulate(1L, ServiceRegion.CAPITAL, List.of(), null, null)
+                new MarginSimulationDto.Request.Simulate(1L, ServiceRegion.CAPITAL, List.of(), null, null, null, null, null, null)
         );
 
         assertThat(simulation.getTotalAmount()).isEqualByComparingTo("1100000");
@@ -91,6 +92,6 @@ class MarginSimulationServiceTest {
 
     private PartnerOrderAmount amount(long total) {
         BigDecimal zero = BigDecimal.ZERO;
-        return new PartnerOrderAmount(zero, 10, zero, 2, zero, zero, zero, BigDecimal.valueOf(total));
+        return new PartnerOrderAmount(zero, 10, zero, 2, zero, zero, zero, BigDecimal.valueOf(total), 0, 0, 0, zero);
     }
 }

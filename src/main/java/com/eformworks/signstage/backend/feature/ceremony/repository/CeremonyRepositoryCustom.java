@@ -25,6 +25,6 @@ public interface CeremonyRepositoryCustom {
      */
     Page<Ceremony> search(
             Long organizationId, String title, CeremonyStatus status, Long assignedUserId,
-            Boolean hasFinalDiscount, Long billingPlanId, Pageable pageable
+            Boolean hasFinalDiscount, Long billingPlanId, boolean partnerVisibleOnly, Pageable pageable
     );
 }

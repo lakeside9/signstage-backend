@@ -11,13 +11,15 @@ import java.util.List;
  * @param supplyAmount 줄 금액 합계(할인 포함, 세금 별도)
  * @param tabletCount 플랜 포함 + 옵션 태블릿 대수(발주 금액 계산 입력)
  * @param onsiteStaffPersonDays 플랜 포함 + 옵션 현장 인력 인·일
+ * @param extras 예비 태블릿·리허설 별도일 인력·숙박(D23·D24·D26)
  */
 public record SalesQuoteCalculation(
         List<Line> lines,
         BigDecimal supplyAmount,
         BigDecimal vatAmount,
         int tabletCount,
-        int onsiteStaffPersonDays
+        int onsiteStaffPersonDays,
+        ScopeExtras extras
 ) {
 
     public record Line(
