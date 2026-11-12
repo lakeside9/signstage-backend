@@ -46,6 +46,10 @@ public final class SalesOrderChangeDto {
             @Valid
             private List<PlatformAdminSalesOrderDto.Request.Option> options = new ArrayList<>();
 
+            /** 카탈로그에 없는 직접 입력 항목. */
+            @Valid
+            private List<PlatformAdminSalesOrderDto.Request.CustomItem> customItems = new ArrayList<>();
+
             @PositiveOrZero
             private BigDecimal discountAmount;
 
@@ -282,7 +286,8 @@ public final class SalesOrderChangeDto {
                         change.getCancelledAt(),
                         change.getCancellationReason(),
                         lines.stream()
-                                .filter(line -> line.getLineType() == SalesOrderLineType.UNIT_PRODUCT)
+                                .filter(line -> line.getLineType() == SalesOrderLineType.UNIT_PRODUCT
+                                        || line.getLineType() == SalesOrderLineType.CUSTOM_ITEM)
                                 .map(line -> new ScopeOption(line.getName(), line.getQuantity()))
                                 .toList(),
                         ExtrasView.from(change.beforeScopeExtras()),

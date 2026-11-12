@@ -91,6 +91,10 @@ public class SalesOrder extends BaseEntity {
     @Column(name = "spare_tablet_count", nullable = false)
     private int spareTabletCount;
 
+    /** 직접 입력 항목의 발주 금액 합계(수량 × 발주 단가) — 발주 금액에 그대로 더한다. */
+    @Column(name = "custom_item_partner_amount", nullable = false, precision = 19, scale = 4)
+    private BigDecimal customItemPartnerAmount = BigDecimal.ZERO;
+
     /** 본행사와 다른 날 리허설의 현장 인력 인·일(D24). */
     @Column(name = "rehearsal_staff_person_days", nullable = false)
     private int rehearsalStaffPersonDays;
@@ -177,8 +181,8 @@ public class SalesOrder extends BaseEntity {
     }
 
     public void applyAmounts(
-            int tabletCount, int wifiCount, int onsiteStaffPersonDays, ScopeExtras extras, BigDecimal supplyAmount,
-            BigDecimal vatAmount, String discountReason, BigDecimal estimatedPartnerAmount
+            int tabletCount, int wifiCount, int onsiteStaffPersonDays, ScopeExtras extras, BigDecimal customItemPartnerAmount,
+            BigDecimal supplyAmount, BigDecimal vatAmount, String discountReason, BigDecimal estimatedPartnerAmount
     ) {
         this.tabletCount = tabletCount;
         this.wifiCount = wifiCount;
@@ -187,6 +191,7 @@ public class SalesOrder extends BaseEntity {
         this.rehearsalStaffPersonDays = extras.rehearsalStaffPersonDays();
         this.lodgingNights = extras.lodgingNights();
         this.lodgingPersons = extras.lodgingPersons();
+        this.customItemPartnerAmount = customItemPartnerAmount;
         this.supplyAmount = supplyAmount;
         this.vatAmount = vatAmount;
         this.totalAmount = supplyAmount.add(vatAmount);
@@ -205,8 +210,8 @@ public class SalesOrder extends BaseEntity {
         this.startsAt = change.getStartsAt();
         this.endsAt = change.getEndsAt();
         applyAmounts(
-                change.getTabletCount(), change.getWifiCount(), change.getOnsiteStaffPersonDays(), change.scopeExtras(), change.getSupplyAmount(),
-                change.getVatAmount(), change.getDiscountReason(), change.getEstimatedPartnerAmount()
+                change.getTabletCount(), change.getWifiCount(), change.getOnsiteStaffPersonDays(), change.scopeExtras(),
+                change.getCustomItemPartnerAmount(), change.getSupplyAmount(), change.getVatAmount(), change.getDiscountReason(), change.getEstimatedPartnerAmount()
         );
     }
 

@@ -27,6 +27,7 @@ import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.PartnerOrderAmount;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
+import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCustomItem;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteOption;
 import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import com.eformworks.signstage.backend.feature.order.repository.CustomerPriceRepository;
@@ -98,7 +99,7 @@ class OrderPricingServiceTest {
         stubVat();
 
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                plan, List.of(new SalesQuoteOption(11L, 2)), ServiceRegion.YEONGNAM_HONAM, ScopeExtras.NONE,
+                plan, List.of(new SalesQuoteOption(11L, 2)), List.of(), ServiceRegion.YEONGNAM_HONAM, ScopeExtras.NONE,
                 BigDecimal.valueOf(100_000), KRW, OrderFixtures.TODAY
         );
 
@@ -125,7 +126,7 @@ class OrderPricingServiceTest {
         given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> orderPricingService.calculateSalesQuote(
-                plan, List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
+                plan, List.of(), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
         )).isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(OrderErrorCode.CUSTOMER_PRICE_NOT_FOUND);
@@ -141,7 +142,7 @@ class OrderPricingServiceTest {
                 .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
 
         PartnerOrderAmount amount = orderPricingService.calculatePartnerOrderAmount(
-                7L, 4, 0, 1, ScopeExtras.NONE, ServiceRegion.CAPITAL, BigDecimal.valueOf(-50_000), KRW, OrderFixtures.TODAY
+                7L, 4, 0, 1, ScopeExtras.NONE, null, ServiceRegion.CAPITAL, BigDecimal.valueOf(-50_000), KRW, OrderFixtures.TODAY
         );
 
         // 500,000 + 4×100,000 + 1×400,000 + 0 − 50,000
@@ -165,7 +166,7 @@ class OrderPricingServiceTest {
         stubVat();
 
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                plan, List.of(), ServiceRegion.JEJU_ISLAND, new ScopeExtras(3, 2, 1, 2), null, KRW, OrderFixtures.TODAY
+                plan, List.of(), List.of(), ServiceRegion.JEJU_ISLAND, new ScopeExtras(3, 2, 1, 2), null, KRW, OrderFixtures.TODAY
         );
 
         assertThat(calculation.lines()).extracting(SalesQuoteCalculation.Line::lineType).containsExactly(
@@ -185,7 +186,7 @@ class OrderPricingServiceTest {
                 .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.JEJU_ISLAND, 0, 0, 100_000, 80_000)));
 
         PartnerOrderAmount amount = orderPricingService.calculatePartnerOrderAmount(
-                null, 4, 0, 1, new ScopeExtras(2, 1, 1, 2), ServiceRegion.JEJU_ISLAND, null, KRW, OrderFixtures.TODAY
+                null, 4, 0, 1, new ScopeExtras(2, 1, 1, 2), null, ServiceRegion.JEJU_ISLAND, null, KRW, OrderFixtures.TODAY
         );
 
         // 500,000 + (4+2)×100,000 + (1+1)×400,000 + 80,000×2
@@ -211,7 +212,7 @@ class OrderPricingServiceTest {
         stubVat();
 
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                plan, List.of(new SalesQuoteOption(13L, 1)), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
+                plan, List.of(new SalesQuoteOption(13L, 1)), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
         );
 
         // 3,000,000 + 30,000×1
@@ -229,7 +230,7 @@ class OrderPricingServiceTest {
                 .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
 
         PartnerOrderAmount amount = orderPricingService.calculatePartnerOrderAmount(
-                null, 4, 3, 1, ScopeExtras.NONE, ServiceRegion.CAPITAL, null, KRW, OrderFixtures.TODAY
+                null, 4, 3, 1, ScopeExtras.NONE, null, ServiceRegion.CAPITAL, null, KRW, OrderFixtures.TODAY
         );
 
         // 500,000 + 4×100,000 + 3×20,000 + 1×400,000
@@ -239,10 +240,80 @@ class OrderPricingServiceTest {
     }
 
     @Test
+    @DisplayName("고객 견적 — 직접 입력 항목은 패키지 세금 코드로 줄을 만들고, 수량 × 발주 단가를 발주 금액 합계로 낸다")
+    void calculateSalesQuote_addsCustomItems() {
+        BillingPlan plan = OrderFixtures.plan(1L);
+        given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of());
+        given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY))
+                .willReturn(Optional.of(customerPrice(plan, null, 3_000_000)));
+        given(regionSurchargeRepository.findEffective(ServiceRegion.CAPITAL, OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
+        stubVat();
+
+        SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
+                plan, List.of(),
+                List.of(
+                        new SalesQuoteCustomItem(" 태블릿 받침대 ", 4, BigDecimal.valueOf(20_000), BigDecimal.valueOf(12_000)),
+                        new SalesQuoteCustomItem("현수막 디자인", 1, BigDecimal.valueOf(150_000), null)
+                ),
+                ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
+        );
+
+        assertThat(calculation.lines()).extracting(SalesQuoteCalculation.Line::lineType).containsExactly(
+                SalesOrderLineType.BILLING_PLAN, SalesOrderLineType.CUSTOM_ITEM, SalesOrderLineType.CUSTOM_ITEM
+        );
+        SalesQuoteCalculation.Line stand = calculation.lines().get(1);
+        assertThat(stand.name()).isEqualTo("태블릿 받침대");
+        assertThat(stand.amount()).isEqualByComparingTo("80000");
+        assertThat(stand.taxCode()).isEqualTo("KR_VAT_STANDARD");
+        assertThat(stand.partnerUnitPrice()).isEqualByComparingTo("12000");
+        assertThat(stand.customerPriceId()).isNull();
+        assertThat(calculation.lines().get(2).partnerUnitPrice()).isEqualByComparingTo("0");
+        // 3,000,000 + 20,000×4 + 150,000
+        assertThat(calculation.supplyAmount()).isEqualByComparingTo("3230000");
+        // 12,000×4 + 0
+        assertThat(calculation.customItemPartnerAmount()).isEqualByComparingTo("48000");
+    }
+
+    @Test
+    @DisplayName("직접 입력 항목은 이름이 있고 금액이 음수가 아니어야 한다")
+    void calculateSalesQuote_rejectsInvalidCustomItem() {
+        BillingPlan plan = OrderFixtures.plan(1L);
+        given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of());
+        given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY))
+                .willReturn(Optional.of(customerPrice(plan, null, 3_000_000)));
+        stubVat();
+
+        assertThatThrownBy(() -> orderPricingService.calculateSalesQuote(
+                plan, List.of(), List.of(new SalesQuoteCustomItem("받침대", 1, BigDecimal.TEN, BigDecimal.valueOf(-1))),
+                ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
+        )).isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CommonErrorCode.INVALID_REQUEST);
+    }
+
+    @Test
+    @DisplayName("발주 금액 — 직접 입력 항목의 발주 금액 합계를 더한다")
+    void calculatePartnerOrderAmount_includesCustomItems() {
+        given(partnerRateCardRepository.findEffectiveDefault(OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.rateCard(null, 500_000, 100_000, 400_000)));
+        given(regionSurchargeRepository.findEffective(ServiceRegion.CAPITAL, OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
+
+        PartnerOrderAmount amount = orderPricingService.calculatePartnerOrderAmount(
+                null, 4, 0, 1, ScopeExtras.NONE, BigDecimal.valueOf(48_000), ServiceRegion.CAPITAL, null, KRW, OrderFixtures.TODAY
+        );
+
+        // 500,000 + 4×100,000 + 1×400,000 + 48,000
+        assertThat(amount.totalAmount()).isEqualByComparingTo("1348000");
+        assertThat(amount.customItemAmount()).isEqualByComparingTo("48000");
+    }
+
+    @Test
     @DisplayName("숙박은 박수와 인원을 함께 넣어야 한다")
     void calculatePartnerOrderAmount_rejectsHalfLodging() {
         assertThatThrownBy(() -> orderPricingService.calculatePartnerOrderAmount(
-                null, 4, 0, 1, new ScopeExtras(0, 0, 1, 0), ServiceRegion.CAPITAL, null, KRW, OrderFixtures.TODAY
+                null, 4, 0, 1, new ScopeExtras(0, 0, 1, 0), null, ServiceRegion.CAPITAL, null, KRW, OrderFixtures.TODAY
         )).isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CommonErrorCode.INVALID_REQUEST);
@@ -257,7 +328,7 @@ class OrderPricingServiceTest {
                 .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
         // 발주 1,300,000 / 공급가 1,500,000 → 마진 200,000 < 300,000(20%)
         SalesQuoteCalculation calculation = new SalesQuoteCalculation(
-                List.of(), BigDecimal.valueOf(1_500_000), BigDecimal.valueOf(150_000), 4, 1, ScopeExtras.NONE, null, 0
+                List.of(), BigDecimal.valueOf(1_500_000), BigDecimal.valueOf(150_000), 4, 1, ScopeExtras.NONE, null, 0, BigDecimal.ZERO
         );
 
         assertThatThrownBy(() -> orderPricingService.estimatePartnerAmountWithinMargin(

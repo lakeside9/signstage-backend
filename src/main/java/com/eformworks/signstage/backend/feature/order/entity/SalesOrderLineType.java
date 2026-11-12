@@ -10,6 +10,8 @@ public enum SalesOrderLineType {
     REHEARSAL_STAFF,
     /** 숙박(D26) — 박수 × 인원 × 권역 1박 금액 */
     LODGING,
+    /** 직접 입력 항목 — 카탈로그에 없는 품목. 고객 단가와 발주 단가를 관리자가 넣는다. */
+    CUSTOM_ITEM,
     /** 영업 할인 — 금액이 음수다 */
     DISCOUNT
 }

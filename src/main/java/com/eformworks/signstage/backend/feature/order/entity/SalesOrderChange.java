@@ -63,6 +63,9 @@ public class SalesOrderChange extends BaseEntity {
     @Column(name = "before_onsite_staff_person_days", nullable = false)
     private int beforeOnsiteStaffPersonDays;
 
+    @Column(name = "before_custom_item_partner_amount", nullable = false, precision = 19, scale = 4)
+    private BigDecimal beforeCustomItemPartnerAmount;
+
     @Column(name = "before_spare_tablet_count", nullable = false)
     private int beforeSpareTabletCount;
 
@@ -92,6 +95,10 @@ public class SalesOrderChange extends BaseEntity {
 
     @Column(name = "onsite_staff_person_days", nullable = false)
     private int onsiteStaffPersonDays;
+
+    /** 변경 후 직접 입력 항목의 발주 금액 합계. */
+    @Column(name = "custom_item_partner_amount", nullable = false, precision = 19, scale = 4)
+    private BigDecimal customItemPartnerAmount;
 
     /** 변경 후 예비 태블릿·리허설 별도일 인력·숙박(D23·D24·D26). */
     @Column(name = "spare_tablet_count", nullable = false)
@@ -168,7 +175,7 @@ public class SalesOrderChange extends BaseEntity {
     @Builder
     private SalesOrderChange(
             SalesOrder salesOrder, PartnerOrder partnerOrder, String reason, int tabletCount, int wifiCount, int onsiteStaffPersonDays,
-            ScopeExtras extras, BigDecimal supplyAmount, BigDecimal vatAmount, String discountReason, BigDecimal estimatedPartnerAmount,
+            ScopeExtras extras, BigDecimal customItemPartnerAmount, BigDecimal supplyAmount, BigDecimal vatAmount, String discountReason, BigDecimal estimatedPartnerAmount,
             BigDecimal partnerAmount, String location, LocalDateTime startsAt, LocalDateTime endsAt, Long proposedBy,
             Long regionSurchargeId
     ) {
@@ -179,6 +186,7 @@ public class SalesOrderChange extends BaseEntity {
         this.beforeTabletCount = salesOrder.getTabletCount();
         this.beforeWifiCount = salesOrder.getWifiCount();
         this.beforeOnsiteStaffPersonDays = salesOrder.getOnsiteStaffPersonDays();
+        this.beforeCustomItemPartnerAmount = salesOrder.getCustomItemPartnerAmount();
         this.beforeSpareTabletCount = salesOrder.getSpareTabletCount();
         this.beforeRehearsalStaffPersonDays = salesOrder.getRehearsalStaffPersonDays();
         this.beforeLodgingNights = salesOrder.getLodgingNights();
@@ -194,6 +202,7 @@ public class SalesOrderChange extends BaseEntity {
         this.rehearsalStaffPersonDays = after.rehearsalStaffPersonDays();
         this.lodgingNights = after.lodgingNights();
         this.lodgingPersons = after.lodgingPersons();
+        this.customItemPartnerAmount = customItemPartnerAmount != null ? customItemPartnerAmount : BigDecimal.ZERO;
         this.supplyAmount = supplyAmount;
         this.vatAmount = vatAmount;
         this.totalAmount = supplyAmount.add(vatAmount);

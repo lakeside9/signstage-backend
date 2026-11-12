@@ -5,6 +5,7 @@ import com.eformworks.signstage.backend.feature.order.entity.SalesOrderChangeLin
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLine;
 import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
+import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCustomItem;
 import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -64,6 +65,10 @@ public final class PlatformAdminSalesOrderDto {
 
             @Valid
             private List<Option> options = new ArrayList<>();
+
+            /** 카탈로그에 없는 직접 입력 항목. */
+            @Valid
+            private List<CustomItem> customItems = new ArrayList<>();
 
             @PositiveOrZero
             private BigDecimal discountAmount;
@@ -125,6 +130,37 @@ public final class PlatformAdminSalesOrderDto {
 
             @Positive
             private int quantity;
+        }
+
+        /** 직접 입력 항목 — 품목명·수량·고객 단가와 발주 단가(생략하면 0, 플랫폼이 처리하는 항목). */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class CustomItem {
+
+            @NotBlank
+            @Size(max = 200)
+            private String name;
+
+            @Positive
+            @Max(MAX_EXTRA_QUANTITY)
+            private int quantity;
+
+            @NotNull
+            @PositiveOrZero
+            private BigDecimal unitPrice;
+
+            @PositiveOrZero
+            private BigDecimal partnerUnitPrice;
+
+            public static List<SalesQuoteCustomItem> toModels(List<CustomItem> items) {
+                return items == null
+                        ? List.of()
+                        : items.stream()
+                                .map(item -> new SalesQuoteCustomItem(item.name, item.quantity, item.unitPrice, item.partnerUnitPrice))
+                                .toList();
+            }
         }
 
         /** 메일·전화로 받은 고객 수락을 플랫폼이 대신 기록한다. */
@@ -215,6 +251,7 @@ public final class PlatformAdminSalesOrderDto {
             private final int tabletCount;
             private final int wifiCount;
             private final int onsiteStaffPersonDays;
+            private final BigDecimal customItemPartnerAmount;
             private final int spareTabletCount;
             private final int rehearsalStaffPersonDays;
             private final int lodgingNights;
@@ -257,6 +294,7 @@ public final class PlatformAdminSalesOrderDto {
                         salesOrder.getTabletCount(),
                         salesOrder.getWifiCount(),
                         salesOrder.getOnsiteStaffPersonDays(),
+                        salesOrder.getCustomItemPartnerAmount(),
                         salesOrder.getSpareTabletCount(),
                         salesOrder.getRehearsalStaffPersonDays(),
                         salesOrder.getLodgingNights(),
@@ -293,6 +331,8 @@ public final class PlatformAdminSalesOrderDto {
             private final BigDecimal amount;
             private final BigDecimal taxRatePercent;
             private final BigDecimal taxAmount;
+            /** 직접 입력 줄의 발주 단가 — 관리자 화면에만 보인다. */
+            private final BigDecimal partnerUnitPrice;
 
             public static QuoteLine from(SalesQuoteCalculation.Line line) {
                 return new QuoteLine(
@@ -303,7 +343,8 @@ public final class PlatformAdminSalesOrderDto {
                         line.unitPrice(),
                         line.amount(),
                         line.taxRatePercent(),
-                        line.taxAmount()
+                        line.taxAmount(),
+                        line.partnerUnitPrice()
                 );
             }
 
@@ -316,7 +357,8 @@ public final class PlatformAdminSalesOrderDto {
                         line.getUnitPrice(),
                         line.getAmount(),
                         line.getTaxRatePercent(),
-                        line.getTaxAmount()
+                        line.getTaxAmount(),
+                        line.getPartnerUnitPrice()
                 );
             }
 
@@ -329,7 +371,8 @@ public final class PlatformAdminSalesOrderDto {
                         line.getUnitPrice(),
                         line.getAmount(),
                         line.getTaxRatePercent(),
-                        line.getTaxAmount()
+                        line.getTaxAmount(),
+                        line.getPartnerUnitPrice()
                 );
             }
         }

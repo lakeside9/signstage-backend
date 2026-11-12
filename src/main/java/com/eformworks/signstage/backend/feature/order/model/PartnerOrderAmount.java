@@ -25,6 +25,7 @@ public record PartnerOrderAmount(
         Long partnerRateCardId,
         Long regionSurchargeId,
         int wifiCount,
-        BigDecimal wifiUnitRate
+        BigDecimal wifiUnitRate,
+        BigDecimal customItemAmount
 ) {
 }

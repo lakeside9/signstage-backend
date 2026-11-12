@@ -21,7 +21,8 @@ import lombok.NoArgsConstructor;
 
 /**
  * 수주 견적 줄 — 견적 시점의 이름·단가·세율을 스냅샷한다. {@code unitProduct}는 UNIT_PRODUCT 줄에만
- * 있다(발주 수락 때 행사 범위로 옮긴다). DISCOUNT 줄은 금액이 음수다.
+ * 있다(발주 수락 때 행사 범위로 옮긴다). CUSTOM_ITEM 줄은 단위 상품 없이 이름과 발주 단가를 둔다.
+ * DISCOUNT 줄은 금액이 음수다.
  */
 @Entity
 @Table(name = "sales_order_lines")
@@ -73,11 +74,15 @@ public class SalesOrderLine extends BaseEntity {
     @Column(name = "customer_price_id")
     private Long customerPriceId;
 
+    /** 직접 입력 항목(CUSTOM_ITEM)의 발주 단가 — 수량을 곱해 발주 금액에 더한다. 다른 줄은 null이다. */
+    @Column(name = "partner_unit_price", precision = 19, scale = 4)
+    private BigDecimal partnerUnitPrice;
+
     @Builder
     private SalesOrderLine(
             SalesOrder salesOrder, SalesOrderLineType lineType, UnitProduct unitProduct, String name, int quantity,
             BigDecimal unitPrice, BigDecimal amount, String taxCode, BigDecimal taxRatePercent, BigDecimal taxAmount,
-            int displayOrder, Long customerPriceId
+            int displayOrder, Long customerPriceId, BigDecimal partnerUnitPrice
     ) {
         this.salesOrder = salesOrder;
         this.lineType = lineType;
@@ -91,5 +96,6 @@ public class SalesOrderLine extends BaseEntity {
         this.taxAmount = taxAmount;
         this.displayOrder = displayOrder;
         this.customerPriceId = customerPriceId;
+        this.partnerUnitPrice = partnerUnitPrice;
     }
 }

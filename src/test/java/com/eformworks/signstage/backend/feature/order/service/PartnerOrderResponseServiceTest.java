@@ -158,7 +158,7 @@ class PartnerOrderResponseServiceTest {
         previous.cancel("파트너 사정");
         given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(100L)).willReturn(List.of(issued, previous));
         given(platformOrderCeremonyService.transferPlatformOrderCeremony(ceremony, PARTNER_ID, USER_ID)).willReturn(ceremony);
-        given(salesOrderService.findOptionLines(100L)).willReturn(List.of());
+        given(salesOrderService.findPartnerScopeLines(100L)).willReturn(List.of());
 
         partnerOrderResponseService.acceptOrder(PARTNER_ID, PARTNER_ORDER_ID, USER_ID);
 
@@ -174,7 +174,7 @@ class PartnerOrderResponseServiceTest {
         givenMember(MemberRole.OWNER, true);
         PartnerOrder issued = partnerOrder(LocalDateTime.now().plusDays(1));
         given(partnerOrderRepository.findByIdAndOrganizationId(PARTNER_ORDER_ID, PARTNER_ID)).willReturn(Optional.of(issued));
-        given(salesOrderService.findOptionLines(100L)).willReturn(List.of());
+        given(salesOrderService.findPartnerScopeLines(100L)).willReturn(List.of());
 
         partnerOrderResponseService.rejectOrder(PARTNER_ID, PARTNER_ORDER_ID, USER_ID, "일정 불가");
 

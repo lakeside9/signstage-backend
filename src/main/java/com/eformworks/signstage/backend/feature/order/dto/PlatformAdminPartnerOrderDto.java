@@ -103,6 +103,7 @@ public final class PlatformAdminPartnerOrderDto {
             private final int lodgingNights;
             private final int lodgingPersons;
             private final BigDecimal lodgingNightRate;
+            private final BigDecimal customItemAmount;
 
             public static AdminPartnerOrderSummary from(PartnerOrder partnerOrder, LocalDateTime now) {
                 return new AdminPartnerOrderSummary(
@@ -135,7 +136,8 @@ public final class PlatformAdminPartnerOrderDto {
                         partnerOrder.getRehearsalStaffPersonDays(),
                         partnerOrder.getLodgingNights(),
                         partnerOrder.getLodgingPersons(),
-                        partnerOrder.getLodgingNightRate()
+                        partnerOrder.getLodgingNightRate(),
+                        partnerOrder.getCustomItemAmount()
                 );
             }
         }
@@ -163,6 +165,7 @@ public final class PlatformAdminPartnerOrderDto {
             private final int rehearsalStaffPersonDays;
             private final int lodgingPersonNights;
             private final BigDecimal lodgingNightRate;
+            private final BigDecimal customItemAmount;
             private final BigDecimal marginAmount;
             private final boolean marginSufficient;
 
@@ -191,6 +194,7 @@ public final class PlatformAdminPartnerOrderDto {
                         amount.rehearsalStaffPersonDays(),
                         amount.lodgingPersonNights(),
                         amount.lodgingNightRate(),
+                        amount.customItemAmount(),
                         customerSupplyAmount.subtract(amount.totalAmount()),
                         marginSufficient
                 );

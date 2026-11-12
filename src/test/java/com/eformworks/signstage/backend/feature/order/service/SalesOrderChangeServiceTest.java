@@ -145,7 +145,7 @@ class SalesOrderChangeServiceTest {
         PartnerOrder accepted = acceptedOrder();
         given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(SALES_ORDER_ID)).willReturn(List.of(accepted));
         given(customerInvoiceRepository.findAllBySalesOrderIdOrderByIdAsc(SALES_ORDER_ID)).willReturn(List.of());
-        given(orderPricingService.calculateSalesQuote(any(), anyList(), any(), any(), any(), any(), any()))
+        given(orderPricingService.calculateSalesQuote(any(), anyList(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(calculation(6, BigDecimal.valueOf(3_400_000)));
         given(salesOrderChangeRepository.save(any(SalesOrderChange.class))).willAnswer(invocation -> invocation.getArgument(0));
         given(salesOrderChangeLineRepository.save(any(SalesOrderChangeLine.class))).willAnswer(invocation -> invocation.getArgument(0));
@@ -177,7 +177,7 @@ class SalesOrderChangeServiceTest {
         PartnerOrder accepted = acceptedOrder();
         given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(SALES_ORDER_ID)).willReturn(List.of(accepted));
         given(customerInvoiceRepository.findAllBySalesOrderIdOrderByIdAsc(SALES_ORDER_ID)).willReturn(List.of());
-        given(orderPricingService.calculateSalesQuote(any(), anyList(), any(), any(), any(), any(), any()))
+        given(orderPricingService.calculateSalesQuote(any(), anyList(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(calculation(4, 2, BigDecimal.valueOf(3_100_000)));
         given(salesOrderChangeRepository.save(any(SalesOrderChange.class))).willAnswer(invocation -> invocation.getArgument(0));
         given(salesOrderChangeLineRepository.save(any(SalesOrderChangeLine.class))).willAnswer(invocation -> invocation.getArgument(0));
@@ -189,6 +189,27 @@ class SalesOrderChangeServiceTest {
         assertThat(change.getPartnerAmount()).isEqualByComparingTo("1340000");
         assertThat(change.getBeforeWifiCount()).isZero();
         assertThat(change.getWifiCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("범위 변경에 직접 입력 항목이 있으면 그 발주 금액 합계를 발주 금액에 더한다")
+    void proposeChange_addsCustomItemPartnerAmount() {
+        givenManageAllowed();
+        PartnerOrder accepted = acceptedOrder();
+        given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(SALES_ORDER_ID)).willReturn(List.of(accepted));
+        given(customerInvoiceRepository.findAllBySalesOrderIdOrderByIdAsc(SALES_ORDER_ID)).willReturn(List.of());
+        given(orderPricingService.calculateSalesQuote(any(), anyList(), anyList(), any(), any(), any(), any(), any()))
+                .willReturn(calculation(4, 0, BigDecimal.valueOf(60_000), BigDecimal.valueOf(3_100_000)));
+        given(salesOrderChangeRepository.save(any(SalesOrderChange.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(salesOrderChangeLineRepository.save(any(SalesOrderChangeLine.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        SalesOrderChangeDto.Response.AdminChange change =
+                salesOrderChangeService.proposeChange(SALES_ORDER_ID, ADMIN_ID, ROLE, proposeRequest(4));
+
+        // 1,300,000 + 직접 입력 항목 60,000
+        assertThat(change.getPartnerAmount()).isEqualByComparingTo("1360000");
+        verify(salesOrderChangeRepository).save(argThat(saved -> saved.getCustomItemPartnerAmount().compareTo(BigDecimal.valueOf(60_000)) == 0
+                && saved.getBeforeCustomItemPartnerAmount().signum() == 0));
     }
 
     @Test
@@ -323,11 +344,17 @@ class SalesOrderChangeServiceTest {
     }
 
     private SalesQuoteCalculation calculation(int tabletCount, int wifiCount, BigDecimal supplyAmount) {
+        return calculation(tabletCount, wifiCount, BigDecimal.ZERO, supplyAmount);
+    }
+
+    private SalesQuoteCalculation calculation(
+            int tabletCount, int wifiCount, BigDecimal customItemPartnerAmount, BigDecimal supplyAmount
+    ) {
         SalesQuoteCalculation.Line line = new SalesQuoteCalculation.Line(
                 SalesOrderLineType.UNIT_PRODUCT, tablets, "태블릿", tabletCount - 2, BigDecimal.valueOf(100_000),
                 BigDecimal.valueOf(100_000L * (tabletCount - 2)), "KR_VAT_STANDARD", BigDecimal.TEN, BigDecimal.ZERO, 51L
         );
-        return new SalesQuoteCalculation(List.of(line), supplyAmount, supplyAmount.divide(BigDecimal.TEN), tabletCount, 1, ScopeExtras.NONE, 61L, wifiCount);
+        return new SalesQuoteCalculation(List.of(line), supplyAmount, supplyAmount.divide(BigDecimal.TEN), tabletCount, 1, ScopeExtras.NONE, 61L, wifiCount, customItemPartnerAmount);
     }
 
     private SalesOrderLine salesOrderLine(int quantity) {
@@ -364,6 +391,7 @@ class SalesOrderChangeServiceTest {
         return new SalesOrderChangeDto.Request.Propose(
                 "고객 요청으로 태블릿 추가",
                 List.of(new PlatformAdminSalesOrderDto.Request.Option(11L, tablets - 2)),
+                List.of(),
                 null, null, null, null, null, null, null, null, null
         );
     }

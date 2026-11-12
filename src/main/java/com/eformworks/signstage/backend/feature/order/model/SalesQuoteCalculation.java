@@ -14,6 +14,7 @@ import java.util.List;
  * @param onsiteStaffPersonDays 플랜 포함 + 옵션 현장 인력 인·일
  * @param extras 예비 태블릿·리허설 별도일 인력·숙박(D23·D24·D26)
  * @param regionSurchargeId 계산에 쓴 권역 할증 행(가격표 사용 여부 판단)
+ * @param customItemPartnerAmount 직접 입력 항목의 발주 금액 합계(수량 × 발주 단가)
  */
 public record SalesQuoteCalculation(
         List<Line> lines,
@@ -23,10 +24,14 @@ public record SalesQuoteCalculation(
         int onsiteStaffPersonDays,
         ScopeExtras extras,
         Long regionSurchargeId,
-        int wifiCount
+        int wifiCount,
+        BigDecimal customItemPartnerAmount
 ) {
 
-    /** @param customerPriceId 단가를 가져온 고객 가격 행. 할인·할증·숙박 줄은 null이다. */
+    /**
+     * @param customerPriceId 단가를 가져온 고객 가격 행. 할인·할증·숙박·직접 입력 줄은 null이다.
+     * @param partnerUnitPrice 직접 입력 줄의 발주 단가. 다른 줄은 null이다.
+     */
     public record Line(
             SalesOrderLineType lineType,
             UnitProduct unitProduct,
@@ -37,7 +42,15 @@ public record SalesQuoteCalculation(
             String taxCode,
             BigDecimal taxRatePercent,
             BigDecimal taxAmount,
-            Long customerPriceId
+            Long customerPriceId,
+            BigDecimal partnerUnitPrice
     ) {
+
+        public Line(
+                SalesOrderLineType lineType, UnitProduct unitProduct, String name, int quantity, BigDecimal unitPrice,
+                BigDecimal amount, String taxCode, BigDecimal taxRatePercent, BigDecimal taxAmount, Long customerPriceId
+        ) {
+            this(lineType, unitProduct, name, quantity, unitPrice, amount, taxCode, taxRatePercent, taxAmount, customerPriceId, null);
+        }
     }
 }

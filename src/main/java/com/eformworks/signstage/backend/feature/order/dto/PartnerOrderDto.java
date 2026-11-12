@@ -108,6 +108,8 @@ public final class PartnerOrderDto {
             private final int lodgingNights;
             private final int lodgingPersons;
             private final BigDecimal lodgingNightRate;
+            /** 직접 입력 항목의 발주 금액 합계 — 품목별 발주 단가는 {@code options}에 있다. */
+            private final BigDecimal customItemAmount;
             private final BigDecimal adjustmentAmount;
             private final String adjustmentReason;
             private final LocalDateTime respondedAt;
@@ -146,6 +148,7 @@ public final class PartnerOrderDto {
                         partnerOrder.getLodgingNights(),
                         partnerOrder.getLodgingPersons(),
                         partnerOrder.getLodgingNightRate(),
+                        partnerOrder.getCustomItemAmount(),
                         partnerOrder.getAdjustmentAmount(),
                         partnerOrder.getAdjustmentReason(),
                         partnerOrder.getRespondedAt(),
@@ -155,7 +158,10 @@ public final class PartnerOrderDto {
             }
         }
 
-        /** 플랜 외 추가 범위(단위 상품과 수량). 고객 가격은 담지 않는다. */
+        /**
+         * 플랜 외 추가 범위(단위 상품 옵션과 직접 입력 항목). 고객 가격은 담지 않는다. 직접 입력 항목은
+         * {@code unitProductId}가 null이고 발주 단가를 보여준다.
+         */
         @Getter
         @AllArgsConstructor
         public static class ScopeOption {
@@ -163,9 +169,13 @@ public final class PartnerOrderDto {
             private final Long unitProductId;
             private final String name;
             private final int quantity;
+            private final BigDecimal partnerUnitPrice;
 
             public static ScopeOption from(SalesOrderLine line) {
-                return new ScopeOption(line.getUnitProduct().getId(), line.getName(), line.getQuantity());
+                return new ScopeOption(
+                        line.getUnitProduct() != null ? line.getUnitProduct().getId() : null, line.getName(), line.getQuantity(),
+                        line.getPartnerUnitPrice()
+                );
             }
         }
     }

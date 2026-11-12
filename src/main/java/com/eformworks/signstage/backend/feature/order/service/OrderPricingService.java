@@ -21,6 +21,7 @@ import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.PartnerOrderAmount;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
+import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCustomItem;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteOption;
 import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import com.eformworks.signstage.backend.feature.order.repository.CustomerPriceRepository;
@@ -68,6 +69,7 @@ public class OrderPricingService {
     public SalesQuoteCalculation calculateSalesQuote(
             BillingPlan plan,
             List<SalesQuoteOption> options,
+            List<SalesQuoteCustomItem> customItems,
             ServiceRegion region,
             ScopeExtras extras,
             BigDecimal discountAmount,
@@ -114,6 +116,26 @@ public class OrderPricingService {
             }
         }
 
+        // 직접 입력 항목은 고객 가격표가 없으므로 패키지 세금 코드를 쓴다.
+        BigDecimal customItemPartnerAmount = BigDecimal.ZERO;
+        for (SalesQuoteCustomItem item : customItems == null ? List.<SalesQuoteCustomItem>of() : customItems) {
+            BigDecimal partnerUnitPrice = item.partnerUnitPrice() == null ? BigDecimal.ZERO : item.partnerUnitPrice();
+            if (item.name() == null || item.name().isBlank() || item.quantity() < 1
+                    || item.unitPrice() == null || item.unitPrice().signum() < 0 || partnerUnitPrice.signum() < 0) {
+                throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+            }
+            SalesQuoteCalculation.Line line = buildLine(SalesOrderLineType.CUSTOM_ITEM, null, item.name().trim(), item.quantity(),
+                    item.unitPrice(), planPrice.getTaxCode(), null, currencyPolicy, asOfDate);
+            BigDecimal normalizedPartnerUnitPrice = moneyCalculator.normalize(partnerUnitPrice, currencyPolicy);
+            lines.add(new SalesQuoteCalculation.Line(
+                    line.lineType(), null, line.name(), line.quantity(), line.unitPrice(), line.amount(), line.taxCode(),
+                    line.taxRatePercent(), line.taxAmount(), null, normalizedPartnerUnitPrice
+            ));
+            customItemPartnerAmount = customItemPartnerAmount.add(
+                    moneyCalculator.normalize(normalizedPartnerUnitPrice.multiply(BigDecimal.valueOf(item.quantity())), currencyPolicy)
+            );
+        }
+
         RegionSurcharge surcharge = findRegionSurchargeOrThrow(region, asOfDate);
         checkCurrency(surcharge.getCurrencyCode(), currencyPolicy);
         if (surcharge.getCustomerAmount().signum() > 0) {
@@ -155,7 +177,8 @@ public class OrderPricingService {
         BigDecimal supplyAmount = lines.stream().map(SalesQuoteCalculation.Line::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal vatAmount = lines.stream().map(SalesQuoteCalculation.Line::taxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         return new SalesQuoteCalculation(
-                lines, supplyAmount, vatAmount, tabletCount, onsiteStaffPersonDays, extras, surcharge.getId(), wifiCount
+                lines, supplyAmount, vatAmount, tabletCount, onsiteStaffPersonDays, extras, surcharge.getId(), wifiCount,
+                customItemPartnerAmount
         );
     }
 
@@ -168,6 +191,7 @@ public class OrderPricingService {
             int wifiCount,
             int onsiteStaffPersonDays,
             ScopeExtras extras,
+            BigDecimal customItemAmount,
             ServiceRegion region,
             BigDecimal adjustmentAmount,
             CurrencyPolicy currencyPolicy,
@@ -189,6 +213,9 @@ public class OrderPricingService {
         BigDecimal onsiteStaffDayRate = moneyCalculator.normalize(rateCard.getOnsiteStaffDayRate(), currencyPolicy);
         BigDecimal regionSurcharge = moneyCalculator.normalize(surcharge.getPartnerAmount(), currencyPolicy);
         BigDecimal lodgingNightRate = moneyCalculator.normalize(surcharge.getLodgingPartnerAmount(), currencyPolicy);
+        BigDecimal customItems = moneyCalculator.normalize(
+                customItemAmount == null ? BigDecimal.ZERO : customItemAmount, currencyPolicy
+        );
         BigDecimal adjustment = moneyCalculator.normalize(
                 adjustmentAmount == null ? BigDecimal.ZERO : adjustmentAmount, currencyPolicy
         );
@@ -198,6 +225,7 @@ public class OrderPricingService {
                 .add(onsiteStaffDayRate.multiply(BigDecimal.valueOf(onsiteStaffPersonDays + extras.rehearsalStaffPersonDays())))
                 .add(regionSurcharge)
                 .add(lodgingNightRate.multiply(BigDecimal.valueOf(extras.lodgingPersonNights())))
+                .add(customItems)
                 .add(adjustment);
         if (total.signum() < 0) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
@@ -206,7 +234,7 @@ public class OrderPricingService {
                 baseFee, tabletCount, tabletUnitRate, onsiteStaffPersonDays, onsiteStaffDayRate,
                 regionSurcharge, adjustment, moneyCalculator.normalize(total, currencyPolicy),
                 extras.spareTabletCount(), extras.rehearsalStaffPersonDays(), extras.lodgingPersonNights(), lodgingNightRate,
-                rateCard.getId(), surcharge.getId(), wifiCount, wifiUnitRate
+                rateCard.getId(), surcharge.getId(), wifiCount, wifiUnitRate, customItems
         );
     }
 
@@ -221,7 +249,8 @@ public class OrderPricingService {
             LocalDate asOfDate
     ) {
         PartnerOrderAmount estimated = calculatePartnerOrderAmount(
-                null, calculation.tabletCount(), calculation.wifiCount(), calculation.onsiteStaffPersonDays(), calculation.extras(), region, BigDecimal.ZERO,
+                null, calculation.tabletCount(), calculation.wifiCount(), calculation.onsiteStaffPersonDays(), calculation.extras(),
+                calculation.customItemPartnerAmount(), region, BigDecimal.ZERO,
                 currencyPolicy, asOfDate
         );
         platformOrderMarginPolicy.checkMargin(calculation.supplyAmount(), estimated.totalAmount());

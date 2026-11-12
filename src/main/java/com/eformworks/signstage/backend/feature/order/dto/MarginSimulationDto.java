@@ -43,6 +43,10 @@ public final class MarginSimulationDto {
             @Valid
             private List<PlatformAdminSalesOrderDto.Request.Option> options = new ArrayList<>();
 
+            /** 카탈로그에 없는 직접 입력 항목. */
+            @Valid
+            private List<PlatformAdminSalesOrderDto.Request.CustomItem> customItems = new ArrayList<>();
+
             @PositiveOrZero
             private BigDecimal discountAmount;
 

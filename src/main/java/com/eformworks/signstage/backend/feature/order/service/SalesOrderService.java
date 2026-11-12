@@ -202,10 +202,18 @@ public class SalesOrderService {
                 .orElseThrow(() -> new ApplicationException(OrderErrorCode.SALES_ORDER_NOT_FOUND));
     }
 
-    /** 수주 범위 중 옵션(단위 상품) 줄 — 발주 수락 때 행사 범위로 옮기고, 파트너 화면에 보여준다. */
+    /** 수주 범위 중 옵션(단위 상품) 줄 — 발주 수락 때 행사 범위로 옮긴다. 직접 입력 줄은 행사에 넣지 않는다. */
     List<SalesOrderLine> findOptionLines(Long salesOrderId) {
         return salesOrderLineRepository.findAllBySalesOrderIdOrderByDisplayOrder(salesOrderId).stream()
                 .filter(line -> line.getLineType() == SalesOrderLineType.UNIT_PRODUCT)
+                .toList();
+    }
+
+    /** 파트너에게 보여줄 추가 범위 — 옵션 줄과 직접 입력 줄. */
+    List<SalesOrderLine> findPartnerScopeLines(Long salesOrderId) {
+        return salesOrderLineRepository.findAllBySalesOrderIdOrderByDisplayOrder(salesOrderId).stream()
+                .filter(line -> line.getLineType() == SalesOrderLineType.UNIT_PRODUCT
+                        || line.getLineType() == SalesOrderLineType.CUSTOM_ITEM)
                 .toList();
     }
 
@@ -238,7 +246,7 @@ public class SalesOrderService {
                         .map(option -> new SalesQuoteOption(option.getUnitProductId(), option.getQuantity()))
                         .toList();
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                plan, options, request.getRegion(), request.scopeExtras(), request.getDiscountAmount(), currencyPolicy, today
+                plan, options, PlatformAdminSalesOrderDto.Request.CustomItem.toModels(request.getCustomItems()), request.getRegion(), request.scopeExtras(), request.getDiscountAmount(), currencyPolicy, today
         );
         BigDecimal estimatedPartnerAmount = orderPricingService.estimatePartnerAmountWithinMargin(
                 calculation, request.getRegion(), currencyPolicy, today
@@ -250,7 +258,7 @@ public class SalesOrderService {
         );
         salesOrder.applyAmounts(
                 calculation.tabletCount(), calculation.wifiCount(), calculation.onsiteStaffPersonDays(), calculation.extras(),
-                calculation.supplyAmount(), calculation.vatAmount(), request.getDiscountReason(), estimatedPartnerAmount
+                calculation.customItemPartnerAmount(), calculation.supplyAmount(), calculation.vatAmount(), request.getDiscountReason(), estimatedPartnerAmount
         );
         salesOrder.useRegionSurcharge(calculation.regionSurchargeId());
         if (isNew) {
@@ -273,6 +281,7 @@ public class SalesOrderService {
                     .taxAmount(line.taxAmount())
                     .displayOrder(displayOrder++)
                     .customerPriceId(line.customerPriceId())
+                    .partnerUnitPrice(line.partnerUnitPrice())
                     .build());
         }
     }

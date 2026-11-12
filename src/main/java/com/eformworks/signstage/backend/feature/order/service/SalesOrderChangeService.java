@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.ceremony.model.PlatformOrderCeremonyCommand;
 import com.eformworks.signstage.backend.feature.ceremony.service.PlatformOrderCeremonyService;
+import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminSalesOrderDto;
 import com.eformworks.signstage.backend.feature.order.dto.SalesOrderChangeDto;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoice;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceType;
@@ -133,7 +134,7 @@ public class SalesOrderChangeService {
                         .map(option -> new SalesQuoteOption(option.getUnitProductId(), option.getQuantity()))
                         .toList();
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                salesOrder.getBillingPlan(), options, salesOrder.getRegion(), request.scopeExtrasOr(salesOrder.scopeExtras()),
+                salesOrder.getBillingPlan(), options, PlatformAdminSalesOrderDto.Request.CustomItem.toModels(request.getCustomItems()), salesOrder.getRegion(), request.scopeExtrasOr(salesOrder.scopeExtras()),
                 request.getDiscountAmount(), salesOrder.currencyPolicy(), today
         );
         BigDecimal invoicedSupply = activeInvoices.stream()
@@ -146,7 +147,8 @@ public class SalesOrderChangeService {
         BigDecimal estimatedPartnerAmount;
         if (acceptedOrder != null) {
             partnerAmount = acceptedOrder.amountFor(
-                    calculation.tabletCount(), calculation.wifiCount(), calculation.onsiteStaffPersonDays(), calculation.extras()
+                    calculation.tabletCount(), calculation.wifiCount(), calculation.onsiteStaffPersonDays(), calculation.extras(),
+                    calculation.customItemPartnerAmount()
             );
             orderPricingService.checkPartnerOrderMargin(calculation.supplyAmount(), partnerAmount);
             estimatedPartnerAmount = partnerAmount;
@@ -164,6 +166,7 @@ public class SalesOrderChangeService {
                 .wifiCount(calculation.wifiCount())
                 .onsiteStaffPersonDays(calculation.onsiteStaffPersonDays())
                 .extras(calculation.extras())
+                .customItemPartnerAmount(calculation.customItemPartnerAmount())
                 .supplyAmount(calculation.supplyAmount())
                 .vatAmount(calculation.vatAmount())
                 .discountReason(request.getDiscountReason() == null || request.getDiscountReason().isBlank()
@@ -196,6 +199,7 @@ public class SalesOrderChangeService {
                     .taxAmount(line.taxAmount())
                     .displayOrder(displayOrder++)
                     .customerPriceId(line.customerPriceId())
+                    .partnerUnitPrice(line.partnerUnitPrice())
                     .build()));
         }
         scopeChangeRequestRepository.findAllByPartnerOrderSalesOrderIdAndClosedAtIsNull(salesOrderId)
@@ -353,6 +357,7 @@ public class SalesOrderChangeService {
                     .taxAmount(line.getTaxAmount())
                     .displayOrder(line.getDisplayOrder())
                     .customerPriceId(line.getCustomerPriceId())
+                    .partnerUnitPrice(line.getPartnerUnitPrice())
                     .build());
         }
 
@@ -360,7 +365,7 @@ public class SalesOrderChangeService {
         if (partnerOrder != null) {
             partnerOrder.applyScopeChange(
                     change.getTabletCount(), change.getWifiCount(), change.getOnsiteStaffPersonDays(), change.scopeExtras(),
-                    change.getPartnerAmount()
+                    change.getCustomItemPartnerAmount(), change.getPartnerAmount()
             );
             platformOrderCeremonyService.applyScopeChange(
                     partnerOrder.getCeremony(), change.getLocation(), change.getStartsAt(), change.getEndsAt(),

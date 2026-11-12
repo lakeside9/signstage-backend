@@ -72,11 +72,15 @@ public class SalesOrderChangeLine extends BaseEntity {
     @Column(name = "customer_price_id")
     private Long customerPriceId;
 
+    /** 직접 입력 항목(CUSTOM_ITEM)의 발주 단가 — 수량을 곱해 발주 금액에 더한다. 다른 줄은 null이다. */
+    @Column(name = "partner_unit_price", precision = 19, scale = 4)
+    private BigDecimal partnerUnitPrice;
+
     @Builder
     private SalesOrderChangeLine(
             SalesOrderChange salesOrderChange, SalesOrderLineType lineType, UnitProduct unitProduct, String name,
             int quantity, BigDecimal unitPrice, BigDecimal amount, String taxCode, BigDecimal taxRatePercent,
-            BigDecimal taxAmount, int displayOrder, Long customerPriceId
+            BigDecimal taxAmount, int displayOrder, Long customerPriceId, BigDecimal partnerUnitPrice
     ) {
         this.salesOrderChange = salesOrderChange;
         this.lineType = lineType;
@@ -90,5 +94,6 @@ public class SalesOrderChangeLine extends BaseEntity {
         this.taxAmount = taxAmount;
         this.displayOrder = displayOrder;
         this.customerPriceId = customerPriceId;
+        this.partnerUnitPrice = partnerUnitPrice;
     }
 }
