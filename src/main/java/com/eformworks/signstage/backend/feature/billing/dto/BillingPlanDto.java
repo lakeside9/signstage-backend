@@ -15,7 +15,7 @@ import lombok.Setter;
  * 과금 플랜 — 단위 상품 묶음 + 전체 할인(signstage-docs
  * business/billing-catalog-unit-product-model-redesign-review.md 결정, 2026-09-10, 3.3절).
  * 플랜은 더 이상 자기 가격을 갖지 않는다 — "오늘 가격"은
- * {@code Σ(unitProduct.effectivePrice × includedQuantity)}로 조회 시점에 계산되고, 그 합계에
+ * {@code Σ(unitProduct.effectivePrice × includedQuantity × saleUnitQuantity)}로 조회 시점에 계산되고, 그 합계에
  * 적용할 할인만 {@code BillingPlanDiscountPeriod}로 기간별 관리한다.
  */
 public final class BillingPlanDto {
@@ -194,8 +194,13 @@ public final class BillingPlanDto {
             private final String unitProductType;
             private final String unitProductName;
             private final String unitProductCategory;
+            /** 포함 묶음 수(판매 단위 기준). */
             private final Integer includedQuantity;
-            /** "오늘" 기준 단위 상품 자체의 판매가(할인 없음) — 플랜 소계 계산에 쓰이는 값 그대로. */
+            /** 단위 상품의 판매 단위(묶음 하나의 개수). 1이면 묶음 상품이 아니다. */
+            private final Integer saleUnitQuantity;
+            /** 실제 포함 개수 = 묶음 수 × 판매 단위. */
+            private final Integer totalQuantity;
+            /** "오늘" 기준 단위 상품 자체의 판매가(할인 없음, 개당) — 플랜 소계는 개당 판매가 × totalQuantity다. */
             private final BigDecimal salePrice;
             private final String currencyCode;
         }

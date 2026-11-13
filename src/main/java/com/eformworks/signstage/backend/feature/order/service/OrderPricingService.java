@@ -21,6 +21,7 @@ import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.PartnerOrderAmount;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
+import com.eformworks.signstage.backend.feature.order.model.SalesQuoteAdjustment;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCustomItem;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteOption;
 import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
@@ -42,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
  * business/platform-order-partner-subcontract-review.md 6장(범위 플랜 + 고객 가격표 + 파트너 단가표).
  *
  * <ul>
- *   <li>고객 견적: 패키지(플랜) 가격 + 옵션(단위 상품) 가격 × 수량 + 지역 할증 − 영업 할인. 줄마다
+ *   <li>고객 견적: 패키지(플랜) 가격 + 옵션(단위 상품) 가격 × 수량 + 지역 할증 − 영업 할인 − 공급가 단수 절사. 줄마다
  *       세금 별도 부가세를 계산한다({@code CeremonyQuoteService}와 같은 세율 조회).</li>
  *   <li>범위 수량: 태블릿·와이파이 장비·현장 인력은 플랜 포함 수량과 옵션 수량을 더한다. 현장 인력
  *       ({@code ONSITE_SUPPORT}) 수량은 인·일로 본다.</li>
@@ -57,6 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderPricingService {
 
     private static final String TAX_COUNTRY_CODE = "KR";
+    private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
 
     private final CustomerPriceRepository customerPriceRepository;
     private final RegionSurchargeRepository regionSurchargeRepository;
@@ -66,13 +68,16 @@ public class OrderPricingService {
     private final MoneyCalculator moneyCalculator;
     private final PlatformOrderMarginPolicy platformOrderMarginPolicy;
 
+    /**
+     * @param adjustment 영업 할인(정액/퍼센트)과 공급가 절사 단위. 할인 → 절사 → 부가세 순서로 적용한다.
+     */
     public SalesQuoteCalculation calculateSalesQuote(
             BillingPlan plan,
             List<SalesQuoteOption> options,
             List<SalesQuoteCustomItem> customItems,
             ServiceRegion region,
             ScopeExtras extras,
-            BigDecimal discountAmount,
+            SalesQuoteAdjustment adjustment,
             CurrencyPolicy currencyPolicy,
             LocalDate asOfDate
     ) {
@@ -163,19 +168,38 @@ public class OrderPricingService {
         }
 
         BigDecimal subtotal = lines.stream().map(SalesQuoteCalculation.Line::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal discount = discountAmount == null ? BigDecimal.ZERO : moneyCalculator.normalize(discountAmount, currencyPolicy);
+        if (adjustment == null) {
+            adjustment = SalesQuoteAdjustment.NONE;
+        }
+        BigDecimal discountRatePercent = adjustment.discountRatePercent();
+        BigDecimal discountAmount = adjustment.discountAmount();
+        BigDecimal discount;
+        String discountName = "영업 할인";
+        if (discountRatePercent != null) {
+            if (discountRatePercent.signum() < 0 || discountRatePercent.compareTo(ONE_HUNDRED) > 0) {
+                throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+            }
+            discount = moneyCalculator.normalize(subtotal.multiply(discountRatePercent).divide(ONE_HUNDRED), currencyPolicy);
+            discountName = "영업 할인(" + discountRatePercent.stripTrailingZeros().toPlainString() + "%)";
+        } else {
+            discount = discountAmount == null ? BigDecimal.ZERO : moneyCalculator.normalize(discountAmount, currencyPolicy);
+        }
         if (discount.signum() < 0 || discount.compareTo(subtotal) > 0) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
         }
         if (discount.signum() > 0) {
             // 할인은 패키지 세율로 음수 줄을 둔다 — 줄별 세액 합계가 그대로 부가세가 되게 한다.
-            SalesQuoteCalculation.Line discountLine = buildLine(SalesOrderLineType.DISCOUNT, null, "영업 할인", 1,
+            SalesQuoteCalculation.Line discountLine = buildLine(SalesOrderLineType.DISCOUNT, null, discountName, 1,
                     discount, planPrice.getTaxCode(), null, currencyPolicy, asOfDate);
             lines.add(new SalesQuoteCalculation.Line(
                     SalesOrderLineType.DISCOUNT, null, discountLine.name(), 1,
                     discountLine.unitPrice().negate(), discountLine.amount().negate(),
                     discountLine.taxCode(), discountLine.taxRatePercent(), discountLine.taxAmount().negate(), null
             ));
+        }
+
+        if (adjustment.truncationUnit() != null) {
+            addTruncationLine(lines, adjustment.truncationUnit(), planPrice.getTaxCode(), currencyPolicy, asOfDate);
         }
 
         BigDecimal supplyAmount = lines.stream().map(SalesQuoteCalculation.Line::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -278,6 +302,29 @@ public class OrderPricingService {
         platformOrderMarginPolicy.checkMargin(customerSupplyAmount, partnerOrderAmount);
     }
 
+    /**
+     * 할인 뒤 공급가(부가세 별도) 합계를 절사 단위 미만에서 버리는 음수 줄을 더한다. 줄 세액은 버린 금액에 패키지 세율로
+     * 계산해 빼므로 부가세는 절사한 공급가 기준이 된다.
+     */
+    private void addTruncationLine(
+            List<SalesQuoteCalculation.Line> lines, int truncationUnit, String taxCode, CurrencyPolicy currencyPolicy, LocalDate asOfDate
+    ) {
+        if (!SalesQuoteAdjustment.TRUNCATION_UNITS.contains(truncationUnit)) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+        BigDecimal supplyAmount = lines.stream().map(SalesQuoteCalculation.Line::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal remainder = supplyAmount.remainder(BigDecimal.valueOf(truncationUnit));
+        if (remainder.signum() <= 0) {
+            return;
+        }
+        SalesQuoteCalculation.Line line = buildLine(SalesOrderLineType.TRUNCATION, null,
+                "단수 절사(" + String.format("%,d", truncationUnit) + " 단위)", 1, remainder, taxCode, null, currencyPolicy, asOfDate);
+        lines.add(new SalesQuoteCalculation.Line(
+                line.lineType(), null, line.name(), 1, line.unitPrice().negate(), line.amount().negate(),
+                line.taxCode(), line.taxRatePercent(), line.taxAmount().negate(), null
+        ));
+    }
+
     private SalesQuoteCalculation.Line buildLine(
             SalesOrderLineType lineType, UnitProduct unitProduct, String name, int quantity, BigDecimal unitPrice,
             String taxCode, Long customerPriceId, CurrencyPolicy currencyPolicy, LocalDate asOfDate
@@ -300,7 +347,7 @@ public class OrderPricingService {
     private static int sumIncluded(List<BillingPlanUnitProduct> planUnitProducts, UnitProductType type) {
         return planUnitProducts.stream()
                 .filter(source -> source.getUnitProduct().getType() == type)
-                .mapToInt(BillingPlanUnitProduct::getIncludedQuantity)
+                .mapToInt(BillingPlanUnitProduct::totalQuantity)
                 .sum();
     }
 

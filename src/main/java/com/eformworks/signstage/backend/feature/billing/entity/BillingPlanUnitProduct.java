@@ -33,7 +33,7 @@ import lombok.NoArgsConstructor;
  * {@code BillingPlanService#resolveUnitProducts}가 검증한다.
  *
  * <p>플랜 소계 계산({@code CeremonyQuoteService#calculateEstimatedTotal})은 이 구성 전체를 순회하며
- * {@code unitProduct.effectivePrice(오늘) × includedQuantity}를 더한다 — 단위 상품 자체는 할인이
+ * {@code unitProduct.effectivePrice(오늘) × totalQuantity()}(묶음 수 × 판매 단위)를 더한다 — 단위 상품 자체는 할인이
  * 없으므로({@link ProductPriceInfo}) 이 합계에 플랜 자체 할인({@link BillingPlanDiscountPeriod})을
  * 한 번만 적용한다.
  */
@@ -62,7 +62,9 @@ public class BillingPlanUnitProduct extends BaseEntity {
     private UnitProduct unitProduct;
 
     /**
-     * 기본 포함 수량 — 0 이상. 0이면 "기본 미포함, 추가구매로만 확보"(태블릿류 지금 동작과 동일).
+     * 기본 포함 수량 — 0 이상, 판매 단위({@link UnitProduct#getSaleUnitQuantity()}) 묶음 수다(2026-11-13 사용자 결정 —
+     * 템플릿 문서 10개 묶음을 2로 넣으면 20개). 실제 개수·한도·금액은 {@link #totalQuantity()}로 계산한다.
+     * 0이면 "기본 미포함, 추가구매로만 확보"(태블릿류 지금 동작과 동일).
      * 행이 존재하는 것 자체가 "이 플랜의 행사가 추가구매할 수 있다"는 뜻이라, 0이어도 삭제하지
      * 않고 남겨둔다.
      */
@@ -78,5 +80,10 @@ public class BillingPlanUnitProduct extends BaseEntity {
         this.billingPlan = billingPlan;
         this.unitProduct = unitProduct;
         this.includedQuantity = includedQuantity;
+    }
+
+    /** 포함 묶음 수 × 판매 단위 = 실제 포함 개수(한도·금액·행사 스냅샷에 쓴다). 판매 단위가 1이면 묶음 수와 같다. */
+    public int totalQuantity() {
+        return includedQuantity * unitProduct.getSaleUnitQuantity();
     }
 }

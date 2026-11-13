@@ -52,7 +52,8 @@ public class MarginSimulationService {
                         .map(option -> new SalesQuoteOption(option.getUnitProductId(), option.getQuantity()))
                         .toList();
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                plan, options, PlatformAdminSalesOrderDto.Request.CustomItem.toModels(request.getCustomItems()), request.getRegion(), request.scopeExtras(), request.getDiscountAmount(), currencyPolicy, today
+                plan, options, PlatformAdminSalesOrderDto.Request.CustomItem.toModels(request.getCustomItems()), request.getRegion(), request.scopeExtras(),
+                request.quoteAdjustment(), currencyPolicy, today
         );
 
         MarginSimulationDto.Response.PartnerQuote defaultQuote =

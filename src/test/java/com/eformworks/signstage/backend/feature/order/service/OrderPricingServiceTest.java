@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mock;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
@@ -27,6 +28,7 @@ import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.PartnerOrderAmount;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
+import com.eformworks.signstage.backend.feature.order.model.SalesQuoteAdjustment;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCustomItem;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteOption;
 import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
@@ -100,7 +102,7 @@ class OrderPricingServiceTest {
 
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
                 plan, List.of(new SalesQuoteOption(11L, 2)), List.of(), ServiceRegion.YEONGNAM_HONAM, ScopeExtras.NONE,
-                BigDecimal.valueOf(100_000), KRW, OrderFixtures.TODAY
+                SalesQuoteAdjustment.fixed(BigDecimal.valueOf(100_000)), KRW, OrderFixtures.TODAY
         );
 
         assertThat(calculation.lines()).extracting(SalesQuoteCalculation.Line::lineType).containsExactly(
@@ -119,6 +121,93 @@ class OrderPricingServiceTest {
     }
 
     @Test
+    @DisplayName("고객 견적 — 퍼센트 할인은 할인 전 공급가 소계에 율을 곱해 할인 줄을 만들고, 정액 할인 값은 무시한다")
+    void calculateSalesQuote_appliesPercentDiscount() {
+        BillingPlan plan = OrderFixtures.plan(1L);
+        given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of());
+        given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY))
+                .willReturn(Optional.of(customerPrice(plan, null, 3_000_000)));
+        given(regionSurchargeRepository.findEffective(ServiceRegion.YEONGNAM_HONAM, OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.YEONGNAM_HONAM, 200_000, 150_000)));
+        stubVat();
+
+        SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
+                plan, List.of(), List.of(), ServiceRegion.YEONGNAM_HONAM, ScopeExtras.NONE,
+                SalesQuoteAdjustment.of(DiscountType.PERCENT, BigDecimal.valueOf(999_999), new BigDecimal("12.5"), null), KRW, OrderFixtures.TODAY
+        );
+
+        // (3,000,000 + 200,000) × 12.5% = 400,000
+        SalesQuoteCalculation.Line discountLine = calculation.lines().get(calculation.lines().size() - 1);
+        assertThat(discountLine.lineType()).isEqualTo(SalesOrderLineType.DISCOUNT);
+        assertThat(discountLine.name()).isEqualTo("영업 할인(12.5%)");
+        assertThat(discountLine.amount()).isEqualByComparingTo("-400000");
+        assertThat(calculation.supplyAmount()).isEqualByComparingTo("2800000");
+        assertThat(calculation.vatAmount()).isEqualByComparingTo("280000");
+    }
+
+    @Test
+    @DisplayName("고객 견적 — 할인 뒤 공급가를 절사 단위 미만에서 버리고, 부가세는 절사한 공급가로 계산한다")
+    void calculateSalesQuote_truncatesTotal() {
+        BillingPlan plan = OrderFixtures.plan(1L);
+        given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of());
+        given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY))
+                .willReturn(Optional.of(customerPrice(plan, null, 1_234_567)));
+        given(regionSurchargeRepository.findEffective(ServiceRegion.CAPITAL, OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
+        stubVat();
+
+        SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
+                plan, List.of(), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE,
+                new SalesQuoteAdjustment(null, BigDecimal.TEN, 10_000), KRW, OrderFixtures.TODAY
+        );
+
+        // 공급가 1,234,567 − 할인 10%(123,457) = 1,111,110 → 10,000 단위로 1,110을 버려 1,110,000, 부가세 111,000
+        SalesQuoteCalculation.Line truncationLine = calculation.lines().get(calculation.lines().size() - 1);
+        assertThat(truncationLine.lineType()).isEqualTo(SalesOrderLineType.TRUNCATION);
+        assertThat(truncationLine.name()).isEqualTo("단수 절사(10,000 단위)");
+        assertThat(truncationLine.amount()).isEqualByComparingTo("-1110");
+        assertThat(truncationLine.taxAmount()).isEqualByComparingTo("-111");
+        assertThat(calculation.supplyAmount()).isEqualByComparingTo("1110000");
+        assertThat(calculation.vatAmount()).isEqualByComparingTo("111000");
+    }
+
+    @Test
+    @DisplayName("고객 견적 — 허용하지 않는 절사 단위는 거부한다")
+    void calculateSalesQuote_rejectsUnknownTruncationUnit() {
+        BillingPlan plan = OrderFixtures.plan(1L);
+        given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of());
+        given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY))
+                .willReturn(Optional.of(customerPrice(plan, null, 1_234_567)));
+        given(regionSurchargeRepository.findEffective(ServiceRegion.CAPITAL, OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
+        stubVat();
+
+        assertThatThrownBy(() -> orderPricingService.calculateSalesQuote(
+                plan, List.of(), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, new SalesQuoteAdjustment(null, null, 500), KRW, OrderFixtures.TODAY
+        )).isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CommonErrorCode.INVALID_REQUEST);
+    }
+
+    @Test
+    @DisplayName("고객 견적 — 퍼센트 할인율이 100을 넘으면 거부한다")
+    void calculateSalesQuote_rejectsPercentOverHundred() {
+        BillingPlan plan = OrderFixtures.plan(1L);
+        given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of());
+        given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY))
+                .willReturn(Optional.of(customerPrice(plan, null, 3_000_000)));
+        given(regionSurchargeRepository.findEffective(ServiceRegion.CAPITAL, OrderFixtures.TODAY))
+                .willReturn(Optional.of(OrderFixtures.regionSurcharge(ServiceRegion.CAPITAL, 0, 0)));
+        stubVat();
+
+        assertThatThrownBy(() -> orderPricingService.calculateSalesQuote(
+                plan, List.of(), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, new SalesQuoteAdjustment(null, new BigDecimal("100.01"), null), KRW, OrderFixtures.TODAY
+        )).isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CommonErrorCode.INVALID_REQUEST);
+    }
+
+    @Test
     @DisplayName("고객 견적 — 기준일에 유효한 패키지 가격이 없으면 거부한다")
     void calculateSalesQuote_rejectsMissingPlanPrice() {
         BillingPlan plan = OrderFixtures.plan(1L);
@@ -126,7 +215,7 @@ class OrderPricingServiceTest {
         given(customerPriceRepository.findEffectiveForPlan(1L, OrderFixtures.TODAY)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> orderPricingService.calculateSalesQuote(
-                plan, List.of(), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
+                plan, List.of(), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, SalesQuoteAdjustment.NONE, KRW, OrderFixtures.TODAY
         )).isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(OrderErrorCode.CUSTOMER_PRICE_NOT_FOUND);
@@ -166,7 +255,7 @@ class OrderPricingServiceTest {
         stubVat();
 
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                plan, List.of(), List.of(), ServiceRegion.JEJU_ISLAND, new ScopeExtras(3, 2, 1, 2), null, KRW, OrderFixtures.TODAY
+                plan, List.of(), List.of(), ServiceRegion.JEJU_ISLAND, new ScopeExtras(3, 2, 1, 2), SalesQuoteAdjustment.NONE, KRW, OrderFixtures.TODAY
         );
 
         assertThat(calculation.lines()).extracting(SalesQuoteCalculation.Line::lineType).containsExactly(
@@ -212,7 +301,7 @@ class OrderPricingServiceTest {
         stubVat();
 
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                plan, List.of(new SalesQuoteOption(13L, 1)), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
+                plan, List.of(new SalesQuoteOption(13L, 1)), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, SalesQuoteAdjustment.NONE, KRW, OrderFixtures.TODAY
         );
 
         // 3,000,000 + 30,000×1
@@ -256,7 +345,7 @@ class OrderPricingServiceTest {
                         new SalesQuoteCustomItem(" 태블릿 받침대 ", 4, BigDecimal.valueOf(20_000), BigDecimal.valueOf(12_000)),
                         new SalesQuoteCustomItem("현수막 디자인", 1, BigDecimal.valueOf(150_000), null)
                 ),
-                ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
+                ServiceRegion.CAPITAL, ScopeExtras.NONE, SalesQuoteAdjustment.NONE, KRW, OrderFixtures.TODAY
         );
 
         assertThat(calculation.lines()).extracting(SalesQuoteCalculation.Line::lineType).containsExactly(
@@ -292,14 +381,14 @@ class OrderPricingServiceTest {
         stubVat();
 
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                plan, List.of(new SalesQuoteOption(17L, 20)), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW,
+                plan, List.of(new SalesQuoteOption(17L, 20)), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, SalesQuoteAdjustment.NONE, KRW,
                 OrderFixtures.TODAY
         );
 
         // 3,000,000 + 1,000 × 20개(10개 묶음 2개)
         assertThat(calculation.supplyAmount()).isEqualByComparingTo("3020000");
         assertThatThrownBy(() -> orderPricingService.calculateSalesQuote(
-                plan, List.of(new SalesQuoteOption(17L, 15)), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW,
+                plan, List.of(new SalesQuoteOption(17L, 15)), List.of(), ServiceRegion.CAPITAL, ScopeExtras.NONE, SalesQuoteAdjustment.NONE, KRW,
                 OrderFixtures.TODAY
         )).isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
@@ -317,7 +406,7 @@ class OrderPricingServiceTest {
 
         assertThatThrownBy(() -> orderPricingService.calculateSalesQuote(
                 plan, List.of(), List.of(new SalesQuoteCustomItem("받침대", 1, BigDecimal.TEN, BigDecimal.valueOf(-1))),
-                ServiceRegion.CAPITAL, ScopeExtras.NONE, null, KRW, OrderFixtures.TODAY
+                ServiceRegion.CAPITAL, ScopeExtras.NONE, SalesQuoteAdjustment.NONE, KRW, OrderFixtures.TODAY
         )).isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CommonErrorCode.INVALID_REQUEST);

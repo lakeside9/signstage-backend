@@ -66,7 +66,7 @@ class MarginSimulationServiceTest {
                 .willThrow(new ApplicationException(OrderErrorCode.PARTNER_RATE_CARD_NOT_FOUND));
 
         MarginSimulationDto.Response.Simulation simulation = marginSimulationService.simulate(
-                new MarginSimulationDto.Request.Simulate(1L, ServiceRegion.CAPITAL, List.of(), List.of(), null, null, null, null, null, null)
+                new MarginSimulationDto.Request.Simulate(1L, ServiceRegion.CAPITAL, List.of(), List.of(), null, null, null, null, null, null, null, null, null)
         );
 
         assertThat(simulation.getTotalAmount()).isEqualByComparingTo("1100000");

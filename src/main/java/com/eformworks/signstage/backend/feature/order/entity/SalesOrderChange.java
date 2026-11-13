@@ -129,6 +129,14 @@ public class SalesOrderChange extends BaseEntity {
     @Column(name = "discount_reason", length = 500)
     private String discountReason;
 
+    /** 변경 후 퍼센트 할인율(%). 정액 할인·할인 없음이면 NULL — 반영할 때 수주로 옮긴다. */
+    @Column(name = "discount_rate_percent", precision = 5, scale = 2)
+    private BigDecimal discountRatePercent;
+
+    /** 변경 후 공급가 절사 단위. 절사하지 않으면 NULL이다. */
+    @Column(name = "truncation_unit")
+    private Integer truncationUnit;
+
     @Column(name = "estimated_partner_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal estimatedPartnerAmount;
 
@@ -176,7 +184,7 @@ public class SalesOrderChange extends BaseEntity {
     private SalesOrderChange(
             SalesOrder salesOrder, PartnerOrder partnerOrder, String reason, int tabletCount, int wifiCount, int onsiteStaffPersonDays,
             ScopeExtras extras, BigDecimal customItemPartnerAmount, BigDecimal supplyAmount, BigDecimal vatAmount, String discountReason, BigDecimal estimatedPartnerAmount,
-            BigDecimal partnerAmount, String location, LocalDateTime startsAt, LocalDateTime endsAt, Long proposedBy,
+            BigDecimal discountRatePercent, Integer truncationUnit, BigDecimal partnerAmount, String location, LocalDateTime startsAt, LocalDateTime endsAt, Long proposedBy,
             Long regionSurchargeId
     ) {
         this.salesOrder = salesOrder;
@@ -207,6 +215,8 @@ public class SalesOrderChange extends BaseEntity {
         this.vatAmount = vatAmount;
         this.totalAmount = supplyAmount.add(vatAmount);
         this.discountReason = discountReason;
+        this.discountRatePercent = discountRatePercent == null || discountRatePercent.signum() == 0 ? null : discountRatePercent;
+        this.truncationUnit = truncationUnit;
         this.estimatedPartnerAmount = estimatedPartnerAmount;
         this.partnerAmount = partnerAmount;
         this.location = location;

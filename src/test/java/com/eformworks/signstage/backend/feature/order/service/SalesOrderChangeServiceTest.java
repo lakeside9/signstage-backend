@@ -392,7 +392,7 @@ class SalesOrderChangeServiceTest {
                 "고객 요청으로 태블릿 추가",
                 List.of(new PlatformAdminSalesOrderDto.Request.Option(11L, tablets - 2)),
                 List.of(),
-                null, null, null, null, null, null, null, null, null
+                null, null, null, null, null, null, null, null, null, null, null, null
         );
     }
 }

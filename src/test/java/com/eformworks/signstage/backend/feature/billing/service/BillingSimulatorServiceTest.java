@@ -72,8 +72,10 @@ class BillingSimulatorServiceTest {
         assertThat(plan.getProducts().getFirst().getId()).isEqualTo(10L);
         assertThat(plan.getProducts().getFirst().getSaleUnitQuantity()).isEqualTo(5);
         assertThat(plan.getProducts().getFirst().getMaxPurchaseQuantity()).isEqualTo(20);
-        assertThat(plan.getSubtotal()).isEqualByComparingTo("2000");
-        assertThat(plan.getAppliedPrice()).isEqualByComparingTo("1500");
+        // 플랫폼 이용료 2묶음 × 5개 × 1,000 = 10,000(장비 1묶음 × 5개 × 2,000 = 10,000과 할인 1,000을 반씩 나눈다)
+        assertThat(plan.getProducts().getFirst().getIncludedQuantity()).isEqualTo(10);
+        assertThat(plan.getSubtotal()).isEqualByComparingTo("10000");
+        assertThat(plan.getAppliedPrice()).isEqualByComparingTo("9500");
         assertThat(plan.isPartnerDiscount()).isTrue();
     }
 
@@ -133,6 +135,8 @@ class BillingSimulatorServiceTest {
         var line = mock(BillingPlanUnitProduct.class);
         when(line.getUnitProduct()).thenReturn(product);
         when(line.getIncludedQuantity()).thenReturn(quantity);
+        // 포함 수량은 묶음 수 — 실제 개수는 판매 단위(5)를 곱한다.
+        when(line.totalQuantity()).thenReturn(quantity * 5);
         var period = mock(UnitProductPricePeriod.class);
         when(period.isActive()).thenReturn(true);
         when(period.getPriceInfo()).thenReturn(ProductPriceInfo.of("KRW", null, BigDecimal.valueOf(price), "STANDARD"));

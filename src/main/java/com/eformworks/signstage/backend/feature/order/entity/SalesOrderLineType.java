@@ -13,5 +13,7 @@ public enum SalesOrderLineType {
     /** 직접 입력 항목 — 카탈로그에 없는 품목. 고객 단가와 발주 단가를 관리자가 넣는다. */
     CUSTOM_ITEM,
     /** 영업 할인 — 금액이 음수다 */
-    DISCOUNT
+    DISCOUNT,
+    /** 공급가 단수 절사 — 버린 공급가와 그 세액이 음수다 */
+    TRUNCATION
 }

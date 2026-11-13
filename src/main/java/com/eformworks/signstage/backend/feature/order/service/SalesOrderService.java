@@ -246,7 +246,8 @@ public class SalesOrderService {
                         .map(option -> new SalesQuoteOption(option.getUnitProductId(), option.getQuantity()))
                         .toList();
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
-                plan, options, PlatformAdminSalesOrderDto.Request.CustomItem.toModels(request.getCustomItems()), request.getRegion(), request.scopeExtras(), request.getDiscountAmount(), currencyPolicy, today
+                plan, options, PlatformAdminSalesOrderDto.Request.CustomItem.toModels(request.getCustomItems()), request.getRegion(), request.scopeExtras(),
+                request.quoteAdjustment(), currencyPolicy, today
         );
         BigDecimal estimatedPartnerAmount = orderPricingService.estimatePartnerAmountWithinMargin(
                 calculation, request.getRegion(), currencyPolicy, today
@@ -261,6 +262,7 @@ public class SalesOrderService {
                 calculation.customItemPartnerAmount(), calculation.supplyAmount(), calculation.vatAmount(), request.getDiscountReason(), estimatedPartnerAmount
         );
         salesOrder.useRegionSurcharge(calculation.regionSurchargeId());
+        salesOrder.useQuoteAdjustment(request.quoteAdjustment());
         if (isNew) {
             salesOrderRepository.save(salesOrder);
         } else {

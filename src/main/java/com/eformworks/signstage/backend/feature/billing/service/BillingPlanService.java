@@ -597,6 +597,8 @@ public class BillingPlanService {
                 unitProduct.getName(),
                 unitProduct.getCategory().name(),
                 source.getIncludedQuantity(),
+                unitProduct.getSaleUnitQuantity(),
+                source.totalQuantity(),
                 effective.map(p -> p.getPriceInfo().getSalePrice()).orElse(null),
                 effective.map(p -> p.getPriceInfo().getCurrencyCode()).orElse(null)
         );
@@ -613,6 +615,8 @@ public class BillingPlanService {
                                     unitProduct.getName(),
                                     unitProduct.getCategory().name(),
                                     snapshot.getIncludedQuantity(),
+                                    unitProduct.getSaleUnitQuantity(),
+                                    snapshot.getIncludedQuantity() * unitProduct.getSaleUnitQuantity(),
                                     null,
                                     null
                             );

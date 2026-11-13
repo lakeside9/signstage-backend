@@ -208,11 +208,11 @@ public class CeremonyQuoteService {
                     billingCatalogQueryService.findEffectiveUnitProductPricePeriod(source.getUnitProduct().getId(), asOfDate)
                             .ifPresent(period -> {
                                 BigDecimal listAmount = period.getPriceInfo().getSalePrice()
-                                        .multiply(BigDecimal.valueOf(source.getIncludedQuantity()));
+                                        .multiply(BigDecimal.valueOf(source.totalQuantity()));
                                 planLines.add(new QuoteLineDraft(
                                         "PLAN_UNIT_PRODUCT", source.getUnitProduct().getId(), source.getUnitProduct().getName(),
                                         source.getUnitProduct().getCategory(), source.getUnitProduct().isPlatformUsageFee(),
-                                        source.getIncludedQuantity(), period.getPriceInfo().getSalePrice(), listAmount,
+                                        source.totalQuantity(), period.getPriceInfo().getSalePrice(), listAmount,
                                         BigDecimal.ZERO, period.getPriceInfo().getTaxCode()
                                 ));
                             });

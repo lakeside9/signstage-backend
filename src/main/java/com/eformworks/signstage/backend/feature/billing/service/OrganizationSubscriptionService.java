@@ -246,7 +246,7 @@ public class OrganizationSubscriptionService {
                 currencyCode = period.get().getPriceInfo().getCurrencyCode();
             }
             subtotal = subtotal.add(
-                    period.get().getPriceInfo().getSalePrice().multiply(BigDecimal.valueOf(line.getIncludedQuantity()))
+                    period.get().getPriceInfo().getSalePrice().multiply(BigDecimal.valueOf(line.totalQuantity()))
             );
         }
         if (currencyCode == null) {

@@ -135,7 +135,7 @@ public class SalesOrderChangeService {
                         .toList();
         SalesQuoteCalculation calculation = orderPricingService.calculateSalesQuote(
                 salesOrder.getBillingPlan(), options, PlatformAdminSalesOrderDto.Request.CustomItem.toModels(request.getCustomItems()), salesOrder.getRegion(), request.scopeExtrasOr(salesOrder.scopeExtras()),
-                request.getDiscountAmount(), salesOrder.currencyPolicy(), today
+                request.quoteAdjustment(), salesOrder.currencyPolicy(), today
         );
         BigDecimal invoicedSupply = activeInvoices.stream()
                 .map(CustomerInvoice::getSupplyAmount)
@@ -173,6 +173,8 @@ public class SalesOrderChangeService {
                         ? null
                         : request.getDiscountReason().trim())
                 .estimatedPartnerAmount(estimatedPartnerAmount)
+                .discountRatePercent(request.quoteAdjustment().discountRatePercent())
+                .truncationUnit(request.quoteAdjustment().truncationUnit())
                 .partnerAmount(partnerAmount)
                 // 장소·일정을 비워 보내면 지금 값을 그대로 둔다.
                 .location(request.getLocation() == null || request.getLocation().isBlank()

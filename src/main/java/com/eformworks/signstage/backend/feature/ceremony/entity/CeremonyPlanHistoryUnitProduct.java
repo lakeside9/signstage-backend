@@ -52,6 +52,7 @@ public class CeremonyPlanHistoryUnitProduct extends BaseEntity {
     @JoinColumn(name = "unit_product_id", nullable = false)
     private UnitProduct unitProduct;
 
+    /** 포함 개수(묶음 수 × 판매 단위) — 플랜은 묶음 수로 두지만 행사 스냅샷은 실제 개수로 잠근다({@code BillingPlanUnitProduct#totalQuantity}). */
     @Column(name = "included_quantity", nullable = false)
     private Integer includedQuantity;
 

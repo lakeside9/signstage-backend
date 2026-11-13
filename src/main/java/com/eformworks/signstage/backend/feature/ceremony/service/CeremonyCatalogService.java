@@ -274,7 +274,7 @@ public class CeremonyCatalogService {
                 // 이력이 없는 경우(플랜 확정 기능 배포 전 기존 행사)만 라이브 값으로 대체한다.
                 .orElseGet(() -> billingCatalogQueryService.findPlanUnitProducts(plan.getId()).stream()
                         .filter(source -> source.getUnitProduct().getType() == type)
-                        .mapToInt(BillingPlanUnitProduct::getIncludedQuantity)
+                        .mapToInt(BillingPlanUnitProduct::totalQuantity)
                         .sum());
 
         // 승인(APPROVED)된 요청만 한도에 반영한다 — 대기중/반려된 요청은 아직/영영 쓸 수 없다.

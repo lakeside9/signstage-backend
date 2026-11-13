@@ -1,13 +1,17 @@
 package com.eformworks.signstage.backend.feature.order.dto;
 
+import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderChangeLine;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLine;
 import com.eformworks.signstage.backend.feature.order.entity.ServiceRegion;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
+import com.eformworks.signstage.backend.feature.order.model.SalesQuoteAdjustment;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCustomItem;
 import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -70,11 +74,23 @@ public final class PlatformAdminSalesOrderDto {
             @Valid
             private List<CustomItem> customItems = new ArrayList<>();
 
+            /** 영업 할인 방식. 생략하면 정액(FIXED_AMOUNT)이다. */
+            private DiscountType discountType;
+
+            /** 정액 할인 금액 — 정액 방식일 때만 쓴다. */
             @PositiveOrZero
             private BigDecimal discountAmount;
 
+            /** 할인율(%) — 퍼센트 방식일 때만 쓴다. 공급가 소계(할인 전)에 곱한다. */
+            @DecimalMin("0")
+            @DecimalMax("100")
+            private BigDecimal discountRatePercent;
+
             @Size(max = 500)
             private String discountReason;
+
+            /** 공급가(부가세 별도) 절사 단위 — 절사한 금액에 부가세를 매긴다 — 10·100·1,000·10,000. 생략하면 절사하지 않는다. */
+            private Integer truncationUnit;
 
             /** 예비 태블릿(D23, 발주에만). 생략하면 0이다. */
             @PositiveOrZero
@@ -102,6 +118,10 @@ public final class PlatformAdminSalesOrderDto {
 
             public ScopeExtras scopeExtras() {
                 return ScopeExtras.of(spareTabletCount, rehearsalStaffPersonDays, lodgingNights, lodgingPersons);
+            }
+
+            public SalesQuoteAdjustment quoteAdjustment() {
+                return SalesQuoteAdjustment.of(discountType, discountAmount, discountRatePercent, truncationUnit);
             }
         }
 
@@ -260,6 +280,10 @@ public final class PlatformAdminSalesOrderDto {
             private final BigDecimal vatAmount;
             private final BigDecimal totalAmount;
             private final String discountReason;
+            /** 퍼센트 할인이면 할인율(%), 정액 할인·할인 없음이면 null이다. */
+            private final BigDecimal discountRatePercent;
+            /** 공급가 절사 단위. 절사하지 않으면 null이다. */
+            private final Integer truncationUnit;
             private final BigDecimal estimatedPartnerAmount;
             private final String status;
             private final LocalDate quoteValidUntil;
@@ -303,6 +327,8 @@ public final class PlatformAdminSalesOrderDto {
                         salesOrder.getVatAmount(),
                         salesOrder.getTotalAmount(),
                         salesOrder.getDiscountReason(),
+                        salesOrder.getDiscountRatePercent(),
+                        salesOrder.getTruncationUnit(),
                         salesOrder.getEstimatedPartnerAmount(),
                         salesOrder.getStatus().name(),
                         salesOrder.getQuoteValidUntil(),

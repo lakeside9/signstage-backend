@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.order.entity;
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.order.model.SalesQuoteAdjustment;
 import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -119,6 +120,14 @@ public class SalesOrder extends BaseEntity {
     @Column(name = "total_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal totalAmount;
 
+    /** 퍼센트 할인율(%) — 견적 수정 화면이 할인 방식을 되살리는 데 쓴다. NULL이면 정액 할인(또는 할인 없음)이다. */
+    @Column(name = "discount_rate_percent", precision = 5, scale = 2)
+    private BigDecimal discountRatePercent;
+
+    /** 공급가(부가세 별도) 절사 단위 — 견적 수정·범위 변경 화면이 되살린다. NULL이면 절사하지 않는다. */
+    @Column(name = "truncation_unit")
+    private Integer truncationUnit;
+
     @Column(name = "discount_reason", length = 500)
     private String discountReason;
 
@@ -199,6 +208,12 @@ public class SalesOrder extends BaseEntity {
         this.estimatedPartnerAmount = estimatedPartnerAmount;
     }
 
+    public void useQuoteAdjustment(SalesQuoteAdjustment adjustment) {
+        BigDecimal rate = adjustment.discountRatePercent();
+        this.discountRatePercent = rate == null || rate.signum() == 0 ? null : rate;
+        this.truncationUnit = adjustment.truncationUnit();
+    }
+
     public void useRegionSurcharge(Long regionSurchargeId) {
         this.regionSurchargeId = regionSurchargeId;
     }
@@ -209,6 +224,8 @@ public class SalesOrder extends BaseEntity {
         this.location = change.getLocation();
         this.startsAt = change.getStartsAt();
         this.endsAt = change.getEndsAt();
+        this.discountRatePercent = change.getDiscountRatePercent();
+        this.truncationUnit = change.getTruncationUnit();
         applyAmounts(
                 change.getTabletCount(), change.getWifiCount(), change.getOnsiteStaffPersonDays(), change.scopeExtras(),
                 change.getCustomItemPartnerAmount(), change.getSupplyAmount(), change.getVatAmount(), change.getDiscountReason(), change.getEstimatedPartnerAmount()

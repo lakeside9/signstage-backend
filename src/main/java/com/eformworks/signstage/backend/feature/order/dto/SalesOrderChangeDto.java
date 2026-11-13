@@ -1,11 +1,15 @@
 package com.eformworks.signstage.backend.feature.order.dto;
 
+import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderChange;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderChangeLine;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLineType;
 import com.eformworks.signstage.backend.feature.order.entity.ScopeChangeRequest;
+import com.eformworks.signstage.backend.feature.order.model.SalesQuoteAdjustment;
 import com.eformworks.signstage.backend.feature.order.model.ScopeExtras;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -50,11 +54,21 @@ public final class SalesOrderChangeDto {
             @Valid
             private List<PlatformAdminSalesOrderDto.Request.CustomItem> customItems = new ArrayList<>();
 
+            /** 영업 할인 방식. 생략하면 정액(FIXED_AMOUNT)이다 — 견적 저장 요청과 같다. */
+            private DiscountType discountType;
+
             @PositiveOrZero
             private BigDecimal discountAmount;
 
+            @DecimalMin("0")
+            @DecimalMax("100")
+            private BigDecimal discountRatePercent;
+
             @Size(max = 500)
             private String discountReason;
+
+            /** 공급가(부가세 별도) 절사 단위. 생략하면 절사하지 않는다. */
+            private Integer truncationUnit;
 
             @Size(max = 500)
             private String location;
@@ -79,6 +93,10 @@ public final class SalesOrderChangeDto {
             @PositiveOrZero
             @Max(999)
             private Integer lodgingPersons;
+
+            public SalesQuoteAdjustment quoteAdjustment() {
+                return SalesQuoteAdjustment.of(discountType, discountAmount, discountRatePercent, truncationUnit);
+            }
 
             public ScopeExtras scopeExtrasOr(ScopeExtras current) {
                 return new ScopeExtras(

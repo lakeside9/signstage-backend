@@ -98,8 +98,9 @@ public class UnitProduct extends BaseEntity {
      *
      * <p>토글형({@link UnitProductType#isToggle()})은 {@link #maxPurchaseQuantity}와 같은
      * 이유로 이 필드도 항상 1로 정규화한다(생성자/{@link #updateInfo} 양쪽). 플랜 기본 포함
-     * 수량({@code BillingPlanUnitProduct.includedQuantity})은 이 제약을 받지 않는다 — 추가구매
-     * 에만 적용된다({@code CeremonyUnitProductPurchaseService#checkPurchaseQuantity}).
+     * 수량({@code BillingPlanUnitProduct.includedQuantity})은 이 판매 단위의 묶음 수다(2026-11-13) —
+     * 실제 포함 개수는 {@code BillingPlanUnitProduct#totalQuantity()}다. 추가구매 수량은 개수로 받고 이 단위의
+     * 배수만 허용한다({@code CeremonyUnitProductPurchaseService#checkPurchaseQuantity}).
      */
     @Column(name = "sale_unit_quantity", nullable = false)
     private Integer saleUnitQuantity = 1;

@@ -74,13 +74,13 @@ public class BillingSimulatorService {
                 }
                 if (line.getIncludedQuantity() > 0) {
                     amounts.add(new Amount(price.get().getPriceInfo().getSalePrice()
-                            .multiply(BigDecimal.valueOf(line.getIncludedQuantity())), product.isPlatformUsageFee()));
+                            .multiply(BigDecimal.valueOf(line.totalQuantity())), product.isPlatformUsageFee()));
                 }
                 if (!product.isPlatformUsageFee()) continue;
                 Integer max = product.getType().isToggle()
                         ? Math.max(0, 1 - line.getIncludedQuantity()) : product.getMaxPurchaseQuantity();
                 products.add(new BillingSimulatorDto.Response.Product(product.getId(), product.getName(), product.getDescription(), product.getType().name(),
-                        line.getIncludedQuantity(), price.get().getPriceInfo().getSalePrice(),
+                        line.totalQuantity(), price.get().getPriceInfo().getSalePrice(),
                         product.getSaleUnitQuantity(), max));
             }
             if (!available || products.isEmpty()) continue;
