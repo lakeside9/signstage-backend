@@ -30,9 +30,8 @@ public final class ProjectorDto {
             private final String eventStatus;
             private final String eventAccessKey;
             /**
-             * 이 행사의 조직이 데모 조직(Organization.isDemo)인가 — signstage-docs
-             * business/demo-account-exhibition-signer-preview-review.md 6.1절 결정(전체 화면
-             * 워터마크 조건: {@code eventType !== 'MAIN' || isDemo}).
+             * 이 행사의 조직이 데모 조직(Organization.isDemo)인가. 화면 워터마크는 2026-11-13에 없앴고,
+             * 워터마크는 결과 PDF에만 들어간다({@code EventPdfWatermark}).
              */
             private final boolean isDemo;
 

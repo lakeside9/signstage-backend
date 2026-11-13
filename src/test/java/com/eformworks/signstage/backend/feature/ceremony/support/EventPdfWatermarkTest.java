@@ -21,7 +21,7 @@ class EventPdfWatermarkTest {
     void marksEveryPageIncludingRotatedCroppedAndUnsignedPages(String eventType) throws Exception {
         byte[] source = sourcePdf();
         byte[] original = source.clone();
-        try (PDDocument document = Loader.loadPDF(EventPdfWatermark.apply(source, eventType))) {
+        try (PDDocument document = Loader.loadPDF(EventPdfWatermark.apply(source, eventType, false))) {
             assertThat(document.getNumberOfPages()).isEqualTo(5);
             PDFTextStripper stripper = new PDFTextStripper();
             for (int index = 0; index < 5; index++) {
@@ -35,9 +35,16 @@ class EventPdfWatermarkTest {
     }
 
     @Test
+    void marksDemoOrganizationMainPdf() throws Exception {
+        try (PDDocument document = Loader.loadPDF(EventPdfWatermark.apply(sourcePdf(), "MAIN", true))) {
+            assertThat(new PDFTextStripper().getText(document).replaceAll("\\s+", "")).contains("SIGNSTAGE");
+        }
+    }
+
+    @Test
     void leavesMainPdfByteForByteUnchanged() throws Exception {
         byte[] source = sourcePdf();
-        assertThat(EventPdfWatermark.apply(source, "MAIN")).isSameAs(source);
+        assertThat(EventPdfWatermark.apply(source, "MAIN", false)).isSameAs(source);
     }
 
     private byte[] sourcePdf() throws Exception {

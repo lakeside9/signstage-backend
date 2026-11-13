@@ -201,7 +201,9 @@ public class CeremonyResultService {
             Resource originalResource = documentStoragePort.loadAsResource(template.getStorageKey());
             originalBytes = originalResource.getInputStream().readAllBytes();
             renderedBytes = SignatureOverlayRenderer.render(originalBytes, fieldStrokesList, mapping.getDocumentRole().name());
-            renderedBytes = EventPdfWatermark.apply(renderedBytes, event.getEventType().name());
+            renderedBytes = EventPdfWatermark.apply(
+                    renderedBytes, event.getEventType().name(), event.getCeremony().getOrganization().isDemo()
+            );
         } catch (IOException | StorageException e) {
             throw new ApplicationException(CeremonyErrorCode.RESULT_GENERATION_FAILED, e);
         }

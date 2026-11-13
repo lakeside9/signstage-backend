@@ -12,15 +12,19 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState;
 import org.apache.pdfbox.util.Matrix;
 
-/** Adds a print-visible watermark to newly generated test/rehearsal results, before digital signing. */
+/**
+ * Adds a print-visible "SIGNSTAGE" watermark to newly generated test/rehearsal results and to every result of a demo
+ * organization, before digital signing. The projector and signer portal screens carry no watermark (2026-11-13) —
+ * only the generated PDF does.
+ */
 public final class EventPdfWatermark {
     private static final String TEXT = "SIGNSTAGE";
 
     private EventPdfWatermark() {
     }
 
-    public static byte[] apply(byte[] pdfBytes, String eventType) throws IOException {
-        if (!"TEST".equals(eventType) && !"REHEARSAL".equals(eventType)) {
+    public static byte[] apply(byte[] pdfBytes, String eventType, boolean demo) throws IOException {
+        if (!demo && !"TEST".equals(eventType) && !"REHEARSAL".equals(eventType)) {
             return pdfBytes;
         }
         try (PDDocument document = Loader.loadPDF(pdfBytes)) {
