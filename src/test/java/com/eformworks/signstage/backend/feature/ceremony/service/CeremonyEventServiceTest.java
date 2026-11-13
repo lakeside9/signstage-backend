@@ -719,4 +719,78 @@ class CeremonyEventServiceTest {
         assertThat(result).extracting(CeremonyEventDto.Response.CeremonyEventSummary::getId)
                 .containsExactly(102L, 101L);
     }
+
+    private CeremonyEventDto.Request.UpdateCeremonyEvent updateRequest(String eventType) {
+        CeremonyEventDto.Request.UpdateCeremonyEvent request = new CeremonyEventDto.Request.UpdateCeremonyEvent();
+        request.setName("바뀐 이름");
+        request.setEventType(eventType);
+        return request;
+    }
+
+    @Test
+    @DisplayName("수정 — 구분을 바꾸면 새 구분의 생성 한도를 확인하고 바꾼다")
+    void updateCeremonyEvent_changesEventTypeWithinCapacity() {
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony);
+        ReflectionTestUtils.setField(event, "eventType", CeremonyEventType.TEST);
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyCatalogService.calculateEffectiveCapacity(ceremony, UnitProductType.MAIN_EVENTS)).willReturn(5);
+        given(ceremonyEventRepository.countByCeremonyIdAndEventType(CEREMONY_ID, CeremonyEventType.MAIN)).willReturn(4L);
+
+        eventService.updateCeremonyEvent(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID, updateRequest("MAIN"));
+
+        assertThat(event.getEventType()).isEqualTo(CeremonyEventType.MAIN);
+        assertThat(event.getName()).isEqualTo("바뀐 이름");
+    }
+
+    @Test
+    @DisplayName("수정 — 새 구분의 생성 한도가 다 찼으면 구분을 바꾸지 않고 거부한다")
+    void updateCeremonyEvent_eventTypeCapacityFull_fail() {
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony);
+        ReflectionTestUtils.setField(event, "eventType", CeremonyEventType.TEST);
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+        given(ceremonyCatalogService.calculateEffectiveCapacity(ceremony, UnitProductType.REHEARSAL_EVENTS)).willReturn(1);
+        given(ceremonyEventRepository.countByCeremonyIdAndEventType(CEREMONY_ID, CeremonyEventType.REHEARSAL)).willReturn(1L);
+
+        assertThatThrownBy(() -> eventService.updateCeremonyEvent(
+                ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID, updateRequest("REHEARSAL")))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CEREMONY_EVENT_LIMIT_EXCEEDED);
+        assertThat(event.getEventType()).isEqualTo(CeremonyEventType.TEST);
+    }
+
+    @Test
+    @DisplayName("수정 — 구분이 그대로면 한도를 다시 세지 않는다")
+    void updateCeremonyEvent_sameEventType_skipsCapacityCheck() {
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony);
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+
+        eventService.updateCeremonyEvent(ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID, updateRequest("MAIN"));
+
+        verify(ceremonyCatalogService, never()).calculateEffectiveCapacity(any(), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CeremonyEventStatus.class, names = {"STARTED", "FINISHED", "FORCE_FINISHED"})
+    @DisplayName("수정 — 시작했거나 끝난 하위 행사는 구분을 바꿀 수 없다")
+    void updateCeremonyEvent_lockedEvent_fail(CeremonyEventStatus status) {
+        Ceremony ceremony = ceremony(CEREMONY_ID);
+        CeremonyEvent event = event(EVENT_ID, ceremony);
+        ReflectionTestUtils.setField(event, "status", status);
+        stubAccess(ceremony);
+        given(ceremonyEventRepository.findById(EVENT_ID)).willReturn(Optional.of(event));
+
+        assertThatThrownBy(() -> eventService.updateCeremonyEvent(
+                ORGANIZATION_ID, CEREMONY_ID, EVENT_ID, CURRENT_USER_ID, updateRequest("TEST")))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.EVENT_LOCKED);
+        assertThat(event.getEventType()).isEqualTo(CeremonyEventType.MAIN);
+    }
 }

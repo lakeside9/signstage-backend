@@ -57,7 +57,7 @@ public final class CeremonyEventDto {
             private List<CeremonyEventEffectSettingDto.Request.EffectSelection> effectSelections;
         }
 
-        /** 이름/장소/일정/설명만 바꾼다. 구분(TEST/MAIN)은 한도 계산과 얽혀 있어 여기서 바꾸지 않는다. */
+        /** 이름/장소/일정/설명과 구분(TEST/REHEARSAL/MAIN)을 바꾼다. */
         @Getter
         @Setter
         @NoArgsConstructor
@@ -66,6 +66,12 @@ public final class CeremonyEventDto {
 
             @NotBlank
             private String name;
+
+            /**
+             * 바꿀 구분(TEST/REHEARSAL/MAIN). null이면 그대로 둔다. 바꾸면 새 구분의 생성 한도를 다시 확인한다
+             * (2026-11-13).
+             */
+            private String eventType;
 
             private String venue;
 

@@ -94,20 +94,7 @@ public class CeremonyEventService {
         ceremonyAccessService.checkCeremonyPlanConfirmed(ceremony);
 
         CeremonyEventType eventType = parseEventType(request.getEventType());
-        // REHEARSAL은 TEST/MAIN과 별도인 자기 용량 버킷(BillingPlan.maxRehearsalEvents)을 쓴다
-        // (2026-08-27 legacy 포팅).
-        UnitProductType capacityType = switch (eventType) {
-            case TEST -> UnitProductType.TEST_EVENTS;
-            case REHEARSAL -> UnitProductType.REHEARSAL_EVENTS;
-            case MAIN -> UnitProductType.MAIN_EVENTS;
-        };
-
-        // 한도 하드 블록(4.5절) — 유효 한도 = 플랜 기본값 + Σ 추가구매.
-        int effectiveLimit = ceremonyCatalogService.calculateEffectiveCapacity(ceremony, capacityType);
-        long typeCount = ceremonyEventRepository.countByCeremonyIdAndEventType(ceremonyId, eventType);
-        if (typeCount >= effectiveLimit) {
-            throw new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_LIMIT_EXCEEDED);
-        }
+        checkEventTypeCapacity(ceremony, eventType);
 
         // 표시 순서는 구분(TEST/REHEARSAL/MAIN)과 무관하게 이 Ceremony의 하위 행사 전체가 하나의
         // 순서를 공유한다 — 새로 등록되는 행사는 항상 목록 맨 끝에 붙는다.
@@ -203,7 +190,7 @@ public class CeremonyEventService {
     }
 
     /**
-     * 이름/장소/일정/설명만 바꾼다. {@code STARTED}/{@code FINISHED}는 잠긴 상태라 바꿀 수 없다
+     * 이름/장소/일정/설명과 구분을 바꾼다. {@code STARTED}/{@code FINISHED}는 잠긴 상태라 바꿀 수 없다
      * (문서 매핑과 같은 규칙 — {@link #checkEventNotLocked}).
      */
     @Transactional
@@ -221,6 +208,15 @@ public class CeremonyEventService {
 
         CeremonyEvent event = findEventInCeremonyOrThrow(ceremonyId, eventId);
         checkEventNotLocked(event);
+
+        // 구분을 바꾸면 새 구분 쪽 생성 한도를 다시 확인한다 — 이 행사는 아직 옛 구분으로 세어지므로 등록과 같은 판정이다.
+        if (request.getEventType() != null) {
+            CeremonyEventType eventType = parseEventType(request.getEventType());
+            if (eventType != event.getEventType()) {
+                checkEventTypeCapacity(ceremony, eventType);
+                event.changeEventType(eventType);
+            }
+        }
 
         event.updateInfo(
                 request.getName(), request.getVenue(), request.getScheduledStartAt(), request.getScheduledEndAt(),
@@ -859,6 +855,22 @@ public class CeremonyEventService {
                 log.getMessage(),
                 log.getCreatedAt()
         );
+    }
+
+    /** 한도 하드 블록(4.5절) — 유효 한도 = 플랜 기본값 + Σ 추가구매. 이 구분의 하위 행사가 이미 한도만큼 있으면 거부한다. */
+    private void checkEventTypeCapacity(Ceremony ceremony, CeremonyEventType eventType) {
+        // REHEARSAL은 TEST/MAIN과 별도인 자기 용량 버킷(BillingPlan.maxRehearsalEvents)을 쓴다
+        // (2026-08-27 legacy 포팅).
+        UnitProductType capacityType = switch (eventType) {
+            case TEST -> UnitProductType.TEST_EVENTS;
+            case REHEARSAL -> UnitProductType.REHEARSAL_EVENTS;
+            case MAIN -> UnitProductType.MAIN_EVENTS;
+        };
+        int effectiveLimit = ceremonyCatalogService.calculateEffectiveCapacity(ceremony, capacityType);
+        long typeCount = ceremonyEventRepository.countByCeremonyIdAndEventType(ceremony.getId(), eventType);
+        if (typeCount >= effectiveLimit) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_LIMIT_EXCEEDED);
+        }
     }
 
     private void checkEventNotLocked(CeremonyEvent event) {
