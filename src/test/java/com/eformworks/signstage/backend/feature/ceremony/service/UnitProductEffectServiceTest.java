@@ -56,10 +56,14 @@ class UnitProductEffectServiceTest {
     }
 
     private CeremonyEffectDefinition effectDefinition(Long id) {
+        return effectDefinition(id, CeremonyEffectTrigger.SIGNATURE_COMPLETED);
+    }
+
+    private CeremonyEffectDefinition effectDefinition(Long id, CeremonyEffectTrigger triggerType) {
         CeremonyEffectDefinition definition = CeremonyEffectDefinition.builder()
                 .code("EFFECT_" + id)
                 .targetType(CeremonyEffectTarget.PROJECTOR)
-                .triggerType(CeremonyEffectTrigger.SIGNATURE_COMPLETED)
+                .triggerType(triggerType)
                 .displayName("효과 " + id)
                 .rendererKey("renderer")
                 .displayOrder(0)
@@ -77,6 +81,21 @@ class UnitProductEffectServiceTest {
         unitProductEffectService.linkEffectDefinitions(bundle(), List.of(10L, 20L));
 
         verify(ceremonyEffectDefinitionOptionRepository, times(2)).save(any());
+    }
+
+    @Test
+    @DisplayName("연결 — 개별 서명 확인 효과와 전체 서명 완료 효과를 한 묶음에 섞으면 거부한다")
+    void linkEffectDefinitions_rejectsMixedTriggers() {
+        given(ceremonyEffectDefinitionRepository.findAllById(List.of(10L, 20L))).willReturn(List.of(
+                effectDefinition(10L, CeremonyEffectTrigger.SIGNATURE_COMPLETED),
+                effectDefinition(20L, CeremonyEffectTrigger.ALL_SIGNATURES_COMPLETED)
+        ));
+
+        assertThatThrownBy(() -> unitProductEffectService.linkEffectDefinitions(bundle(), List.of(10L, 20L)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.EFFECT_BUNDLE_TRIGGER_MIXED);
+        verify(ceremonyEffectDefinitionOptionRepository, never()).save(any());
     }
 
     @Test

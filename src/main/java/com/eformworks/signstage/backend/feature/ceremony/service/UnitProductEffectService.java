@@ -38,6 +38,9 @@ public class UnitProductEffectService implements UnitProductEffectPort {
      * 생략/빈 배열이면 아무것도 만들지 않는다(생성 시 "빈 묶음으로 시작"). 효과 하나가 여러 묶음에
      * 속할 수 있는 N:N 매핑이라, 여기서 만드는 행은 이 단위 상품 쪽만 새로 추가한다 — 이미 다른
      * 묶음에 속한 효과라도 그대로 둔 채 이 상품에도 추가된다.
+     *
+     * <p>한 묶음에는 한 가지 trigger(개별 서명 확인 또는 전체 서명 완료)의 효과만 담는다(2026-11-13) —
+     * 두 효과를 선택옵션으로 따로 팔고 적용하기 위해서다.
      */
     @Override
     @Transactional
@@ -45,7 +48,11 @@ public class UnitProductEffectService implements UnitProductEffectPort {
         if (effectDefinitionIds == null || effectDefinitionIds.isEmpty()) {
             return;
         }
-        for (CeremonyEffectDefinition definition : resolveEffectDefinitions(effectDefinitionIds)) {
+        List<CeremonyEffectDefinition> definitions = resolveEffectDefinitions(effectDefinitionIds);
+        if (definitions.stream().map(CeremonyEffectDefinition::getTriggerType).distinct().count() > 1) {
+            throw new ApplicationException(CeremonyErrorCode.EFFECT_BUNDLE_TRIGGER_MIXED);
+        }
+        for (CeremonyEffectDefinition definition : definitions) {
             ceremonyEffectDefinitionOptionRepository.save(
                     CeremonyEffectDefinitionOption.builder().effectDefinition(definition).unitProduct(unitProduct).build()
             );

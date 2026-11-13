@@ -321,6 +321,11 @@ public enum CeremonyErrorCode implements ErrorCode {
     EFFECT_DEFINITION_NOT_FOUND(
             "CEREMONY_EFFECT_DEFINITION_NOT_FOUND", HttpStatus.NOT_FOUND, "이벤트 효과 정의를 찾을 수 없습니다."
     ),
+    EFFECT_BUNDLE_TRIGGER_MIXED(
+            "CEREMONY_EFFECT_BUNDLE_TRIGGER_MIXED",
+            HttpStatus.CONFLICT,
+            "이벤트 효과 묶음에는 개별 서명 확인 효과와 전체 서명 완료 효과 중 한 종류만 담을 수 있습니다."
+    ),
     EFFECT_DEFINITION_CODE_DUPLICATE(
             "CEREMONY_EFFECT_DEFINITION_CODE_DUPLICATE",
             HttpStatus.CONFLICT,
