@@ -40,8 +40,8 @@ public class FaqService {
     private final RolePermissionService rolePermissionService;
 
     /**
-     * 대상별 활성 FAQ를 표시 순서대로 — 파트너용은 {@code /api/faqs}(로그인한 조직 사용자), 고객용은 공개
-     * {@code /api/public/faqs}(로그인 없이). 카테고리별 그룹핑은 프런트가 한다.
+     * 대상별 활성 FAQ를 표시 순서대로 — 공개 {@code /api/public/faqs}(로그인 없이, 고객용). 카테고리별 그룹핑은 프런트가
+     * 한다. 파트너용 {@code /api/faqs}는 검색·페이지가 있어 {@link #findFaqs}를 쓴다(2026-11-13).
      */
     public List<FaqDto.Response.FaqSummary> findPublicFaqs(SupportAudience audience) {
         return faqRepository.findAllByAudienceAndActiveTrueOrderByDisplayOrderAscIdAsc(audience).stream()

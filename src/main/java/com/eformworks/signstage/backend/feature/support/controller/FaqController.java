@@ -2,14 +2,17 @@ package com.eformworks.signstage.backend.feature.support.controller;
 
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
+import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.support.dto.FaqDto;
 import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import com.eformworks.signstage.backend.feature.support.service.FaqService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -24,9 +27,18 @@ public class FaqController {
     private final FaqService faqService;
     private final TraceIdProvider traceIdProvider;
 
-    @Operation(summary = "FAQ 목록 조회", description = "파트너용 활성 FAQ만 표시 순서대로 반환한다(고객용은 /api/public/faqs).")
+    @Operation(
+            summary = "FAQ 목록 조회",
+            description = "파트너용 활성 FAQ만 표시 순서대로 페이지 단위로 반환한다. keyword(category/question/answer 부분일치)는 "
+                    + "선택 필터다(고객용은 /api/public/faqs)."
+    )
     @GetMapping("/api/faqs")
-    public ApiResponse<List<FaqDto.Response.FaqSummary>> findPublicFaqs() {
-        return ApiResponse.success(faqService.findPublicFaqs(SupportAudience.PARTNER), traceIdProvider.getTraceId());
+    public ApiResponse<PageResponse<FaqDto.Response.FaqSummary>> findPublicFaqs(
+            @RequestParam(required = false) String keyword,
+            @PageableDefault(size = 20) Pageable pageable
+    ) {
+        return ApiResponse.success(
+                PageResponse.from(faqService.findFaqs(SupportAudience.PARTNER, keyword, true, pageable)),
+                traceIdProvider.getTraceId());
     }
 }

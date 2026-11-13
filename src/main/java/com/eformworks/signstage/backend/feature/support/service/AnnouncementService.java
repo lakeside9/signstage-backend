@@ -34,8 +34,8 @@ public class AnnouncementService {
     private final RolePermissionService rolePermissionService;
 
     /**
-     * 대상별 활성 공지를 고정 우선 + 최신순으로 — 파트너용은 {@code /api/announcements}(로그인한 조직 사용자), 고객용은
-     * 공개 {@code /api/public/announcements}(로그인 없이).
+     * 대상별 활성 공지를 고정 우선 + 최신순으로 — 공개 {@code /api/public/announcements}(로그인 없이, 고객용). 파트너용
+     * {@code /api/announcements}는 검색·페이지가 있어 {@link #findAnnouncements}를 쓴다(2026-11-13).
      */
     public List<AnnouncementDto.Response.AnnouncementSummary> findPublicAnnouncements(SupportAudience audience) {
         return announcementRepository.findAllByAudienceAndActiveTrueOrderByPinnedDescCreatedAtDesc(audience).stream()
