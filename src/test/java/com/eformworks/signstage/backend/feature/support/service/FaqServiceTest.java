@@ -15,6 +15,7 @@ import com.eformworks.signstage.backend.feature.permission.service.RolePermissio
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.support.dto.FaqDto;
 import com.eformworks.signstage.backend.feature.support.entity.Faq;
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import com.eformworks.signstage.backend.feature.support.error.SupportErrorCode;
 import com.eformworks.signstage.backend.feature.support.repository.FaqRepository;
 import java.util.List;
@@ -51,7 +52,7 @@ class FaqServiceTest {
     }
 
     private Faq faq(long id, int displayOrder) {
-        Faq faq = Faq.builder().category("일반").question("질문").answer("답변").displayOrder(displayOrder).build();
+        Faq faq = Faq.builder().audience(SupportAudience.PARTNER).category("일반").question("질문").answer("답변").displayOrder(displayOrder).build();
         ReflectionTestUtils.setField(faq, "id", id);
         return faq;
     }
@@ -62,7 +63,7 @@ class FaqServiceTest {
         given(rolePermissionService.isAllowed("PLATFORM_SUPPORT", "ACTION_FAQ_MANAGE")).willReturn(false);
 
         assertThatThrownBy(() -> faqService.createFaq(
-                "PLATFORM_SUPPORT", 1L, new FaqDto.Request.CreateFaq("일반", "질문", "답변")
+                "PLATFORM_SUPPORT", 1L, new FaqDto.Request.CreateFaq(SupportAudience.PARTNER, "일반", "질문", "답변")
         ))
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
@@ -74,7 +75,7 @@ class FaqServiceTest {
     @DisplayName("단건 조회 — 비활성 FAQ도 관리자는 조회할 수 있다(수정 화면용)")
     void findFaq_inactive_returnsAnyway() {
         Faq faq = faq(1L, 10);
-        faq.updateInfo(faq.getCategory(), faq.getQuestion(), faq.getAnswer(), false);
+        faq.updateInfo(faq.getAudience(), faq.getCategory(), faq.getQuestion(), faq.getAnswer(), false);
         given(faqRepository.findById(1L)).willReturn(Optional.of(faq));
 
         FaqDto.Response.FaqSummary response = faqService.findFaq(1L);
@@ -86,19 +87,19 @@ class FaqServiceTest {
     @DisplayName("목록 조회 — keyword/active를 그대로 리포지토리 검색에 넘긴다")
     void findFaqs_delegatesKeywordAndActiveToRepository() {
         Pageable pageable = PageRequest.of(0, 20);
-        given(faqRepository.search("결제", true, pageable))
+        given(faqRepository.search(SupportAudience.PARTNER, "결제", true, pageable))
                 .willReturn(new PageImpl<>(List.of(faq(1L, 10)), pageable, 1));
 
-        Page<FaqDto.Response.FaqSummary> response = faqService.findFaqs("결제", true, pageable);
+        Page<FaqDto.Response.FaqSummary> response = faqService.findFaqs(SupportAudience.PARTNER, "결제", true, pageable);
 
         assertThat(response.getTotalElements()).isEqualTo(1);
-        verify(faqRepository).search("결제", true, pageable);
+        verify(faqRepository).search(SupportAudience.PARTNER, "결제", true, pageable);
     }
 
     @Test
     @DisplayName("등록 — 기존 최대 표시 순서 + 10을 부여한다")
     void createFaq_assignsNextDisplayOrder() {
-        given(faqRepository.findAllByOrderByDisplayOrderAscIdAsc()).willReturn(List.of(faq(1L, 10), faq(2L, 20)));
+        given(faqRepository.findAllByAudienceOrderByDisplayOrderAscIdAsc(SupportAudience.PARTNER)).willReturn(List.of(faq(1L, 10), faq(2L, 20)));
         given(faqRepository.save(any())).willAnswer(invocation -> {
             Faq saved = invocation.getArgument(0);
             ReflectionTestUtils.setField(saved, "id", 3L);
@@ -106,21 +107,46 @@ class FaqServiceTest {
         });
 
         FaqDto.Response.FaqSummary response =
-                faqService.createFaq("PLATFORM_OPS", 1L, new FaqDto.Request.CreateFaq("일반", "새 질문", "새 답변"));
+                faqService.createFaq("PLATFORM_OPS", 1L, new FaqDto.Request.CreateFaq(SupportAudience.PARTNER, "일반", "새 질문", "새 답변"));
 
         assertThat(response.getDisplayOrder()).isEqualTo(30);
     }
 
     @Test
+    @DisplayName("대상을 바꿔 수정하면 새 대상 목록의 맨 뒤로 간다")
+    void updateFaq_changingAudience_movesToEndOfNewAudience() {
+        Faq faq = faq(1L, 10);
+        given(faqRepository.findById(1L)).willReturn(Optional.of(faq));
+        given(faqRepository.findAllByAudienceOrderByDisplayOrderAscIdAsc(SupportAudience.CUSTOMER))
+                .willReturn(List.of(faq(5L, 10), faq(6L, 20)));
+
+        FaqDto.Response.FaqSummary response = faqService.updateFaq(1L, "PLATFORM_OPS", 1L,
+                new FaqDto.Request.UpdateFaq(SupportAudience.CUSTOMER, "일반", "질문", "답변", true));
+
+        assertThat(response.getAudience()).isEqualTo(SupportAudience.CUSTOMER);
+        assertThat(response.getDisplayOrder()).isEqualTo(30);
+    }
+
+    @Test
+    @DisplayName("공개 목록 — 요청한 대상의 활성 FAQ만 돌려준다")
+    void findPublicFaqs_filtersByAudience() {
+        given(faqRepository.findAllByAudienceAndActiveTrueOrderByDisplayOrderAscIdAsc(SupportAudience.CUSTOMER))
+                .willReturn(List.of(faq(5L, 10)));
+
+        assertThat(faqService.findPublicFaqs(SupportAudience.CUSTOMER)).extracting(FaqDto.Response.FaqSummary::getId)
+                .containsExactly(5L);
+    }
+
+    @Test
     @DisplayName("표시 순서 일괄 변경 — 요청 id 집합이 전체 목록과 다르면 거부된다")
     void updateDisplayOrders_mismatchedIds_fail() {
-        given(faqRepository.findAllByOrderByDisplayOrderAscIdAsc()).willReturn(List.of(faq(1L, 10), faq(2L, 20)));
+        given(faqRepository.findAllByAudienceOrderByDisplayOrderAscIdAsc(SupportAudience.PARTNER)).willReturn(List.of(faq(1L, 10), faq(2L, 20)));
 
         DisplayOrderRequest.UpdateDisplayOrders request = new DisplayOrderRequest.UpdateDisplayOrders(
                 List.of(new DisplayOrderRequest.Item(1L, 10), new DisplayOrderRequest.Item(999L, 20))
         );
 
-        assertThatThrownBy(() -> faqService.updateDisplayOrders("PLATFORM_OPS", 1L, request))
+        assertThatThrownBy(() -> faqService.updateDisplayOrders("PLATFORM_OPS", 1L, SupportAudience.PARTNER, request))
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(SupportErrorCode.FAQ_ORDER_GROUP_MISMATCH);

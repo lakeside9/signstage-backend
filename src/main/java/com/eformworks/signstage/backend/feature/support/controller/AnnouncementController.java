@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.support.controller;
 import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.feature.support.dto.AnnouncementDto;
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import com.eformworks.signstage.backend.feature.support.service.AnnouncementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,10 +25,10 @@ public class AnnouncementController {
     private final AnnouncementService announcementService;
     private final TraceIdProvider traceIdProvider;
 
-    @Operation(summary = "공지사항 목록 조회", description = "활성 공지만 고정 우선 + 최신순으로 반환한다.")
+    @Operation(summary = "공지사항 목록 조회", description = "파트너용 활성 공지만 고정 우선 + 최신순으로 반환한다(고객용은 /api/public/announcements).")
     @GetMapping("/api/announcements")
     public ApiResponse<List<AnnouncementDto.Response.AnnouncementSummary>> findPublicAnnouncements() {
-        return ApiResponse.success(announcementService.findPublicAnnouncements(), traceIdProvider.getTraceId());
+        return ApiResponse.success(announcementService.findPublicAnnouncements(SupportAudience.PARTNER), traceIdProvider.getTraceId());
     }
 
     @Operation(summary = "공지사항 상세 조회")
@@ -35,6 +36,6 @@ public class AnnouncementController {
     public ApiResponse<AnnouncementDto.Response.AnnouncementSummary> findPublicAnnouncement(
             @PathVariable Long announcementId
     ) {
-        return ApiResponse.success(announcementService.findPublicAnnouncement(announcementId), traceIdProvider.getTraceId());
+        return ApiResponse.success(announcementService.findPublicAnnouncement(SupportAudience.PARTNER, announcementId), traceIdProvider.getTraceId());
     }
 }

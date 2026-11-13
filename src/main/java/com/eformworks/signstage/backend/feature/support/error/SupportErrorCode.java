@@ -17,6 +17,12 @@ public enum SupportErrorCode implements ErrorCode {
             "SUPPORT_FAQ_ORDER_GROUP_MISMATCH",
             HttpStatus.CONFLICT,
             "전달된 순서 목록이 현재 FAQ 전체 목록과 일치하지 않습니다."
+    ),
+    CONTACT_INQUIRY_NOT_FOUND("SUPPORT_CONTACT_INQUIRY_NOT_FOUND", HttpStatus.NOT_FOUND, "고객 문의를 찾을 수 없습니다."),
+    CONTACT_INQUIRY_CONSENT_REQUIRED(
+            "SUPPORT_CONTACT_INQUIRY_CONSENT_REQUIRED",
+            HttpStatus.BAD_REQUEST,
+            "개인정보 수집·이용에 동의해야 문의를 접수할 수 있습니다."
     );
 
     private final String code;

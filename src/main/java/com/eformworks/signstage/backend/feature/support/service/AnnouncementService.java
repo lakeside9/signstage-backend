@@ -7,6 +7,7 @@ import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.support.dto.AnnouncementDto;
 import com.eformworks.signstage.backend.feature.support.entity.Announcement;
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import com.eformworks.signstage.backend.feature.support.error.SupportErrorCode;
 import com.eformworks.signstage.backend.feature.support.repository.AnnouncementRepository;
 import java.util.List;
@@ -32,16 +33,20 @@ public class AnnouncementService {
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     private final RolePermissionService rolePermissionService;
 
-    /** {@code /api/announcements} — 인증된 사용자 누구나, 활성 공지만 고정 우선 + 최신순. */
-    public List<AnnouncementDto.Response.AnnouncementSummary> findPublicAnnouncements() {
-        return announcementRepository.findAllByActiveTrueOrderByPinnedDescCreatedAtDesc().stream()
+    /**
+     * 대상별 활성 공지를 고정 우선 + 최신순으로 — 파트너용은 {@code /api/announcements}(로그인한 조직 사용자), 고객용은
+     * 공개 {@code /api/public/announcements}(로그인 없이).
+     */
+    public List<AnnouncementDto.Response.AnnouncementSummary> findPublicAnnouncements(SupportAudience audience) {
+        return announcementRepository.findAllByAudienceAndActiveTrueOrderByPinnedDescCreatedAtDesc(audience).stream()
                 .map(this::toSummary)
                 .toList();
     }
 
-    public AnnouncementDto.Response.AnnouncementSummary findPublicAnnouncement(Long announcementId) {
+    /** 활성이고 대상이 맞는 공지만 — 고객용 공지 id로 파트너 API를 부르거나 그 반대면 없는 공지로 본다. */
+    public AnnouncementDto.Response.AnnouncementSummary findPublicAnnouncement(SupportAudience audience, Long announcementId) {
         Announcement announcement = announcementRepository.findById(announcementId)
-                .filter(Announcement::isActive)
+                .filter(found -> found.isActive() && found.getAudience() == audience)
                 .orElseThrow(() -> new ApplicationException(SupportErrorCode.ANNOUNCEMENT_NOT_FOUND));
         return toSummary(announcement);
     }
@@ -56,8 +61,10 @@ public class AnnouncementService {
     }
 
     /** {@code keyword}는 title/content 중 하나라도 포함하면 매칭된다(2026-09-12 사용자 요청). */
-    public Page<AnnouncementDto.Response.AnnouncementSummary> findAnnouncements(String keyword, Boolean active, Pageable pageable) {
-        return announcementRepository.search(keyword, active, pageable).map(this::toSummary);
+    public Page<AnnouncementDto.Response.AnnouncementSummary> findAnnouncements(
+            SupportAudience audience, String keyword, Boolean active, Pageable pageable
+    ) {
+        return announcementRepository.search(audience, keyword, active, pageable).map(this::toSummary);
     }
 
     @Transactional
@@ -67,6 +74,7 @@ public class AnnouncementService {
         checkAllowed(actingPlatformRole);
 
         Announcement announcement = Announcement.builder()
+                .audience(request.getAudience())
                 .title(request.getTitle())
                 .content(request.getContent())
                 .pinned(request.getPinned() != null && request.getPinned())
@@ -88,7 +96,7 @@ public class AnnouncementService {
 
         Announcement announcement = announcementRepository.findById(announcementId)
                 .orElseThrow(() -> new ApplicationException(SupportErrorCode.ANNOUNCEMENT_NOT_FOUND));
-        announcement.updateInfo(request.getTitle(), request.getContent(), request.getPinned(), request.getActive());
+        announcement.updateInfo(request.getAudience(), request.getTitle(), request.getContent(), request.getPinned(), request.getActive());
 
         platformAdminAuditLogRecorder.record(
                 adminUserId, PlatformAdminAction.UPDATE_ANNOUNCEMENT, null, null, "announcementId=" + announcementId
@@ -112,7 +120,7 @@ public class AnnouncementService {
     private AnnouncementDto.Response.AnnouncementSummary toSummary(Announcement announcement) {
         return new AnnouncementDto.Response.AnnouncementSummary(
                 announcement.getId(), announcement.getTitle(), announcement.getContent(),
-                announcement.isPinned(), announcement.isActive(), announcement.getCreatedAt()
+                announcement.isPinned(), announcement.isActive(), announcement.getCreatedAt(), announcement.getAudience()
         );
     }
 

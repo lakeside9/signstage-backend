@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.support.repository;
 
 import com.eformworks.signstage.backend.feature.support.entity.Announcement;
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -12,5 +13,5 @@ import org.springframework.data.domain.Pageable;
 public interface AnnouncementRepositoryCustom {
 
     /** keyword/active 둘 다 선택 필터다. keyword는 title/content 중 하나라도 포함하면 매칭된다. */
-    Page<Announcement> search(String keyword, Boolean active, Pageable pageable);
+    Page<Announcement> search(SupportAudience audience, String keyword, Boolean active, Pageable pageable);
 }

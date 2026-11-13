@@ -62,6 +62,8 @@ public class SecurityConfig {
                         // business/demo-account-exhibition-signer-preview-review.md 13장).
                         .requestMatchers("/api/demo/**").permitAll()
                         .requestMatchers("/api/ceremonies/portal/**").permitAll()
+                        // 로그인 없이 보는 공개 화면의 API(고객 문의하기 등). 접수 횟수 제한은 서비스가 건다.
+                        .requestMatchers("/api/public/**").permitAll()
                         // platform_role 보유자만 통과. 등급별 세부 권한(예: 회원 상태 변경은 PLATFORM_OPS 이상)은
                         // 서비스 레이어에서 CurrentUser.platformRole()로 한 번 더 검사한다
                         // (signstage-docs backend/signup-approval-implementation-plan.md 4.2절).

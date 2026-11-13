@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.support.dto;
 
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -26,6 +27,9 @@ public final class FaqDto {
         @AllArgsConstructor
         public static class CreateFaq {
 
+            @NotNull
+            private SupportAudience audience;
+
             @Size(max = 50)
             private String category;
 
@@ -42,6 +46,9 @@ public final class FaqDto {
         @NoArgsConstructor
         @AllArgsConstructor
         public static class UpdateFaq {
+
+            @NotNull
+            private SupportAudience audience;
 
             @Size(max = 50)
             private String category;
@@ -74,6 +81,7 @@ public final class FaqDto {
             private final int displayOrder;
             private final boolean active;
             private final LocalDateTime createdAt;
+            private final SupportAudience audience;
         }
     }
 }

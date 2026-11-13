@@ -37,6 +37,29 @@ public final class QuoteTemplateDto {
 
             private LocalDate effectiveTo;
         }
+
+        /** 견적서 공급자 칸. 비운 항목은 견적서에 나오지 않는다. */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class SaveSupplier {
+
+            @Size(max = 100)
+            private String name;
+
+            @Size(max = 50)
+            private String representative;
+
+            @Size(max = 20)
+            private String businessNumber;
+
+            @Size(max = 300)
+            private String address;
+
+            @Size(max = 50)
+            private String phone;
+        }
     }
 
     public static final class Response {
@@ -54,6 +77,7 @@ public final class QuoteTemplateDto {
             private final LocalDate effectiveTo;
             /** 견적에 복사됐는지 — 쓰이지 않은 문구만 고치거나 지울 수 있다. */
             private final boolean used;
+            private final QuoteSupplier supplier;
 
             public static AdminQuoteTemplate from(QuoteTemplate template, boolean used) {
                 return new AdminQuoteTemplate(
@@ -62,7 +86,40 @@ public final class QuoteTemplateDto {
                         template.getFooterNotice(),
                         template.getPeriod().getEffectiveFrom(),
                         template.getPeriod().getEffectiveTo(),
-                        used
+                        used,
+                        QuoteSupplier.from(template)
+                );
+            }
+        }
+
+        /**
+         * 견적서 공급자 칸과 인감 유무. 인감 이미지는 {@code GET /api/platform-admin/quote-templates/{id}/seal}로 받는다.
+         * {@code quoteTemplateId}가 null이면 공통 문구 없이 저장된 견적이다.
+         */
+        @Getter
+        @AllArgsConstructor
+        public static class QuoteSupplier {
+
+            private final Long quoteTemplateId;
+            private final String name;
+            private final String representative;
+            private final String businessNumber;
+            private final String address;
+            private final String phone;
+            private final boolean sealAvailable;
+
+            public static QuoteSupplier from(QuoteTemplate template) {
+                if (template == null) {
+                    return new QuoteSupplier(null, null, null, null, null, null, false);
+                }
+                return new QuoteSupplier(
+                        template.getId(),
+                        template.getSupplierName(),
+                        template.getSupplierRepresentative(),
+                        template.getSupplierBusinessNumber(),
+                        template.getSupplierAddress(),
+                        template.getSupplierPhone(),
+                        template.hasSeal()
                 );
             }
         }

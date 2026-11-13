@@ -30,6 +30,21 @@ public enum OrderErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "견적에 쓰인 공통 문구는 고치거나 삭제할 수 없습니다. 기간을 종료하고 새 문구를 등록해주세요."
     ),
+    QUOTE_SUPPLIER_IN_USE(
+            "ORDER_QUOTE_SUPPLIER_IN_USE",
+            HttpStatus.CONFLICT,
+            "견적에 쓰인 공통 문구의 공급자 정보·인감은 비어 있을 때 한 번만 채울 수 있습니다. 바꾸려면 기간을 종료하고 새 문구를 등록해주세요."
+    ),
+    QUOTE_SEAL_INVALID(
+            "ORDER_QUOTE_SEAL_INVALID",
+            HttpStatus.BAD_REQUEST,
+            "인감은 2MB 이하의 PNG 또는 JPEG 이미지만 올릴 수 있습니다."
+    ),
+    QUOTE_SEAL_NOT_FOUND(
+            "ORDER_QUOTE_SEAL_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "등록된 인감이 없습니다."
+    ),
     QUOTE_TEMPLATE_PERIOD_OVERLAP(
             "ORDER_QUOTE_TEMPLATE_PERIOD_OVERLAP",
             HttpStatus.CONFLICT,

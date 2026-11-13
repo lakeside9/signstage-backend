@@ -5,6 +5,7 @@ import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.support.dto.AnnouncementDto;
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import com.eformworks.signstage.backend.feature.support.service.AnnouncementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,11 +45,12 @@ public class PlatformAdminAnnouncementController {
     )
     @GetMapping
     public ApiResponse<PageResponse<AnnouncementDto.Response.AnnouncementSummary>> findAnnouncements(
+            @RequestParam(required = false) SupportAudience audience,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Boolean active,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        Page<AnnouncementDto.Response.AnnouncementSummary> response = announcementService.findAnnouncements(keyword, active, pageable);
+        Page<AnnouncementDto.Response.AnnouncementSummary> response = announcementService.findAnnouncements(audience, keyword, active, pageable);
         return ApiResponse.success(PageResponse.from(response), traceIdProvider.getTraceId());
     }
 

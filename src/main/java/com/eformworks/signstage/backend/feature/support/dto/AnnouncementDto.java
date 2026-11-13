@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.support.dto;
 
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -26,6 +27,9 @@ public final class AnnouncementDto {
         @AllArgsConstructor
         public static class CreateAnnouncement {
 
+            @NotNull
+            private SupportAudience audience;
+
             @NotBlank
             @Size(max = 200)
             private String title;
@@ -42,6 +46,9 @@ public final class AnnouncementDto {
         @NoArgsConstructor
         @AllArgsConstructor
         public static class UpdateAnnouncement {
+
+            @NotNull
+            private SupportAudience audience;
 
             @NotBlank
             @Size(max = 200)
@@ -73,6 +80,7 @@ public final class AnnouncementDto {
             private final boolean pinned;
             private final boolean active;
             private final LocalDateTime createdAt;
+            private final SupportAudience audience;
         }
     }
 }

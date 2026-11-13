@@ -7,9 +7,11 @@ import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.order.dto.CustomerCancellationDto;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminPartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminSalesOrderDto;
+import com.eformworks.signstage.backend.feature.order.dto.QuoteTemplateDto;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderStatus;
 import com.eformworks.signstage.backend.feature.order.service.CustomerCancellationService;
 import com.eformworks.signstage.backend.feature.order.service.PartnerOrderService;
+import com.eformworks.signstage.backend.feature.order.service.QuoteTemplateService;
 import com.eformworks.signstage.backend.feature.order.service.SalesOrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,6 +43,7 @@ public class PlatformAdminSalesOrderController {
     private final SalesOrderService salesOrderService;
     private final CustomerCancellationService customerCancellationService;
     private final PartnerOrderService partnerOrderService;
+    private final QuoteTemplateService quoteTemplateService;
     private final TraceIdProvider traceIdProvider;
 
     @Operation(summary = "수주 목록 조회")
@@ -61,6 +64,16 @@ public class PlatformAdminSalesOrderController {
             @PathVariable Long salesOrderId
     ) {
         return ApiResponse.success(salesOrderService.retrieveSalesOrder(salesOrderId), traceIdProvider.getTraceId());
+    }
+
+    @Operation(summary = "견적서 공급자 정보", description = "견적을 저장할 때 쓴 견적 공통 문구의 공급자 칸과 인감 유무. 인감 이미지는 "
+            + "GET /api/platform-admin/quote-templates/{quoteTemplateId}/seal로 받는다.")
+    @GetMapping("/{salesOrderId}/quote-supplier")
+    public ApiResponse<QuoteTemplateDto.Response.QuoteSupplier> findQuoteSupplier(@PathVariable Long salesOrderId) {
+        return ApiResponse.success(
+                quoteTemplateService.findSupplierForSalesOrder(salesOrderId),
+                traceIdProvider.getTraceId()
+        );
     }
 
     @Operation(

@@ -11,6 +11,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +23,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 견적 공통 문구 API — 견적서 "제공 서비스" 본문과 하단 안내문구를 기간별로 관리한다. 등록·수정·기간 종료·삭제는
@@ -82,6 +88,55 @@ public class PlatformAdminQuoteTemplateController {
                 quoteTemplateService.closeQuoteTemplate(quoteTemplateId, currentUser.userId(), currentUser.platformRole(), request),
                 traceIdProvider.getTraceId()
         );
+    }
+
+    @Operation(summary = "견적서 공급자 정보 저장", description = "상호·대표자·사업자등록번호·주소·연락처. 견적에 쓰인 문구는 비어 있을 때 한 번만 "
+            + "채울 수 있다(ORDER_QUOTE_SUPPLIER_IN_USE).")
+    @PutMapping("/{quoteTemplateId}/supplier")
+    public ApiResponse<QuoteTemplateDto.Response.AdminQuoteTemplate> updateSupplier(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long quoteTemplateId,
+            @Valid @RequestBody QuoteTemplateDto.Request.SaveSupplier request
+    ) {
+        return ApiResponse.success(
+                quoteTemplateService.updateSupplier(quoteTemplateId, currentUser.userId(), currentUser.platformRole(), request),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "회사 인감 업로드", description = "PNG·JPEG, 2MB 이하. 견적에 쓰인 문구는 인감이 없을 때만 올릴 수 있다.")
+    @PostMapping(value = "/{quoteTemplateId}/seal", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<QuoteTemplateDto.Response.AdminQuoteTemplate> uploadSeal(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long quoteTemplateId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        return ApiResponse.success(
+                quoteTemplateService.uploadSeal(quoteTemplateId, currentUser.userId(), currentUser.platformRole(), file),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "회사 인감 삭제", description = "견적에 쓰이지 않은 문구만.")
+    @DeleteMapping("/{quoteTemplateId}/seal")
+    public ApiResponse<QuoteTemplateDto.Response.AdminQuoteTemplate> deleteSeal(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long quoteTemplateId
+    ) {
+        return ApiResponse.success(
+                quoteTemplateService.deleteSeal(quoteTemplateId, currentUser.userId(), currentUser.platformRole()),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "회사 인감 이미지", description = "플랫폼 관리자 인증이 필요하다. 캐시하지 않는다.")
+    @GetMapping("/{quoteTemplateId}/seal")
+    public ResponseEntity<Resource> loadSeal(@PathVariable Long quoteTemplateId) {
+        QuoteTemplateService.SealImage seal = quoteTemplateService.loadSeal(quoteTemplateId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(seal.contentType()))
+                .cacheControl(CacheControl.noStore())
+                .body(seal.resource());
     }
 
     @Operation(summary = "견적 공통 문구 삭제", description = "견적에 쓰인 문구는 삭제할 수 없다(ORDER_QUOTE_TEMPLATE_IN_USE).")

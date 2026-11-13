@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.support.repository;
 
 import com.eformworks.signstage.backend.feature.support.entity.Faq;
 import com.eformworks.signstage.backend.feature.support.entity.QFaq;
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import java.util.List;
@@ -20,8 +21,8 @@ public class FaqRepositoryImpl implements FaqRepositoryCustom {
     private final JPAQueryFactory queryFactory;
 
     @Override
-    public Page<Faq> search(String keyword, Boolean active, Pageable pageable) {
-        BooleanExpression[] conditions = { keywordContains(keyword), activeEq(active) };
+    public Page<Faq> search(SupportAudience audience, String keyword, Boolean active, Pageable pageable) {
+        BooleanExpression[] conditions = { audienceEq(audience), keywordContains(keyword), activeEq(active) };
 
         List<Faq> content = queryFactory.selectFrom(FAQ)
                 .where(conditions)
@@ -46,5 +47,9 @@ public class FaqRepositoryImpl implements FaqRepositoryCustom {
 
     private BooleanExpression activeEq(Boolean active) {
         return active == null ? null : FAQ.active.eq(active);
+    }
+
+    private BooleanExpression audienceEq(SupportAudience audience) {
+        return audience == null ? null : FAQ.audience.eq(audience);
     }
 }

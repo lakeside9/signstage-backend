@@ -3,6 +3,8 @@ package com.eformworks.signstage.backend.feature.support.entity;
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -29,6 +31,11 @@ public class Announcement extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 보여줄 대상 — 파트너용(조직 콘솔) 또는 고객용(공개 화면). */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private SupportAudience audience;
+
     @Column(nullable = false, length = 200)
     private String title;
 
@@ -42,14 +49,16 @@ public class Announcement extends BaseEntity {
     private boolean active;
 
     @Builder
-    private Announcement(String title, String content, boolean pinned) {
+    private Announcement(SupportAudience audience, String title, String content, boolean pinned) {
+        this.audience = audience;
         this.title = title;
         this.content = content;
         this.pinned = pinned;
         this.active = true;
     }
 
-    public void updateInfo(String title, String content, boolean pinned, boolean active) {
+    public void updateInfo(SupportAudience audience, String title, String content, boolean pinned, boolean active) {
+        this.audience = audience;
         this.title = title;
         this.content = content;
         this.pinned = pinned;

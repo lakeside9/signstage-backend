@@ -13,6 +13,8 @@ import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.ceremony.model.StoredFile;
+import com.eformworks.signstage.backend.feature.ceremony.port.DocumentStoragePort;
 import com.eformworks.signstage.backend.feature.order.dto.QuoteTemplateDto;
 import com.eformworks.signstage.backend.feature.order.entity.EffectivePeriod;
 import com.eformworks.signstage.backend.feature.order.entity.QuoteTemplate;
@@ -21,15 +23,20 @@ import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.repository.QuoteTemplateRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.util.Optional;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 /** 견적 공통 문구 — 기간 겹침 금지, 견적에 쓰인 문구는 고치거나 지우지 못한다({@link QuoteTemplateService}). */
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +50,8 @@ class QuoteTemplateServiceTest {
     private QuoteTemplateRepository quoteTemplateRepository;
     @Mock
     private SalesOrderRepository salesOrderRepository;
+    @Mock
+    private DocumentStoragePort documentStoragePort;
     @Mock
     private RolePermissionService rolePermissionService;
     @Mock
@@ -147,6 +156,62 @@ class QuoteTemplateServiceTest {
         assertThat(salesOrder.getQuoteTemplateId()).isNull();
         assertThat(salesOrder.getServiceDescription()).isNull();
         assertThat(salesOrder.getQuoteFooterNotice()).isNull();
+    }
+
+    @Test
+    @DisplayName("공급자 정보 — 견적에 쓰인 문구도 비어 있으면 한 번 채우고, 채운 뒤에는 바꿀 수 없다")
+    void updateSupplier_fillsOnceOnUsedTemplate() {
+        allowManage();
+        QuoteTemplate template = template(10L);
+        given(quoteTemplateRepository.findById(10L)).willReturn(Optional.of(template));
+        given(salesOrderRepository.existsByQuoteTemplateId(10L)).willReturn(true);
+        QuoteTemplateDto.Request.SaveSupplier request = new QuoteTemplateDto.Request.SaveSupplier(
+                " (주)이폼웍스 ", "홍길동", "123-45-67890", "서울시 중구", "   ");
+
+        QuoteTemplateDto.Response.AdminQuoteTemplate saved = quoteTemplateService.updateSupplier(10L, ADMIN_ID, ROLE, request);
+
+        assertThat(saved.getSupplier().getName()).isEqualTo("(주)이폼웍스");
+        assertThat(saved.getSupplier().getPhone()).isNull();
+        assertThatThrownBy(() -> quoteTemplateService.updateSupplier(10L, ADMIN_ID, ROLE, request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(OrderErrorCode.QUOTE_SUPPLIER_IN_USE);
+    }
+
+    @Test
+    @DisplayName("인감 — PNG·JPEG 이미지가 아니면 저장소에 올리지 않고 거부한다")
+    void uploadSeal_rejectsNonImage() {
+        allowManage();
+        given(quoteTemplateRepository.findById(10L)).willReturn(Optional.of(template(10L)));
+        given(salesOrderRepository.existsByQuoteTemplateId(10L)).willReturn(false);
+        MockMultipartFile fake = new MockMultipartFile("file", "seal.png", "image/png", "not an image".getBytes());
+
+        assertThatThrownBy(() -> quoteTemplateService.uploadSeal(10L, ADMIN_ID, ROLE, fake))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(OrderErrorCode.QUOTE_SEAL_INVALID);
+        verify(documentStoragePort, never()).store(anyString(), any(MultipartFile.class));
+    }
+
+    @Test
+    @DisplayName("인감 — 올바른 이미지는 저장하고, 쓰이지 않은 문구에서 바꾸면 이전 파일을 지운다")
+    void uploadSeal_storesImageAndReplacesPrevious() throws Exception {
+        allowManage();
+        QuoteTemplate template = template(10L);
+        template.useSeal("quote-seals/old.png", "image/png");
+        given(quoteTemplateRepository.findById(10L)).willReturn(Optional.of(template));
+        given(salesOrderRepository.existsByQuoteTemplateId(10L)).willReturn(false);
+        given(documentStoragePort.store(eq("quote-seals"), any(MultipartFile.class)))
+                .willReturn(new StoredFile("quote-seals/new.png", "new.png"));
+        ByteArrayOutputStream png = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_ARGB), "png", png);
+
+        QuoteTemplateDto.Response.AdminQuoteTemplate saved = quoteTemplateService.uploadSeal(
+                10L, ADMIN_ID, ROLE, new MockMultipartFile("file", "seal.png", "image/png", png.toByteArray()));
+
+        assertThat(saved.getSupplier().isSealAvailable()).isTrue();
+        assertThat(template.getSealStorageKey()).isEqualTo("quote-seals/new.png");
+        verify(documentStoragePort).delete("quote-seals/old.png");
     }
 
     private void allowManage() {

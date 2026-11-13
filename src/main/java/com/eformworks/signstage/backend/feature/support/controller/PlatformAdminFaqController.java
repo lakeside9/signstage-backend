@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.core.web.DisplayOrderRequest;
 import com.eformworks.signstage.backend.feature.support.dto.FaqDto;
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import com.eformworks.signstage.backend.feature.support.service.FaqService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -46,11 +47,12 @@ public class PlatformAdminFaqController {
     )
     @GetMapping
     public ApiResponse<PageResponse<FaqDto.Response.FaqSummary>> findFaqs(
+            @RequestParam(required = false) SupportAudience audience,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Boolean active,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        Page<FaqDto.Response.FaqSummary> response = faqService.findFaqs(keyword, active, pageable);
+        Page<FaqDto.Response.FaqSummary> response = faqService.findFaqs(audience, keyword, active, pageable);
         return ApiResponse.success(PageResponse.from(response), traceIdProvider.getTraceId());
     }
 
@@ -94,16 +96,17 @@ public class PlatformAdminFaqController {
 
     @Operation(
             summary = "FAQ 표시 순서 일괄 변경",
-            description = "목록 화면의 위/아래 이동 버튼이 전체 목록을 원하는 순서로 다시 나열해 통째로 보낸다. "
+            description = "목록 화면의 위/아래 이동 버튼이 그 대상(audience)의 전체 목록을 원하는 순서로 다시 나열해 통째로 보낸다. "
                     + "ACTION_FAQ_MANAGE가 허용된 등급만 호출할 수 있다(PLATFORM_OPS 이상)."
     )
     @PutMapping("/order")
     public ApiResponse<List<FaqDto.Response.FaqSummary>> updateDisplayOrders(
             @AuthenticationPrincipal CurrentUser currentUser,
+            @RequestParam SupportAudience audience,
             @Valid @RequestBody DisplayOrderRequest.UpdateDisplayOrders request
     ) {
         List<FaqDto.Response.FaqSummary> response =
-                faqService.updateDisplayOrders(currentUser.platformRole(), currentUser.userId(), request);
+                faqService.updateDisplayOrders(currentUser.platformRole(), currentUser.userId(), audience, request);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 }

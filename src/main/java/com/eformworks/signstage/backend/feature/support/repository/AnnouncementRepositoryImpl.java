@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.support.repository;
 
 import com.eformworks.signstage.backend.feature.support.entity.Announcement;
 import com.eformworks.signstage.backend.feature.support.entity.QAnnouncement;
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import java.util.List;
@@ -20,8 +21,8 @@ public class AnnouncementRepositoryImpl implements AnnouncementRepositoryCustom 
     private final JPAQueryFactory queryFactory;
 
     @Override
-    public Page<Announcement> search(String keyword, Boolean active, Pageable pageable) {
-        BooleanExpression[] conditions = { keywordContains(keyword), activeEq(active) };
+    public Page<Announcement> search(SupportAudience audience, String keyword, Boolean active, Pageable pageable) {
+        BooleanExpression[] conditions = { audienceEq(audience), keywordContains(keyword), activeEq(active) };
 
         List<Announcement> content = queryFactory.selectFrom(ANNOUNCEMENT)
                 .where(conditions)
@@ -44,5 +45,9 @@ public class AnnouncementRepositoryImpl implements AnnouncementRepositoryCustom 
 
     private BooleanExpression activeEq(Boolean active) {
         return active == null ? null : ANNOUNCEMENT.active.eq(active);
+    }
+
+    private BooleanExpression audienceEq(SupportAudience audience) {
+        return audience == null ? null : ANNOUNCEMENT.audience.eq(audience);
     }
 }

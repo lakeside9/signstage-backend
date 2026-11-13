@@ -57,6 +57,8 @@ public enum PlatformAdminAction {
     /** 답변/종료를 한 액션으로 묶는다({@code APPROVE/REJECT_UNIT_PRODUCT_PURCHASE}와 달리 성격이 대칭이라 통합). */
     REPLY_CEREMONY_INQUIRY,
     CLOSE_CEREMONY_INQUIRY,
+    /** 고객 문의하기(공개 화면) 처리 상태·메모 기록 — 2026-11-13. */
+    HANDLE_CONTACT_INQUIRY,
     /** 현장지원 요청에 거리 등을 보고 실제 금액을 매긴다 — signstage-docs business/onsite-support-negotiation-and-billing-classification-review.md 3.2절(2026-09-12). */
     QUOTE_ONSITE_SUPPORT_REQUEST,
     /** 플랫폼 수주·파트너 발주 — signstage-docs business/platform-order-partner-subcontract-review.md 4.1절. */
@@ -74,6 +76,9 @@ public enum PlatformAdminAction {
     UPDATE_QUOTE_TEMPLATE,
     CLOSE_QUOTE_TEMPLATE,
     DELETE_QUOTE_TEMPLATE,
+    UPDATE_QUOTE_SUPPLIER,
+    UPLOAD_QUOTE_SEAL,
+    DELETE_QUOTE_SEAL,
     CREATE_SALES_ORDER,
     UPDATE_SALES_ORDER,
     ACCEPT_SALES_ORDER,

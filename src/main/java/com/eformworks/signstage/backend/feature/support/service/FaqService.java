@@ -8,6 +8,7 @@ import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.support.dto.FaqDto;
 import com.eformworks.signstage.backend.feature.support.entity.Faq;
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import com.eformworks.signstage.backend.feature.support.error.SupportErrorCode;
 import com.eformworks.signstage.backend.feature.support.repository.FaqRepository;
 import java.util.Comparator;
@@ -38,9 +39,12 @@ public class FaqService {
     private final PlatformAdminAuditLogRecorder platformAdminAuditLogRecorder;
     private final RolePermissionService rolePermissionService;
 
-    /** {@code /api/faqs} — 인증된 사용자 누구나, 활성 FAQ만 표시 순서대로. 카테고리별 그룹핑은 프런트가 한다. */
-    public List<FaqDto.Response.FaqSummary> findPublicFaqs() {
-        return faqRepository.findAllByActiveTrueOrderByDisplayOrderAscIdAsc().stream()
+    /**
+     * 대상별 활성 FAQ를 표시 순서대로 — 파트너용은 {@code /api/faqs}(로그인한 조직 사용자), 고객용은 공개
+     * {@code /api/public/faqs}(로그인 없이). 카테고리별 그룹핑은 프런트가 한다.
+     */
+    public List<FaqDto.Response.FaqSummary> findPublicFaqs(SupportAudience audience) {
+        return faqRepository.findAllByAudienceAndActiveTrueOrderByDisplayOrderAscIdAsc(audience).stream()
                 .map(this::toSummary)
                 .toList();
     }
@@ -52,8 +56,8 @@ public class FaqService {
     }
 
     /** {@code keyword}는 category/question/answer 중 하나라도 포함하면 매칭된다(2026-09-12 사용자 요청). */
-    public Page<FaqDto.Response.FaqSummary> findFaqs(String keyword, Boolean active, Pageable pageable) {
-        return faqRepository.search(keyword, active, pageable).map(this::toSummary);
+    public Page<FaqDto.Response.FaqSummary> findFaqs(SupportAudience audience, String keyword, Boolean active, Pageable pageable) {
+        return faqRepository.search(audience, keyword, active, pageable).map(this::toSummary);
     }
 
     @Transactional
@@ -62,12 +66,14 @@ public class FaqService {
     ) {
         checkAllowed(actingPlatformRole);
 
-        int displayOrder = faqRepository.findAllByOrderByDisplayOrderAscIdAsc().stream()
+        // 표시 순서는 대상별로 매긴다 — 같은 대상의 맨 뒤에 붙인다.
+        int displayOrder = faqRepository.findAllByAudienceOrderByDisplayOrderAscIdAsc(request.getAudience()).stream()
                 .mapToInt(Faq::getDisplayOrder)
                 .max()
                 .orElse(0) + DISPLAY_ORDER_STEP;
 
         Faq faq = Faq.builder()
+                .audience(request.getAudience())
                 .category(request.getCategory())
                 .question(request.getQuestion())
                 .answer(request.getAnswer())
@@ -89,7 +95,14 @@ public class FaqService {
 
         Faq faq = faqRepository.findById(faqId)
                 .orElseThrow(() -> new ApplicationException(SupportErrorCode.FAQ_NOT_FOUND));
-        faq.updateInfo(request.getCategory(), request.getQuestion(), request.getAnswer(), request.getActive());
+        if (faq.getAudience() != request.getAudience()) {
+            // 대상을 바꾸면 새 대상 목록의 맨 뒤로 보낸다.
+            faq.updateDisplayOrder(faqRepository.findAllByAudienceOrderByDisplayOrderAscIdAsc(request.getAudience()).stream()
+                    .mapToInt(Faq::getDisplayOrder)
+                    .max()
+                    .orElse(0) + DISPLAY_ORDER_STEP);
+        }
+        faq.updateInfo(request.getAudience(), request.getCategory(), request.getQuestion(), request.getAnswer(), request.getActive());
 
         platformAdminAuditLogRecorder.record(
                 adminUserId, PlatformAdminAction.UPDATE_FAQ, null, null, "faqId=" + faqId
@@ -117,11 +130,12 @@ public class FaqService {
      */
     @Transactional
     public List<FaqDto.Response.FaqSummary> updateDisplayOrders(
-            String actingPlatformRole, Long adminUserId, DisplayOrderRequest.UpdateDisplayOrders request
+            String actingPlatformRole, Long adminUserId, SupportAudience audience,
+            DisplayOrderRequest.UpdateDisplayOrders request
     ) {
         checkAllowed(actingPlatformRole);
 
-        List<Faq> all = faqRepository.findAllByOrderByDisplayOrderAscIdAsc();
+        List<Faq> all = faqRepository.findAllByAudienceOrderByDisplayOrderAscIdAsc(audience);
         Set<Long> allIds = all.stream().map(Faq::getId).collect(Collectors.toSet());
         Set<Long> requestedIds = request.getItems().stream().map(DisplayOrderRequest.Item::getId).collect(Collectors.toSet());
         if (!allIds.equals(requestedIds)) {
@@ -147,7 +161,7 @@ public class FaqService {
     private FaqDto.Response.FaqSummary toSummary(Faq faq) {
         return new FaqDto.Response.FaqSummary(
                 faq.getId(), faq.getCategory(), faq.getQuestion(), faq.getAnswer(),
-                faq.getDisplayOrder(), faq.isActive(), faq.getCreatedAt()
+                faq.getDisplayOrder(), faq.isActive(), faq.getCreatedAt(), faq.getAudience()
         );
     }
 

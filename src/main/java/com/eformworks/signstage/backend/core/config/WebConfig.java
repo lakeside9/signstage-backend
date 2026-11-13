@@ -20,7 +20,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(rateLimitInterceptor).addPathPatterns("/api/portal/**", "/api/projector/**");
+        registry.addInterceptor(rateLimitInterceptor).addPathPatterns("/api/portal/**", "/api/projector/**", "/api/public/**");
         registry.addInterceptor(partnerDirectOrderInterceptor).addPathPatterns("/api/organizations/**");
     }
 }

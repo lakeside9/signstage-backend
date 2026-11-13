@@ -1,6 +1,7 @@
 package com.eformworks.signstage.backend.feature.support.repository;
 
 import com.eformworks.signstage.backend.feature.support.entity.Faq;
+import com.eformworks.signstage.backend.feature.support.entity.SupportAudience;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -16,5 +17,5 @@ public interface FaqRepositoryCustom {
      * keyword/active 둘 다 선택 필터다(null/빈 문자열이면 그 조건을 걸지 않는다). keyword는
      * category/question/answer 중 하나라도 포함하면 매칭된다.
      */
-    Page<Faq> search(String keyword, Boolean active, Pageable pageable);
+    Page<Faq> search(SupportAudience audience, String keyword, Boolean active, Pageable pageable);
 }

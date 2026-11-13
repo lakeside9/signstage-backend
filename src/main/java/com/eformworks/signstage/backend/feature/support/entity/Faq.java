@@ -3,6 +3,8 @@ package com.eformworks.signstage.backend.feature.support.entity;
 import com.eformworks.signstage.backend.core.jpa.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -30,6 +32,11 @@ public class Faq extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 보여줄 대상 — 파트너용(조직 콘솔) 또는 고객용(공개 화면). */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private SupportAudience audience;
+
     @Column(length = 50)
     private String category;
 
@@ -46,7 +53,8 @@ public class Faq extends BaseEntity {
     private boolean active;
 
     @Builder
-    private Faq(String category, String question, String answer, int displayOrder) {
+    private Faq(SupportAudience audience, String category, String question, String answer, int displayOrder) {
+        this.audience = audience;
         this.category = category;
         this.question = question;
         this.answer = answer;
@@ -54,7 +62,8 @@ public class Faq extends BaseEntity {
         this.active = true;
     }
 
-    public void updateInfo(String category, String question, String answer, boolean active) {
+    public void updateInfo(SupportAudience audience, String category, String question, String answer, boolean active) {
+        this.audience = audience;
         this.category = category;
         this.question = question;
         this.answer = answer;
