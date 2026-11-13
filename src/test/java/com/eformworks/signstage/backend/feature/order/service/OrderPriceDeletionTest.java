@@ -44,7 +44,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * 수주 가격표 삭제 — 견적·수주·발주 계산에 쓰이지 않은 가격만 지운다({@link OrderPriceService},
+ * 수주 가격표 삭제·수정 — 견적·수주·발주 계산에 쓰이지 않은 가격만 지우거나 고친다({@link OrderPriceService},
  * {@link PartnerRateCardService}).
  */
 @ExtendWith(MockitoExtension.class)
@@ -157,6 +157,58 @@ class OrderPriceDeletionTest {
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(OrderErrorCode.PRICE_IN_USE);
         verify(partnerRateCardRepository, never()).delete(used);
+    }
+
+    @Test
+    @DisplayName("쓰이지 않은 고객 가격은 단가·기간을 고치고, 겹침 확인에서 자기 자신은 뺀다")
+    void updateCustomerPrice_updatesUnused() {
+        CustomerPrice price = customerPrice(10L);
+        given(customerPriceRepository.findById(10L)).willReturn(Optional.of(price));
+        PlatformAdminOrderPriceDto.Request.CreateCustomerPrice request = new PlatformAdminOrderPriceDto.Request.CreateCustomerPrice(
+                null, 999L, "KRW", BigDecimal.valueOf(120_000), null, OrderFixtures.TODAY.plusDays(1), null
+        );
+
+        orderPriceService.updateCustomerPrice(10L, ADMIN_ID, ROLE, request);
+
+        // 대상은 바꾸지 않는다 — 요청의 unitProductId(999)가 아니라 원래 상품(11)으로 겹침을 본다.
+        verify(customerPriceRepository).existsOverlapForUnitProduct(11L, OrderFixtures.TODAY.plusDays(1), EffectivePeriod.OPEN_END, 10L);
+        assertThat(price.getUnitPrice()).isEqualByComparingTo("120000");
+        assertThat(price.getUnitProduct().getId()).isEqualTo(11L);
+        assertThat(price.getPeriod().getEffectiveFrom()).isEqualTo(OrderFixtures.TODAY.plusDays(1));
+        verify(auditLogRecorder).record(eq(ADMIN_ID), eq(PlatformAdminAction.UPDATE_ORDER_PRICE), any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("견적에 쓰인 고객 가격은 고치지 않는다")
+    void updateCustomerPrice_rejectsUsed() {
+        CustomerPrice price = customerPrice(10L);
+        given(customerPriceRepository.findById(10L)).willReturn(Optional.of(price));
+        given(salesOrderLineRepository.existsByCustomerPriceId(10L)).willReturn(true);
+        PlatformAdminOrderPriceDto.Request.CreateCustomerPrice request = new PlatformAdminOrderPriceDto.Request.CreateCustomerPrice(
+                null, 11L, "KRW", BigDecimal.valueOf(120_000), null, OrderFixtures.TODAY, null
+        );
+
+        assertThatThrownBy(() -> orderPriceService.updateCustomerPrice(10L, ADMIN_ID, ROLE, request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(OrderErrorCode.PRICE_IN_USE);
+        assertThat(price.getUnitPrice()).isEqualByComparingTo("100000");
+    }
+
+    @Test
+    @DisplayName("발주에 쓰인 파트너 단가표는 고치지 않는다")
+    void updatePartnerRateCard_rejectsUsed() {
+        PartnerRateCard used = OrderFixtures.rateCard(null, 500_000, 100_000, 400_000);
+        given(partnerRateCardRepository.findById(31L)).willReturn(Optional.of(used));
+        given(partnerOrderRepository.existsByPartnerRateCardId(31L)).willReturn(true);
+        PlatformAdminOrderPriceDto.Request.CreatePartnerRateCard request = new PlatformAdminOrderPriceDto.Request.CreatePartnerRateCard(
+                null, "KRW", BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, OrderFixtures.TODAY, null
+        );
+
+        assertThatThrownBy(() -> partnerRateCardService.updatePartnerRateCard(31L, ADMIN_ID, ROLE, request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(OrderErrorCode.PRICE_IN_USE);
     }
 
     private static CustomerPrice customerPrice(Long id) {

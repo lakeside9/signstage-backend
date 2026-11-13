@@ -74,4 +74,17 @@ public class PartnerRateCard extends BaseEntity {
     public void close(LocalDate effectiveTo) {
         this.period = period.close(effectiveTo);
     }
+
+    /** 아직 어떤 발주에도 쓰이지 않은 단가표만 고친다(서비스가 확인한다). 파트너(또는 기본 단가표)는 바꾸지 않는다. */
+    public void update(
+            String currencyCode, BigDecimal baseFee, BigDecimal tabletUnitRate, BigDecimal wifiUnitRate,
+            BigDecimal onsiteStaffDayRate, EffectivePeriod period
+    ) {
+        this.currencyCode = currencyCode;
+        this.baseFee = baseFee;
+        this.tabletUnitRate = tabletUnitRate;
+        this.wifiUnitRate = wifiUnitRate != null ? wifiUnitRate : BigDecimal.ZERO;
+        this.onsiteStaffDayRate = onsiteStaffDayRate;
+        this.period = period;
+    }
 }

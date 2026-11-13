@@ -75,4 +75,18 @@ public class RegionSurcharge extends BaseEntity {
     public void close(LocalDate effectiveTo) {
         this.period = period.close(effectiveTo);
     }
+
+    /** 아직 어떤 수주·발주에도 쓰이지 않은 할증만 고친다(서비스가 확인한다). 권역은 바꾸지 않는다. */
+    public void update(
+            String currencyCode, BigDecimal customerAmount, BigDecimal partnerAmount, BigDecimal lodgingCustomerAmount,
+            BigDecimal lodgingPartnerAmount, String taxCode, EffectivePeriod period
+    ) {
+        this.currencyCode = currencyCode;
+        this.customerAmount = customerAmount;
+        this.partnerAmount = partnerAmount;
+        this.lodgingCustomerAmount = lodgingCustomerAmount != null ? lodgingCustomerAmount : BigDecimal.ZERO;
+        this.lodgingPartnerAmount = lodgingPartnerAmount != null ? lodgingPartnerAmount : BigDecimal.ZERO;
+        this.taxCode = taxCode;
+        this.period = period;
+    }
 }

@@ -71,4 +71,12 @@ public class CustomerPrice extends BaseEntity {
     public void close(LocalDate effectiveTo) {
         this.period = period.close(effectiveTo);
     }
+
+    /** 아직 어떤 견적에도 쓰이지 않은 가격만 고친다(서비스가 확인한다). 대상(패키지·옵션)은 바꾸지 않는다. */
+    public void update(String currencyCode, BigDecimal unitPrice, String taxCode, EffectivePeriod period) {
+        this.currencyCode = currencyCode;
+        this.unitPrice = unitPrice;
+        this.taxCode = taxCode;
+        this.period = period;
+    }
 }

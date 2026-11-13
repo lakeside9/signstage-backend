@@ -123,6 +123,42 @@ public class OrderPriceService {
         return PlatformAdminOrderPriceDto.Response.AdminCustomerPrice.from(price, isCustomerPriceUsed(customerPriceId));
     }
 
+    /**
+     * 견적 줄(범위 변경 포함)에 한 번도 쓰이지 않은 고객 가격만 고친다 — 단가·세금 코드·기간. 대상(패키지·옵션)은
+     * 바꾸지 않는다(요청의 대상 필드는 무시한다). 같은 대상의 다른 기간과 겹치면 거부한다.
+     */
+    @Transactional
+    public PlatformAdminOrderPriceDto.Response.AdminCustomerPrice updateCustomerPrice(
+            Long customerPriceId,
+            Long adminUserId,
+            String actingPlatformRole,
+            PlatformAdminOrderPriceDto.Request.CreateCustomerPrice request
+    ) {
+        checkCanManagePrices(rolePermissionService, actingPlatformRole);
+        CustomerPrice price = customerPriceRepository.findById(customerPriceId)
+                .orElseThrow(() -> new ApplicationException(OrderErrorCode.PRICE_NOT_FOUND));
+        if (isCustomerPriceUsed(customerPriceId)) {
+            throw new ApplicationException(OrderErrorCode.PRICE_IN_USE);
+        }
+        EffectivePeriod period = new EffectivePeriod(request.getEffectiveFrom(), request.getEffectiveTo());
+        String taxCode = resolveTaxCode(request.getTaxCode(), period);
+        boolean overlaps = price.getBillingPlan() != null
+                ? customerPriceRepository.existsOverlapForPlan(
+                        price.getBillingPlan().getId(), period.getEffectiveFrom(), period.effectiveToOrOpenEnd(), customerPriceId)
+                : customerPriceRepository.existsOverlapForUnitProduct(
+                        price.getUnitProduct().getId(), period.getEffectiveFrom(), period.effectiveToOrOpenEnd(), customerPriceId);
+        if (overlaps) {
+            throw new ApplicationException(OrderErrorCode.PRICE_PERIOD_OVERLAP);
+        }
+        String before = "unitPrice=" + price.getUnitPrice() + ", period=" + price.getPeriod().getEffectiveFrom()
+                + "~" + price.getPeriod().getEffectiveTo();
+        price.update(resolveCurrencyCode(request.getCurrencyCode()), request.getUnitPrice(), taxCode, period);
+        auditLogRecorder.record(adminUserId, PlatformAdminAction.UPDATE_ORDER_PRICE, null, null,
+                "customerPriceId=" + customerPriceId + ", " + before + " -> unitPrice=" + price.getUnitPrice()
+                        + ", period=" + period.getEffectiveFrom() + "~" + period.getEffectiveTo());
+        return PlatformAdminOrderPriceDto.Response.AdminCustomerPrice.from(price, false);
+    }
+
     @Transactional
     public void deleteCustomerPrice(Long customerPriceId, Long adminUserId, String actingPlatformRole) {
         checkCanManagePrices(rolePermissionService, actingPlatformRole);
@@ -189,6 +225,37 @@ public class OrderPriceService {
         auditLogRecorder.record(adminUserId, PlatformAdminAction.CLOSE_ORDER_PRICE_PERIOD, null, null,
                 "regionSurchargeId=" + regionSurchargeId + ", effectiveTo=" + request.getEffectiveTo());
         return PlatformAdminOrderPriceDto.Response.AdminRegionSurcharge.from(surcharge, isRegionSurchargeUsed(regionSurchargeId));
+    }
+
+    /** 수주·범위 변경·발주에 한 번도 쓰이지 않은 권역 할증만 고친다. 권역은 바꾸지 않는다(요청의 region은 무시한다). */
+    @Transactional
+    public PlatformAdminOrderPriceDto.Response.AdminRegionSurcharge updateRegionSurcharge(
+            Long regionSurchargeId,
+            Long adminUserId,
+            String actingPlatformRole,
+            PlatformAdminOrderPriceDto.Request.CreateRegionSurcharge request
+    ) {
+        checkCanManagePrices(rolePermissionService, actingPlatformRole);
+        RegionSurcharge surcharge = regionSurchargeRepository.findById(regionSurchargeId)
+                .orElseThrow(() -> new ApplicationException(OrderErrorCode.PRICE_NOT_FOUND));
+        if (isRegionSurchargeUsed(regionSurchargeId)) {
+            throw new ApplicationException(OrderErrorCode.PRICE_IN_USE);
+        }
+        EffectivePeriod period = new EffectivePeriod(request.getEffectiveFrom(), request.getEffectiveTo());
+        String taxCode = resolveTaxCode(request.getTaxCode(), period);
+        if (regionSurchargeRepository.existsOverlap(
+                surcharge.getRegion(), period.getEffectiveFrom(), period.effectiveToOrOpenEnd(), regionSurchargeId)) {
+            throw new ApplicationException(OrderErrorCode.PRICE_PERIOD_OVERLAP);
+        }
+        surcharge.update(
+                resolveCurrencyCode(request.getCurrencyCode()), request.getCustomerAmount(), request.getPartnerAmount(),
+                request.getLodgingCustomerAmount(), request.getLodgingPartnerAmount(), taxCode, period
+        );
+        auditLogRecorder.record(adminUserId, PlatformAdminAction.UPDATE_ORDER_PRICE, null, null,
+                "regionSurchargeId=" + regionSurchargeId + ", customerAmount=" + surcharge.getCustomerAmount()
+                        + ", partnerAmount=" + surcharge.getPartnerAmount()
+                        + ", period=" + period.getEffectiveFrom() + "~" + period.getEffectiveTo());
+        return PlatformAdminOrderPriceDto.Response.AdminRegionSurcharge.from(surcharge, false);
     }
 
     @Transactional

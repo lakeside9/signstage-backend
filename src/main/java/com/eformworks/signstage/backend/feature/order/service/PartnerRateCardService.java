@@ -90,6 +90,35 @@ public class PartnerRateCardService {
         );
     }
 
+    /** 발주에 한 번도 쓰이지 않은 단가표만 고친다. 파트너(또는 기본 단가표)는 바꾸지 않는다(요청의 organizationId는 무시한다). */
+    @Transactional
+    public PlatformAdminOrderPriceDto.Response.AdminPartnerRateCard updatePartnerRateCard(
+            Long partnerRateCardId,
+            Long adminUserId,
+            String actingPlatformRole,
+            PlatformAdminOrderPriceDto.Request.CreatePartnerRateCard request
+    ) {
+        OrderPriceService.checkCanManagePrices(rolePermissionService, actingPlatformRole);
+        PartnerRateCard rateCard = partnerRateCardRepository.findById(partnerRateCardId)
+                .orElseThrow(() -> new ApplicationException(OrderErrorCode.PRICE_NOT_FOUND));
+        if (partnerOrderRepository.existsByPartnerRateCardId(partnerRateCardId)) {
+            throw new ApplicationException(OrderErrorCode.PRICE_IN_USE);
+        }
+        EffectivePeriod period = new EffectivePeriod(request.getEffectiveFrom(), request.getEffectiveTo());
+        Long organizationId = rateCard.getOrganization() != null ? rateCard.getOrganization().getId() : null;
+        if (partnerRateCardRepository.existsOverlap(
+                organizationId, period.getEffectiveFrom(), period.effectiveToOrOpenEnd(), partnerRateCardId)) {
+            throw new ApplicationException(OrderErrorCode.PRICE_PERIOD_OVERLAP);
+        }
+        rateCard.update(
+                OrderPriceService.resolveCurrencyCode(request.getCurrencyCode()), request.getBaseFee(),
+                request.getTabletUnitRate(), request.getWifiUnitRate(), request.getOnsiteStaffDayRate(), period
+        );
+        auditLogRecorder.record(adminUserId, PlatformAdminAction.UPDATE_ORDER_PRICE, null, organizationId,
+                "partnerRateCardId=" + partnerRateCardId + ", period=" + period.getEffectiveFrom() + "~" + period.getEffectiveTo());
+        return PlatformAdminOrderPriceDto.Response.AdminPartnerRateCard.from(rateCard, false);
+    }
+
     @Transactional
     public void deletePartnerRateCard(Long partnerRateCardId, Long adminUserId, String actingPlatformRole) {
         OrderPriceService.checkCanManagePrices(rolePermissionService, actingPlatformRole);

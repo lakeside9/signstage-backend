@@ -67,6 +67,19 @@ public class PlatformAdminOrderPriceController {
         );
     }
 
+    @Operation(summary = "고객 가격 수정", description = "견적 줄(범위 변경 포함)에 쓰이지 않은 가격만 고친다(ORDER_PRICE_IN_USE). 대상은 바꾸지 않는다.")
+    @PutMapping("/customer-prices/{customerPriceId}")
+    public ApiResponse<PlatformAdminOrderPriceDto.Response.AdminCustomerPrice> updateCustomerPrice(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long customerPriceId,
+            @Valid @RequestBody PlatformAdminOrderPriceDto.Request.CreateCustomerPrice request
+    ) {
+        return ApiResponse.success(
+                orderPriceService.updateCustomerPrice(customerPriceId, currentUser.userId(), currentUser.platformRole(), request),
+                traceIdProvider.getTraceId()
+        );
+    }
+
     @Operation(summary = "고객 가격 삭제", description = "견적 줄(범위 변경 포함)에 쓰인 가격은 삭제할 수 없다(ORDER_PRICE_IN_USE).")
     @DeleteMapping("/customer-prices/{customerPriceId}")
     public ApiResponse<Void> deleteCustomerPrice(
@@ -108,6 +121,19 @@ public class PlatformAdminOrderPriceController {
         );
     }
 
+    @Operation(summary = "권역 할증 수정", description = "수주·범위 변경·발주에 쓰이지 않은 할증만 고친다(ORDER_PRICE_IN_USE). 권역은 바꾸지 않는다.")
+    @PutMapping("/region-surcharges/{regionSurchargeId}")
+    public ApiResponse<PlatformAdminOrderPriceDto.Response.AdminRegionSurcharge> updateRegionSurcharge(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long regionSurchargeId,
+            @Valid @RequestBody PlatformAdminOrderPriceDto.Request.CreateRegionSurcharge request
+    ) {
+        return ApiResponse.success(
+                orderPriceService.updateRegionSurcharge(regionSurchargeId, currentUser.userId(), currentUser.platformRole(), request),
+                traceIdProvider.getTraceId()
+        );
+    }
+
     @Operation(summary = "지역 할증 삭제", description = "수주·범위 변경·발주 계산에 쓰인 할증은 삭제할 수 없다(ORDER_PRICE_IN_USE).")
     @DeleteMapping("/region-surcharges/{regionSurchargeId}")
     public ApiResponse<Void> deleteRegionSurcharge(
@@ -145,6 +171,19 @@ public class PlatformAdminOrderPriceController {
     ) {
         return ApiResponse.success(
                 partnerRateCardService.closePartnerRateCard(partnerRateCardId, currentUser.userId(), currentUser.platformRole(), request),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "파트너 단가표 수정", description = "발주에 쓰이지 않은 단가표만 고친다(ORDER_PRICE_IN_USE). 파트너는 바꾸지 않는다.")
+    @PutMapping("/partner-rate-cards/{partnerRateCardId}")
+    public ApiResponse<PlatformAdminOrderPriceDto.Response.AdminPartnerRateCard> updatePartnerRateCard(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long partnerRateCardId,
+            @Valid @RequestBody PlatformAdminOrderPriceDto.Request.CreatePartnerRateCard request
+    ) {
+        return ApiResponse.success(
+                partnerRateCardService.updatePartnerRateCard(partnerRateCardId, currentUser.userId(), currentUser.platformRole(), request),
                 traceIdProvider.getTraceId()
         );
     }
