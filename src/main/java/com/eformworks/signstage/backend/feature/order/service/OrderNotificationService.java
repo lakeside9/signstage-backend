@@ -43,6 +43,14 @@ public class OrderNotificationService {
         notifyPartner(order, NotificationType.PARTNER_ORDER_ISSUED, "새 발주가 도착했습니다", message);
     }
 
+    /** 발급 뒤 메모를 고쳤다. 메모를 지웠으면 그렇게 알린다. */
+    public void partnerOrderMemoUpdated(PartnerOrder order) {
+        String message = title(order) + (order.getMemo() != null
+                ? " · 메모: " + abbreviate(order.getMemo(), MEMO_PREVIEW_LENGTH)
+                : " · 메모를 지웠습니다.");
+        notifyPartner(order, NotificationType.PARTNER_ORDER_MEMO_UPDATED, "발주 메모가 바뀌었습니다", message);
+    }
+
     public void partnerOrderDueSoon(PartnerOrder order) {
         notifyPartner(order, NotificationType.PARTNER_ORDER_DUE_SOON, "발주 응답 기한이 다가옵니다",
                 title(order) + " · 응답 기한 " + order.getResponseDueAt().format(DUE_FORMAT) + "까지 수락·거절해주세요.");

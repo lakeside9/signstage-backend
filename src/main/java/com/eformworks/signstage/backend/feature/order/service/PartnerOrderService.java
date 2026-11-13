@@ -26,6 +26,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -150,7 +151,7 @@ public class PartnerOrderService {
                 .issuedBy(adminUserId)
                 .partnerRateCardId(amount.partnerRateCardId())
                 .regionSurchargeId(amount.regionSurchargeId())
-                .memo(request.getMemo() != null && !request.getMemo().isBlank() ? request.getMemo().strip() : null)
+                .memo(normalizeMemo(request.getMemo()))
                 .build());
         snapshotPackageItems(partnerOrder, salesOrder);
 
@@ -195,6 +196,38 @@ public class PartnerOrderService {
         return PlatformAdminPartnerOrderDto.Response.AdminPartnerOrderSummary.from(
                 partnerOrder, LocalDateTime.now(SalesOrderService.PLATFORM_ZONE)
         );
+    }
+
+    /**
+     * 발급한 발주의 메모를 고친다(I04) — 응답 대기이거나 행사 완료 전인 수락 발주만. 바뀌면 파트너에게 알린다.
+     */
+    @Transactional
+    public PlatformAdminPartnerOrderDto.Response.AdminPartnerOrderSummary updateMemo(
+            Long partnerOrderId,
+            Long adminUserId,
+            String actingPlatformRole,
+            String memo
+    ) {
+        checkCanIssue(actingPlatformRole);
+        PartnerOrder partnerOrder = partnerOrderRepository.findById(partnerOrderId)
+                .orElseThrow(() -> new ApplicationException(OrderErrorCode.PARTNER_ORDER_NOT_FOUND));
+        LocalDateTime now = LocalDateTime.now(SalesOrderService.PLATFORM_ZONE);
+        if (!partnerOrder.isMemoEditable(now)) {
+            throw new ApplicationException(OrderErrorCode.PARTNER_ORDER_MEMO_NOT_EDITABLE);
+        }
+        String normalized = normalizeMemo(memo);
+        if (!Objects.equals(partnerOrder.getMemo(), normalized)) {
+            partnerOrder.updateMemo(normalized);
+            orderNotificationService.partnerOrderMemoUpdated(partnerOrder);
+            auditLogRecorder.record(adminUserId, PlatformAdminAction.UPDATE_PARTNER_ORDER_MEMO, null,
+                    partnerOrder.getOrganization().getId(), "partnerOrderId=" + partnerOrderId
+                            + ", memoLength=" + (normalized != null ? normalized.length() : 0));
+        }
+        return PlatformAdminPartnerOrderDto.Response.AdminPartnerOrderSummary.from(partnerOrder, now);
+    }
+
+    private static String normalizeMemo(String memo) {
+        return memo != null && !memo.isBlank() ? memo.strip() : null;
     }
 
     /** 발주 시점의 패키지 기본 포함 구성을 복사해 둔다 — 이후 플랜 구성이 바뀌어도 파트너가 받은 범위는 그대로다(I05). */

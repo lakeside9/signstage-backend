@@ -83,6 +83,7 @@ public enum PlatformAdminAction {
     RECORD_CUSTOMER_REFUND,
     ISSUE_PARTNER_ORDER,
     CANCEL_PARTNER_ORDER,
+    UPDATE_PARTNER_ORDER_MEMO,
     /** 검수·파트너 지급 — signstage-docs business/platform-order-partner-subcontract-review.md D11·D13. */
     APPROVE_ORDER_INSPECTION,
     CREATE_PARTNER_PAYOUTS,

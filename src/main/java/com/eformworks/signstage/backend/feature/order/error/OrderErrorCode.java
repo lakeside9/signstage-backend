@@ -85,6 +85,11 @@ public enum OrderErrorCode implements ErrorCode {
             "응답 대기 중인 발주만 수락·거절·취소할 수 있습니다."
     ),
     PARTNER_ORDER_EXPIRED("ORDER_PARTNER_ORDER_EXPIRED", HttpStatus.CONFLICT, "응답 기한이 지난 발주입니다."),
+    PARTNER_ORDER_MEMO_NOT_EDITABLE(
+            "ORDER_PARTNER_ORDER_MEMO_NOT_EDITABLE",
+            HttpStatus.CONFLICT,
+            "응답 대기 중이거나 행사 완료 전인 수락 발주만 메모를 고칠 수 있습니다."
+    ),
     PARTNER_ORDER_NOT_CANCELLABLE(
             "ORDER_PARTNER_ORDER_NOT_CANCELLABLE",
             HttpStatus.CONFLICT,

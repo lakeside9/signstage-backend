@@ -17,6 +17,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -54,6 +55,20 @@ public class PlatformAdminPartnerOrderController {
     ) {
         return ApiResponse.success(
                 partnerOrderService.cancelPartnerOrder(partnerOrderId, currentUser.userId(), currentUser.platformRole(), request.getReason()),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "발주 메모 수정", description = "응답 대기이거나 행사 완료 전인 수락 발주의 메모를 고치고 파트너에게 알린다. "
+            + "비우면 메모를 지운다. ACTION_PARTNER_ORDER_ISSUE 권한이 필요하다.")
+    @PutMapping("/{partnerOrderId}/memo")
+    public ApiResponse<PlatformAdminPartnerOrderDto.Response.AdminPartnerOrderSummary> updateMemo(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long partnerOrderId,
+            @Valid @RequestBody PlatformAdminPartnerOrderDto.Request.UpdateMemo request
+    ) {
+        return ApiResponse.success(
+                partnerOrderService.updateMemo(partnerOrderId, currentUser.userId(), currentUser.platformRole(), request.getMemo()),
                 traceIdProvider.getTraceId()
         );
     }

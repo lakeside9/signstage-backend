@@ -273,6 +273,20 @@ public class PartnerOrder extends BaseEntity {
         return status == PartnerOrderStatus.ACCEPTED && ceremony != null && ceremony.getCompletedAt() == null;
     }
 
+    /**
+     * 발주 메모를 고칠 수 있는지 — 응답 대기(기한 전)이거나, 수락했고 행사가 아직 완료되지 않은 발주.
+     * 거절·만료·취소된 발주와 완료된 행사의 발주는 기록으로 남긴다.
+     */
+    public boolean isMemoEditable(LocalDateTime now) {
+        PartnerOrderStatus effective = effectiveStatus(now);
+        return effective == PartnerOrderStatus.ISSUED
+                || effective == PartnerOrderStatus.ACCEPTED && (ceremony == null || ceremony.getCompletedAt() == null);
+    }
+
+    public void updateMemo(String memo) {
+        this.memo = memo;
+    }
+
     public void cancel(String cancellationReason) {
         this.status = PartnerOrderStatus.CANCELLED;
         this.cancelledAt = LocalDateTime.now();

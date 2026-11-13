@@ -66,6 +66,17 @@ public final class PlatformAdminPartnerOrderDto {
             @Size(max = 500)
             private String reason;
         }
+
+        /** 발급 뒤 메모 수정. 비우면 메모를 지운다. */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class UpdateMemo {
+
+            @Size(max = 2000)
+            private String memo;
+        }
     }
 
     public static final class Response {

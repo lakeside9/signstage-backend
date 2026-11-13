@@ -238,6 +238,41 @@ class PartnerOrderServiceTest {
         verify(orderNotificationService).partnerOrderCancelled(accepted, "파트너 사정");
     }
 
+    @Test
+    @DisplayName("수락한 발주의 메모를 고치면 정리해 저장하고 파트너에게 알린다 — 같은 내용이면 알리지 않는다(I04)")
+    void updateMemo_updatesAcceptedOrderAndNotifies() {
+        PartnerOrder accepted = acceptedOrder(false);
+        given(partnerOrderRepository.findById(300L)).willReturn(Optional.of(accepted));
+
+        partnerOrderService.updateMemo(300L, ADMIN_ID, ROLE, "  09시까지 도착  ");
+        partnerOrderService.updateMemo(300L, ADMIN_ID, ROLE, "09시까지 도착");
+
+        assertThat(accepted.getMemo()).isEqualTo("09시까지 도착");
+        verify(orderNotificationService).partnerOrderMemoUpdated(accepted);
+
+        partnerOrderService.updateMemo(300L, ADMIN_ID, ROLE, "   ");
+        assertThat(accepted.getMemo()).isNull();
+    }
+
+    @Test
+    @DisplayName("행사가 완료된 발주와 만료된 발주는 메모를 고칠 수 없다")
+    void updateMemo_rejectsClosedOrders() {
+        PartnerOrder completed = acceptedOrder(true);
+        given(partnerOrderRepository.findById(300L)).willReturn(Optional.of(completed));
+        assertThatThrownBy(() -> partnerOrderService.updateMemo(300L, ADMIN_ID, ROLE, "메모"))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(OrderErrorCode.PARTNER_ORDER_MEMO_NOT_EDITABLE);
+
+        PartnerOrder overdue = partnerOrder(LocalDateTime.now().minusHours(1));
+        given(partnerOrderRepository.findById(301L)).willReturn(Optional.of(overdue));
+        assertThatThrownBy(() -> partnerOrderService.updateMemo(301L, ADMIN_ID, ROLE, "메모"))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(OrderErrorCode.PARTNER_ORDER_MEMO_NOT_EDITABLE);
+        verify(orderNotificationService, never()).partnerOrderMemoUpdated(any());
+    }
+
     private PartnerOrder acceptedOrder(boolean ceremonyCompleted) {
         PartnerOrder order = partnerOrder(LocalDateTime.now().plusDays(1));
         ReflectionTestUtils.setField(order, "id", 300L);
