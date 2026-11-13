@@ -367,9 +367,9 @@ public class CeremonyEventController {
     }
 
     @Operation(
-            summary = "서명매핑확인 (테스트/리허설 전용)",
-            description = "진행 중(STARTED)인 테스트 또는 리허설 행사에서, 매핑된 서명란마다 배정된 서명자의 소속명(5자)을 자동으로 채워 넣는다. "
-                    + "이미 서명(또는 이전 확인 결과)이 있는 서명란은 건드리지 않는다. MAIN에는 허용하지 않는다."
+            summary = "서명매핑확인",
+            description = "시작 전(DRAFT/READY) 행사에서, 매핑된 서명란마다 배정된 서명자의 소속명(5자)을 자동으로 채워 넣는다. "
+                    + "이미 서명(또는 이전 확인 결과)이 있는 서명란은 건드리지 않는다. 진행 중이거나 종료된 행사는 거부한다."
     )
     @PostMapping("/{eventId}/signature-mapping-check")
     public ApiResponse<Void> runSignatureMappingCheck(

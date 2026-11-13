@@ -617,7 +617,7 @@ public class CeremonyEventService {
         ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyForUpdateOrThrow(ceremonyId, eventId);
-        if (!canCheckOrResetSignatures(event)) {
+        if (!canResetSignatures(event)) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_BULK_RESET_NOT_ALLOWED);
         }
 
@@ -649,7 +649,7 @@ public class CeremonyEventService {
     }
 
     /**
-     * 서명매핑확인 — 시작 전 MAIN 또는 TEST/REHEARSAL 행사에서, 매핑된 서명란마다
+     * 서명매핑확인 — 시작 전(DRAFT/READY) 행사에서만, 행사 종류와 관계없이 매핑된 서명란마다
      * 배정된 서명자의 소속(5자까지)을 텍스트로 채워 넣어 프로젝터/서명자 화면에서
      * 필드-서명자 매핑이 맞는지 눈으로 바로 확인할 수 있게 한다. SIGNATURE_COMPLETE 로그를
      * 남기지 않아 "행사 종료" 가능 여부나 실제 서명 진행 상황에는 전혀 영향이 없다. 이미
@@ -668,7 +668,8 @@ public class CeremonyEventService {
         ceremonyAccessService.checkCeremonyEditable(ceremony);
 
         CeremonyEvent event = findEventInCeremonyForUpdateOrThrow(ceremonyId, eventId);
-        if (!canCheckOrResetSignatures(event)) {
+        // 진행 중인 테스트/리허설에서는 실제 서명 연습과 섞이지 않도록 막는다 — 서명 초기화와 달리 시작 전에만 허용한다.
+        if (!isBeforeStart(event)) {
             throw new ApplicationException(CeremonyErrorCode.EVENT_MAPPING_CHECK_NOT_ALLOWED);
         }
 
@@ -697,14 +698,17 @@ public class CeremonyEventService {
         }
     }
 
-    private boolean canCheckOrResetSignatures(CeremonyEvent event) {
-        boolean beforeStart = event.getStatus() == CeremonyEventStatus.DRAFT
-                || event.getStatus() == CeremonyEventStatus.READY;
+    private boolean isBeforeStart(CeremonyEvent event) {
+        return event.getStatus() == CeremonyEventStatus.DRAFT || event.getStatus() == CeremonyEventStatus.READY;
+    }
+
+    /** 서명 초기화 — MAIN은 시작 전에만, TEST/REHEARSAL은 진행 중까지 허용한다. */
+    private boolean canResetSignatures(CeremonyEvent event) {
         if (event.getEventType() == CeremonyEventType.MAIN) {
-            return beforeStart;
+            return isBeforeStart(event);
         }
         return (event.getEventType() == CeremonyEventType.TEST || event.getEventType() == CeremonyEventType.REHEARSAL)
-                && (beforeStart || event.getStatus() == CeremonyEventStatus.STARTED);
+                && (isBeforeStart(event) || event.getStatus() == CeremonyEventStatus.STARTED);
     }
 
     private String mappingCheckLabel(Signer signer) {

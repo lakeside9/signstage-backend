@@ -316,7 +316,7 @@ public enum CeremonyErrorCode implements ErrorCode {
     EVENT_MAPPING_CHECK_NOT_ALLOWED(
             "CEREMONY_EVENT_MAPPING_CHECK_NOT_ALLOWED",
             HttpStatus.CONFLICT,
-            "본행사는 작성 중 또는 준비 상태에서만, 테스트 또는 리허설 행사는 진행 중까지 서명매핑확인을 실행할 수 있습니다."
+            "서명매핑확인은 행사 시작 전(작성 중 또는 준비 상태)에만 실행할 수 있습니다."
     ),
     EFFECT_DEFINITION_NOT_FOUND(
             "CEREMONY_EFFECT_DEFINITION_NOT_FOUND", HttpStatus.NOT_FOUND, "이벤트 효과 정의를 찾을 수 없습니다."

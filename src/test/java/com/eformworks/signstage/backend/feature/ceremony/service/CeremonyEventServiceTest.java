@@ -579,7 +579,7 @@ class CeremonyEventServiceTest {
      * 소속명 5자 텍스트를 채워 넣는다({@link CeremonyEventService#runSignatureMappingCheck}).
      */
     @ParameterizedTest
-    @CsvSource({"TEST,DRAFT", "TEST,READY", "TEST,STARTED", "REHEARSAL,DRAFT", "REHEARSAL,READY", "REHEARSAL,STARTED", "MAIN,DRAFT", "MAIN,READY"})
+    @CsvSource({"TEST,DRAFT", "TEST,READY", "REHEARSAL,DRAFT", "REHEARSAL,READY", "MAIN,DRAFT", "MAIN,READY"})
     @DisplayName("시작 전 본행사와 테스트/리허설 행사는 매핑된 서명란마다 소속명 5자 텍스트를 채워 넣는다")
     void runSignatureMappingCheck_startedTestEvent_success(CeremonyEventType eventType, CeremonyEventStatus status) {
         // given
@@ -636,8 +636,8 @@ class CeremonyEventServiceTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = CeremonyEventStatus.class, names = {"FINISHED", "FORCE_FINISHED"})
-    @DisplayName("서명매핑확인 - 종료된 행사는 실행할 수 없다")
+    @EnumSource(value = CeremonyEventStatus.class, names = {"STARTED", "FINISHED", "FORCE_FINISHED"})
+    @DisplayName("서명매핑확인 - 진행 중이거나 종료된 테스트 행사는 실행할 수 없다")
     void runSignatureMappingCheck_notStarted_fail(CeremonyEventStatus status) {
         // given
         Ceremony ceremony = ceremony(CEREMONY_ID);
@@ -666,7 +666,6 @@ class CeremonyEventServiceTest {
                 .ceremony(ceremony).name("테스트").eventType(CeremonyEventType.TEST).accessKey("access-key").build();
         ReflectionTestUtils.setField(event, "id", EVENT_ID);
         event.transitionToReady();
-        event.transitionToStarted();
 
         Signer signer = signer(1L, ceremony, "서명자1");
         Template contractTemplate = template(101L, ceremony, TemplateDocumentRole.CONTRACT);
