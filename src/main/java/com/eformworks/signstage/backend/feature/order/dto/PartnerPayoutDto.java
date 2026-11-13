@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.order.dto;
 
+import com.eformworks.signstage.backend.feature.order.entity.PartnerCompensation;
 import com.eformworks.signstage.backend.core.web.PageResponse;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerLedgerEntry;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerPayout;
@@ -144,6 +145,33 @@ public final class PartnerPayoutDto {
             private final List<OrderInspectionDto.Response.InspectionSummary> items;
             /** 이번 지급에서 뺀 귀책 상계. */
             private final List<PartnerOffsetDto.Response.OffsetSummary> offsets;
+            /** 이번 지급에 더한 고객 취소 보상(C04). */
+            private final List<CompensationItem> compensations;
+        }
+
+        @Getter
+        @AllArgsConstructor
+        public static class CompensationItem {
+
+            private final Long id;
+            private final Long partnerOrderId;
+            private final String salesOrderTitle;
+            private final BigDecimal amount;
+            private final BigDecimal ratePercent;
+            private final String reason;
+            private final LocalDate occurredOn;
+
+            public static CompensationItem from(PartnerCompensation compensation) {
+                return new CompensationItem(
+                        compensation.getId(),
+                        compensation.getPartnerOrder().getId(),
+                        compensation.getPartnerOrder().getSalesOrder().getTitle(),
+                        compensation.getAmount(),
+                        compensation.getRatePercent(),
+                        compensation.getReason(),
+                        compensation.getOccurredOn()
+                );
+            }
         }
 
         @Getter

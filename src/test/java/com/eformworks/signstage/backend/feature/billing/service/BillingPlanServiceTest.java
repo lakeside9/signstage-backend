@@ -320,4 +320,19 @@ class BillingPlanServiceTest {
                 .isEqualTo(BillingErrorCode.PLATFORM_ORDER_CATALOG_INVALID);
         verify(billingPlanRepository, never()).save(any());
     }
+    @Test
+    @DisplayName("플랫폼 수주 경로 — 파트너 수행 상품(플랫폼 이용료가 아닌 상품)을 담으면 거부한다(I06)")
+    void createPlan_platformOrder_rejectsPartnerPerformedProduct() {
+        UnitProduct staff = UnitProduct.builder()
+                .type(UnitProductType.TABLETS).name("태블릿").category(UnitProductCategory.ESSENTIAL)
+                .platformUsageFee(false).salesChannel(SalesChannel.PLATFORM_ORDER).build();
+        ReflectionTestUtils.setField(staff, "id", 58L);
+        given(unitProductRepository.findAllByIdIn(java.util.List.of(58L))).willReturn(java.util.List.of(staff));
+
+        assertThatThrownBy(() -> billingPlanService.createPlan("PLATFORM_OPS", 1L, platformOrderPlan(58L)))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(BillingErrorCode.PLATFORM_ORDER_PLAN_PARTNER_PRODUCT);
+        verify(billingPlanRepository, never()).save(any());
+    }
 }

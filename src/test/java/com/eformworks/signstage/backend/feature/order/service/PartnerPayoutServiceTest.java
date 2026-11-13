@@ -14,6 +14,8 @@ import com.eformworks.signstage.backend.feature.order.dto.PartnerPayoutDto;
 import com.eformworks.signstage.backend.feature.order.entity.OrderInspection;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerLedgerEntry;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerLedgerEntryType;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerCompensation;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerCompensationStatus;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOffset;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOffsetStatus;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerPayout;
@@ -21,6 +23,7 @@ import com.eformworks.signstage.backend.feature.order.entity.PartnerPayoutStatus
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.repository.OrderInspectionRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerLedgerEntryRepository;
+import com.eformworks.signstage.backend.feature.order.repository.PartnerCompensationRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOffsetRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerPayoutRepository;
 import com.eformworks.signstage.backend.feature.organization.dto.PartnerSubcontractProfileDto;
@@ -64,6 +67,8 @@ class PartnerPayoutServiceTest {
     @Mock
     private PartnerOffsetRepository partnerOffsetRepository;
     @Mock
+    private PartnerCompensationRepository partnerCompensationRepository;
+    @Mock
     private PartnerSubcontractProfileService partnerSubcontractProfileService;
     @Mock
     private MemberRepository memberRepository;
@@ -83,7 +88,7 @@ class PartnerPayoutServiceTest {
     void setUp() {
         partnerPayoutService = new PartnerPayoutService(
                 partnerPayoutRepository, orderInspectionRepository, partnerLedgerEntryRepository, orderInspectionService,
-                partnerOffsetRepository, new PartnerSettlementPolicy(7, 60), OrderFixtures.paymentControlPolicy(),
+                partnerOffsetRepository, partnerCompensationRepository, new PartnerSettlementPolicy(7, 60), OrderFixtures.paymentControlPolicy(),
                 partnerSubcontractProfileService, memberRepository,
                 rolePermissionService, auditLogRecorder, orderNotificationService
         );
@@ -133,6 +138,34 @@ class PartnerPayoutServiceTest {
         assertThat(created.get(1).getAmount()).isEqualByComparingTo("800000");
         assertThat(a1.getPartnerPayout()).isNotNull().isSameAs(a2.getPartnerPayout());
         assertThat(b1.getPartnerPayout()).isNotSameAs(a1.getPartnerPayout());
+    }
+
+    @Test
+    @DisplayName("고객 취소 보상은 검수 건이 없어도 그달 지급 건으로 만들고, 검수 건이 있으면 합산한다(C04)")
+    void createPayouts_includesCompensations() {
+        allowPayment();
+        OrderInspection a1 = approved(301L, partnerA, 1_000_000, lastMonth.atDay(3));
+        given(orderInspectionRepository.findSettleableUntil(lastMonth.atEndOfMonth(), disputeWindowFrom()))
+                .willReturn(List.of(a1));
+        PartnerCompensation compensationA = compensation(partnerA, 200_000, lastMonth.atDay(15));
+        PartnerCompensation compensationB = compensation(partnerB, 300_000, lastMonth.atDay(1));
+        given(partnerCompensationRepository.findPendingUntil(lastMonth.atEndOfMonth()))
+                .willReturn(List.of(compensationA, compensationB));
+        given(partnerSubcontractProfileService.retrieveProfileByPlatformAdmin(any()))
+                .willAnswer(invocation -> PartnerSubcontractProfileDto.Response.Profile.empty(invocation.getArgument(0)));
+        given(partnerPayoutRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        List<PartnerPayoutDto.Response.PayoutSummary> created =
+                partnerPayoutService.createPayouts(lastMonth.toString(), ADMIN_ID, ROLE);
+
+        assertThat(created).extracting(PartnerPayoutDto.Response.PayoutSummary::getOrganizationId,
+                        PartnerPayoutDto.Response.PayoutSummary::getAmount)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(7L, new BigDecimal("1200000")),
+                        org.assertj.core.groups.Tuple.tuple(8L, new BigDecimal("300000")));
+        assertThat(compensationA.getStatus()).isEqualTo(PartnerCompensationStatus.APPLIED);
+        assertThat(compensationA.getPartnerPayout()).isSameAs(a1.getPartnerPayout());
+        assertThat(compensationB.getPartnerPayout()).isNotNull();
     }
 
     @Test
@@ -326,6 +359,16 @@ class PartnerPayoutServiceTest {
         ReflectionTestUtils.setField(payout, "createdBy", createdBy);
         given(partnerPayoutRepository.findById(900L)).willReturn(Optional.of(payout));
         return payout;
+    }
+
+    private static PartnerCompensation compensation(Organization partner, long amount, LocalDate occurredOn) {
+        return PartnerCompensation.builder()
+                .partnerOrder(OrderFixtures.partnerOrder(320L + amount / 100_000, partner, amount * 5))
+                .amount(BigDecimal.valueOf(amount))
+                .ratePercent(BigDecimal.valueOf(20))
+                .reason("고객 취소")
+                .occurredOn(occurredOn)
+                .build();
     }
 
     private PartnerOffset offset(long amount, LocalDate occurredOn) {

@@ -9,9 +9,13 @@ import com.eformworks.signstage.backend.feature.order.dto.PartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.dto.SalesOrderChangeDto;
 import com.eformworks.signstage.backend.feature.order.entity.Customer;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerCompensation;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderPackageItem;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
+import com.eformworks.signstage.backend.feature.order.repository.PartnerCompensationRepository;
+import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderPackageItemRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberStatus;
@@ -40,6 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class PartnerOrderResponseService {
 
     private final PartnerOrderRepository partnerOrderRepository;
+    private final PartnerOrderPackageItemRepository partnerOrderPackageItemRepository;
+    private final PartnerCompensationRepository partnerCompensationRepository;
     private final MemberRepository memberRepository;
     private final RolePermissionService rolePermissionService;
     private final SalesOrderService salesOrderService;
@@ -227,11 +233,25 @@ public class PartnerOrderResponseService {
     private PartnerOrderDto.Response.PartnerOrderDetail toDetail(PartnerOrder partnerOrder) {
         return PartnerOrderDto.Response.PartnerOrderDetail.of(
                 partnerOrder,
-                salesOrderService.findPlanInclusions(partnerOrder.getSalesOrder()),
+                packageItems(partnerOrder),
                 salesOrderService.findPartnerScopeLines(partnerOrder.getSalesOrder().getId()),
                 orderInspectionService.findByPartnerOrder(partnerOrder.getId()),
+                partnerCompensationRepository.findByPartnerOrderId(partnerOrder.getId())
+                        .map(PartnerCompensation::getAmount)
+                        .orElse(null),
                 LocalDateTime.now(SalesOrderService.PLATFORM_ZONE)
         );
+    }
+
+    private List<PartnerOrderDto.Response.PackageItem> packageItems(PartnerOrder partnerOrder) {
+        List<PartnerOrderPackageItem> snapshot =
+                partnerOrderPackageItemRepository.findAllByPartnerOrderIdOrderByDisplayOrderAsc(partnerOrder.getId());
+        if (!snapshot.isEmpty()) {
+            return snapshot.stream().map(PartnerOrderDto.Response.PackageItem::from).toList();
+        }
+        return salesOrderService.findPlanInclusions(partnerOrder.getSalesOrder()).stream()
+                .map(PartnerOrderDto.Response.PackageItem::from)
+                .toList();
     }
 
     private void checkCanRespond(Long organizationId, Long currentUserId) {

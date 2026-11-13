@@ -143,6 +143,10 @@ public class Ceremony extends BaseEntity {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    /** 고객 취소로 행사를 닫은 시각(C01). */
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
     /**
      * 수락한 발주가 취소(파트너 교체)되면 채운다 — 새 파트너가 수락해 행사를 옮길 때까지 행사 조직의
      * 회원은 이 행사를 보지 못한다(signstage-docs business/platform-order-partner-subcontract-review.md D03·D18).
@@ -298,6 +302,20 @@ public class Ceremony extends BaseEntity {
     public void transferTo(Organization organization) {
         this.organization = organization;
         this.partnerAccessSuspendedAt = null;
+    }
+
+    /** 고객 취소(C01·C02) — 취소된 행사는 조회만 가능하고 파트너 접근을 막는다. */
+    public void cancelByCustomer() {
+        this.status = CeremonyStatus.CANCELLED;
+        this.cancelledAt = LocalDateTime.now();
+        if (partnerAccessSuspendedAt == null) {
+            this.partnerAccessSuspendedAt = cancelledAt;
+        }
+    }
+
+    /** 완료·취소된 행사 — 하위 데이터를 더 바꿀 수 없다. */
+    public boolean isClosed() {
+        return status == CeremonyStatus.COMPLETED || status == CeremonyStatus.CANCELLED;
     }
 
     public void suspendPartnerAccess() {

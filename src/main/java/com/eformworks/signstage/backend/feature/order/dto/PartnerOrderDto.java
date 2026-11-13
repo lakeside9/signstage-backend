@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.order.dto;
 
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderPackageItem;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLine;
@@ -121,12 +122,18 @@ public final class PartnerOrderDto {
             private final OrderInspectionDto.Response.InspectionSummary inspection;
             /** 발주 메모(관리자가 적은 전달 사항). */
             private final String memo;
+            /** 취소된 발주의 취소일·사유. 고객 취소면 사유가 "고객 취소: "로 시작한다. */
+            private final LocalDateTime cancelledAt;
+            private final String cancellationReason;
+            /** 고객 취소 보상(C04). 보상이 없으면 null이다. */
+            private final BigDecimal compensationAmount;
 
             public static PartnerOrderDetail of(
                     PartnerOrder partnerOrder,
-                    List<BillingPlanUnitProduct> planInclusions,
+                    List<PackageItem> packageItems,
                     List<SalesOrderLine> optionLines,
                     OrderInspectionDto.Response.InspectionSummary inspection,
+                    BigDecimal compensationAmount,
                     LocalDateTime now
             ) {
                 SalesOrder salesOrder = partnerOrder.getSalesOrder();
@@ -136,7 +143,7 @@ public final class PartnerOrderDto {
                 return new PartnerOrderDetail(
                         PartnerOrderSummary.from(partnerOrder, now),
                         salesOrder.getBillingPlan().getName(),
-                        planInclusions.stream().map(PackageItem::from).toList(),
+                        packageItems,
                         optionLines.stream().map(ScopeOption::from).toList(),
                         salesOrder.getCustomer().getName(),
                         showsContact ? salesOrder.getCustomer().getContactName() : null,
@@ -161,12 +168,18 @@ public final class PartnerOrderDto {
                         partnerOrder.getRespondedAt(),
                         partnerOrder.getRejectionReason(),
                         inspection,
-                        partnerOrder.getMemo()
+                        partnerOrder.getMemo(),
+                        partnerOrder.getCancelledAt(),
+                        partnerOrder.getCancellationReason(),
+                        compensationAmount
                 );
             }
         }
 
-        /** 패키지 기본 포함 상품 하나 — 실제 개수(묶음 수 × 판매 단위)와 단위("명", "개" 등). */
+        /**
+         * 패키지 기본 포함 상품 하나 — 실제 개수(묶음 수 × 판매 단위)와 단위("명", "개" 등). 발주 때 복사해 둔 값을
+         * 쓰고, 복사본이 없는 예전 발주만 지금 플랜 구성으로 대신한다(I05).
+         */
         @Getter
         @AllArgsConstructor
         public static class PackageItem {
@@ -174,6 +187,10 @@ public final class PartnerOrderDto {
             private final String name;
             private final int quantity;
             private final String quantityUnit;
+
+            public static PackageItem from(PartnerOrderPackageItem snapshot) {
+                return new PackageItem(snapshot.getName(), snapshot.getQuantity(), snapshot.getQuantityUnit());
+            }
 
             public static PackageItem from(BillingPlanUnitProduct source) {
                 return new PackageItem(

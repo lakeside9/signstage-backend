@@ -436,6 +436,10 @@ public class BillingPlanService {
         if (found.stream().anyMatch(unitProduct -> unitProduct.getSalesChannel() != salesChannel)) {
             throw new ApplicationException(BillingErrorCode.SALES_CHANNEL_MISMATCH);
         }
+        // 플랫폼 수주 플랜은 플랫폼 제공분만 담는다 — 파트너 수행 상품은 수주 옵션과 발주 단가로 다룬다(I06, 화면의 isPlanComposable과 같다).
+        if (salesChannel == SalesChannel.PLATFORM_ORDER && found.stream().anyMatch(unitProduct -> !unitProduct.isPlatformUsageFee())) {
+            throw new ApplicationException(BillingErrorCode.PLATFORM_ORDER_PLAN_PARTNER_PRODUCT);
+        }
         Map<Long, UnitProduct> byId = new HashMap<>();
         found.forEach(unitProduct -> byId.put(unitProduct.getId(), unitProduct));
 

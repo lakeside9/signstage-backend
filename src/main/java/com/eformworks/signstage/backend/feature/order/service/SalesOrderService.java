@@ -13,11 +13,8 @@ import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQu
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminPartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminSalesOrderDto;
 import com.eformworks.signstage.backend.feature.order.dto.SalesQuotePortalDto;
-import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceStatus;
 import com.eformworks.signstage.backend.feature.order.entity.Customer;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerStatus;
-import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
-import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderAcceptanceChannel;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLine;
@@ -26,7 +23,6 @@ import com.eformworks.signstage.backend.feature.order.entity.SalesOrderStatus;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculation;
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteOption;
-import com.eformworks.signstage.backend.feature.order.repository.CustomerInvoiceRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.order.repository.QuoteTemplateRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderLineRepository;
@@ -73,7 +69,6 @@ public class SalesOrderService {
     private final SalesOrderLineRepository salesOrderLineRepository;
     private final QuoteTemplateRepository quoteTemplateRepository;
     private final PartnerOrderRepository partnerOrderRepository;
-    private final CustomerInvoiceRepository customerInvoiceRepository;
     private final CustomerService customerService;
     private final BillingCatalogQueryService billingCatalogQueryService;
     private final OrderPricingService orderPricingService;
@@ -161,16 +156,11 @@ public class SalesOrderService {
         if (salesOrder.getStatus() == SalesOrderStatus.CANCELLED) {
             throw new ApplicationException(OrderErrorCode.SALES_ORDER_NOT_QUOTED);
         }
-        List<PartnerOrder> partnerOrders = partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(salesOrderId);
-        if (partnerOrders.stream().anyMatch(order -> order.getStatus() == PartnerOrderStatus.ACCEPTED)) {
-            throw new ApplicationException(OrderErrorCode.SALES_ORDER_HAS_ACCEPTED_PARTNER_ORDER);
+        // 고객이 수락한 수주는 발주·행사·청구를 함께 정리하는 "고객 취소"로만 취소한다(C02).
+        if (salesOrder.getStatus() == SalesOrderStatus.ACCEPTED) {
+            throw new ApplicationException(OrderErrorCode.SALES_ORDER_CUSTOMER_CANCELLATION_REQUIRED);
         }
-        if (customerInvoiceRepository.existsBySalesOrderIdAndStatusNot(salesOrderId, CustomerInvoiceStatus.CANCELLED)) {
-            throw new ApplicationException(OrderErrorCode.SALES_ORDER_HAS_ACTIVE_INVOICE);
-        }
-        partnerOrders.stream()
-                .filter(order -> order.getStatus() == PartnerOrderStatus.ISSUED)
-                .forEach(order -> order.cancel(reason));
+        // 견적 단계(QUOTED)라 발주·청구가 아직 없다.
         salesOrder.cancel(reason);
 
         auditLogRecorder.record(adminUserId, PlatformAdminAction.CANCEL_SALES_ORDER, null, null,

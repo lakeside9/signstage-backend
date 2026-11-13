@@ -11,10 +11,13 @@ import com.eformworks.signstage.backend.feature.order.dto.CustomerInvoiceDto;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoice;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceStatus;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceType;
+import com.eformworks.signstage.backend.feature.order.entity.CustomerRefund;
+import com.eformworks.signstage.backend.feature.order.entity.CustomerRefundStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderStatus;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.repository.CustomerInvoiceRepository;
+import com.eformworks.signstage.backend.feature.order.repository.CustomerRefundRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.math.BigDecimal;
@@ -51,6 +54,7 @@ public class CustomerInvoiceService {
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
 
     private final CustomerInvoiceRepository customerInvoiceRepository;
+    private final CustomerRefundRepository customerRefundRepository;
     private final PartnerOrderRepository partnerOrderRepository;
     private final SalesOrderService salesOrderService;
     private final CustomerBillingPolicy customerBillingPolicy;
@@ -226,6 +230,31 @@ public class CustomerInvoiceService {
         return request.getAdvanceValue();
     }
 
+    /** 고객 취소로 생긴 환불을 시스템 밖에서 돌려준 뒤 기록한다(C03). */
+    @Transactional
+    public CustomerInvoiceDto.Response.SalesOrderBilling recordRefund(
+            Long refundId,
+            Long adminUserId,
+            String actingPlatformRole,
+            CustomerInvoiceDto.Request.RecordRefund request
+    ) {
+        checkCanManage(actingPlatformRole);
+        CustomerRefund refund = customerRefundRepository.findById(refundId)
+                .orElseThrow(() -> new ApplicationException(OrderErrorCode.REFUND_NOT_FOUND));
+        if (refund.getStatus() != CustomerRefundStatus.PENDING) {
+            throw new ApplicationException(OrderErrorCode.REFUND_ALREADY_RECORDED);
+        }
+        if (request.getRefundedDate().isAfter(today())) {
+            throw new ApplicationException(OrderErrorCode.REFUND_DATE_INVALID);
+        }
+        refund.recordRefund(adminUserId, request.getRefundedDate(), trimToNull(request.getRefundMemo()));
+
+        auditLogRecorder.record(adminUserId, PlatformAdminAction.RECORD_CUSTOMER_REFUND, null, null,
+                "customerRefundId=" + refundId + ", salesOrderId=" + refund.getSalesOrder().getId()
+                        + ", amount=" + refund.getAmount() + ", refundedDate=" + request.getRefundedDate());
+        return toBilling(refund.getSalesOrder());
+    }
+
     private CustomerInvoiceDto.Response.SalesOrderBilling toBilling(SalesOrder salesOrder) {
         LocalDate today = today();
         List<CustomerInvoice> invoices = customerInvoiceRepository.findAllBySalesOrderIdOrderByIdAsc(salesOrder.getId());
@@ -247,7 +276,13 @@ public class CustomerInvoiceService {
                 accepted && customerBillingPolicy.isAdvanceEnabled()
                         && !hasType(active, CustomerInvoiceType.ADVANCE) && !hasType(active, CustomerInvoiceType.BALANCE),
                 accepted && eventCompleted && !hasType(active, CustomerInvoiceType.BALANCE),
-                invoices.stream().map(invoice -> CustomerInvoiceDto.Response.InvoiceSummary.from(invoice, today)).toList()
+                invoices.stream().map(invoice -> CustomerInvoiceDto.Response.InvoiceSummary.from(invoice, today)).toList(),
+                salesOrder.isCancelledByCustomer(),
+                salesOrder.getCancellationFeeRatePercent(),
+                salesOrder.getCancellationFeeAmount(),
+                customerRefundRepository.findAllBySalesOrderIdOrderByIdAsc(salesOrder.getId()).stream()
+                        .map(CustomerInvoiceDto.Response.RefundSummary::from)
+                        .toList()
         );
     }
 

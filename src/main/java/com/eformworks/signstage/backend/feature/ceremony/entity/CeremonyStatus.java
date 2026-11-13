@@ -14,9 +14,14 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
  * 플랜이 고정되고 그때부터 서명자/문서/하위 행사를 등록할 수 있다(`CeremonyEventStatus`가
  * 이미 쓰는 이름을 그대로 재사용한 것 — 배포 전 기존 Ceremony는 전부 IN_PROGRESS/COMPLETED라
  * 이 상태를 거치지 않는다).
+ *
+ * <p>{@code CANCELLED}는 고객 사정으로 취소된 플랫폼 수주 행사다(signstage-docs
+ * business/platform-order-pending-items.md C01, 2026-11-13) — 수주 "고객 취소"로만 들어가고 되돌리지 않는다.
+ * 완료와 같이 조회만 가능하고, 파트너 접근은 막힌 채로 둔다.
  */
 public enum CeremonyStatus {
     DRAFT,
     IN_PROGRESS,
-    COMPLETED
+    COMPLETED,
+    CANCELLED
 }

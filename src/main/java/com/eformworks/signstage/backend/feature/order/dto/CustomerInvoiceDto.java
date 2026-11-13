@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.order.dto;
 import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoice;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceType;
+import com.eformworks.signstage.backend.feature.order.entity.CustomerRefund;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -91,6 +92,20 @@ public final class CustomerInvoiceDto {
             @Size(max = 500)
             private String reason;
         }
+
+        /** 시스템 밖에서 고객에게 돌려준 뒤 환불일을 기록한다(C03). */
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class RecordRefund {
+
+            @NotNull
+            private LocalDate refundedDate;
+
+            @Size(max = 500)
+            private String refundMemo;
+        }
     }
 
     public static final class Response {
@@ -170,6 +185,30 @@ public final class CustomerInvoiceDto {
             private final boolean advanceIssuable;
             private final boolean balanceIssuable;
             private final List<InvoiceSummary> invoices;
+            /** 고객 취소(C02·C03)면 true와 적용한 취소 수수료 비율·금액, 그리고 생긴 환불. */
+            private final boolean cancelledByCustomer;
+            private final BigDecimal cancellationFeeRatePercent;
+            private final BigDecimal cancellationFeeAmount;
+            private final List<RefundSummary> refunds;
+        }
+
+        @Getter
+        @AllArgsConstructor
+        public static class RefundSummary {
+
+            private final Long id;
+            private final BigDecimal amount;
+            private final String reason;
+            private final String status;
+            private final LocalDate refundedDate;
+            private final String refundMemo;
+
+            public static RefundSummary from(CustomerRefund refund) {
+                return new RefundSummary(
+                        refund.getId(), refund.getAmount(), refund.getReason(), refund.getStatus().name(),
+                        refund.getRefundedDate(), refund.getRefundMemo()
+                );
+            }
         }
     }
 }

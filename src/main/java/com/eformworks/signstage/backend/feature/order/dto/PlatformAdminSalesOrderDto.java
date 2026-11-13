@@ -304,6 +304,8 @@ public final class PlatformAdminSalesOrderDto {
             private final String acceptanceChannel;
             private final LocalDateTime cancelledAt;
             private final String cancellationReason;
+            /** 고객 사정 취소(C02)면 true — 견적 단계 취소와 구분한다. */
+            private final boolean cancelledByCustomer;
             private final String memo;
             /** 견적서 "제공 서비스" 본문(견적 저장 시점 복사본). */
             private final String serviceDescription;
@@ -353,6 +355,7 @@ public final class PlatformAdminSalesOrderDto {
                         salesOrder.getAcceptanceChannel() != null ? salesOrder.getAcceptanceChannel().name() : null,
                         salesOrder.getCancelledAt(),
                         salesOrder.getCancellationReason(),
+                        salesOrder.isCancelledByCustomer(),
                         salesOrder.getMemo(),
                         salesOrder.getServiceDescription(),
                         salesOrder.getQuoteFooterNotice(),

@@ -73,11 +73,6 @@ public enum OrderErrorCode implements ErrorCode {
             "고객이 수락한 수주만 발주할 수 있습니다."
     ),
     SALES_QUOTE_EXPIRED("ORDER_SALES_QUOTE_EXPIRED", HttpStatus.CONFLICT, "견적 유효기간이 지났습니다."),
-    SALES_ORDER_HAS_ACCEPTED_PARTNER_ORDER(
-            "ORDER_SALES_ORDER_HAS_ACCEPTED_PARTNER_ORDER",
-            HttpStatus.CONFLICT,
-            "파트너가 수락한 발주가 있는 수주는 취소할 수 없습니다. 먼저 수락한 발주를 취소(파트너 교체)하세요."
-    ),
     PARTNER_ORDER_NOT_FOUND("ORDER_PARTNER_ORDER_NOT_FOUND", HttpStatus.NOT_FOUND, "발주를 찾을 수 없습니다."),
     PARTNER_ORDER_ALREADY_ACTIVE(
             "ORDER_PARTNER_ORDER_ALREADY_ACTIVE",
@@ -229,11 +224,24 @@ public enum OrderErrorCode implements ErrorCode {
     ),
     INVOICE_DUE_DATE_INVALID("ORDER_INVOICE_DUE_DATE_INVALID", HttpStatus.BAD_REQUEST, "입금 기한은 오늘 이후여야 합니다."),
     INVOICE_PAID_DATE_INVALID("ORDER_INVOICE_PAID_DATE_INVALID", HttpStatus.BAD_REQUEST, "입금일은 오늘 이후일 수 없습니다."),
-    SALES_ORDER_HAS_ACTIVE_INVOICE(
-            "ORDER_SALES_ORDER_HAS_ACTIVE_INVOICE",
+    SALES_ORDER_CUSTOMER_CANCELLATION_REQUIRED(
+            "ORDER_SALES_ORDER_CUSTOMER_CANCELLATION_REQUIRED",
             HttpStatus.CONFLICT,
-            "청구가 있는 수주는 취소할 수 없습니다. 입금 전 청구를 먼저 취소해주세요."
+            "고객이 수락한 수주는 \"고객 취소\"로 취소해주세요. 발주·행사·청구를 함께 정리합니다."
     ),
+    CUSTOMER_CANCEL_EVENT_COMPLETED(
+            "ORDER_CUSTOMER_CANCEL_EVENT_COMPLETED",
+            HttpStatus.CONFLICT,
+            "행사가 완료된 수주는 고객 취소할 수 없습니다."
+    ),
+    CUSTOMER_CANCEL_BALANCE_ISSUED(
+            "ORDER_CUSTOMER_CANCEL_BALANCE_ISSUED",
+            HttpStatus.CONFLICT,
+            "잔금을 청구한 수주는 고객 취소할 수 없습니다."
+    ),
+    REFUND_NOT_FOUND("ORDER_REFUND_NOT_FOUND", HttpStatus.NOT_FOUND, "환불을 찾을 수 없습니다."),
+    REFUND_ALREADY_RECORDED("ORDER_REFUND_ALREADY_RECORDED", HttpStatus.CONFLICT, "이미 환불 완료로 기록했습니다."),
+    REFUND_DATE_INVALID("ORDER_REFUND_DATE_INVALID", HttpStatus.BAD_REQUEST, "환불일은 오늘 이후일 수 없습니다."),
     SALES_ORDER_CHANGE_NOT_FOUND("ORDER_SALES_ORDER_CHANGE_NOT_FOUND", HttpStatus.NOT_FOUND, "범위 변경을 찾을 수 없습니다."),
     SALES_ORDER_CHANGE_IN_PROGRESS(
             "ORDER_SALES_ORDER_CHANGE_IN_PROGRESS",

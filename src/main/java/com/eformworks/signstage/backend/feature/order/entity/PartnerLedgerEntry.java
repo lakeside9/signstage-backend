@@ -133,6 +133,19 @@ public class PartnerLedgerEntry extends BaseEntity {
                 .build();
     }
 
+    /** 고객 취소 보상(+) — 다음 정산에서 지급액에 더한다(C04). */
+    public static PartnerLedgerEntry compensation(PartnerCompensation compensation) {
+        return PartnerLedgerEntry.builder()
+                .organization(compensation.getOrganization())
+                .entryType(PartnerLedgerEntryType.COMPENSATION)
+                .currencyCode(compensation.getCurrencyCode())
+                .amount(compensation.getAmount())
+                .partnerOrder(compensation.getPartnerOrder())
+                .memo("고객 취소 보상: " + compensation.getReason())
+                .occurredOn(compensation.getOccurredOn())
+                .build();
+    }
+
     private static PartnerLedgerEntry offsetEntry(PartnerOffset offset, BigDecimal amount, String memo, LocalDate occurredOn) {
         return PartnerLedgerEntry.builder()
                 .organization(offset.getOrganization())

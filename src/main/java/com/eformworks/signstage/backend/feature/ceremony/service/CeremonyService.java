@@ -267,8 +267,12 @@ public class CeremonyService {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationForPlatformAdminOrThrow(organizationId, ceremonyId);
         CeremonyStatus previousStatus = ceremony.getStatus();
         CeremonyStatus newStatus = parseCeremonyStatus(request.getStatus());
-        if (newStatus == CeremonyStatus.DRAFT) {
+        // 취소는 수주 "고객 취소"로만 들어가고 되돌리지 않는다(C01).
+        if (newStatus == CeremonyStatus.DRAFT || newStatus == CeremonyStatus.CANCELLED) {
             throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
+        if (previousStatus == CeremonyStatus.CANCELLED) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_CANCELLED);
         }
         ceremony.changeStatus(newStatus);
 
@@ -331,6 +335,9 @@ public class CeremonyService {
         }
         if (ceremony.getStatus() == CeremonyStatus.COMPLETED) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_ALREADY_COMPLETED);
+        }
+        if (ceremony.getStatus() == CeremonyStatus.CANCELLED) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_CANCELLED);
         }
     }
 

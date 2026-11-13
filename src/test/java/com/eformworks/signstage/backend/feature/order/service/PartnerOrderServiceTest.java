@@ -13,16 +13,20 @@ import static org.mockito.Mockito.verify;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.service.PlatformOrderCeremonyService;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminPartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderPackageItem;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderAcceptanceChannel;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.PartnerOrderAmount;
+import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderPackageItemRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
@@ -55,6 +59,8 @@ class PartnerOrderServiceTest {
 
     @Mock
     private PartnerOrderRepository partnerOrderRepository;
+    @Mock
+    private PartnerOrderPackageItemRepository partnerOrderPackageItemRepository;
     @Mock
     private SalesOrderService salesOrderService;
     @Mock
@@ -152,6 +158,9 @@ class PartnerOrderServiceTest {
         given(orderPricingService.calculatePartnerOrderAmount(eq(PARTNER_ID), anyInt(), anyInt(), anyInt(), any(), any(), any(), any(), any(), any()))
                 .willReturn(amount);
         given(partnerOrderRepository.save(any(PartnerOrder.class))).willAnswer(invocation -> invocation.getArgument(0));
+        BillingPlanUnitProduct signers = OrderFixtures.planUnitProduct(
+                salesOrder.getBillingPlan(), OrderFixtures.unitProduct(55L, UnitProductType.SIGNERS, "서명자"), 50);
+        given(salesOrderService.findPlanInclusions(salesOrder)).willReturn(List.of(signers));
 
         partnerOrderService.issuePartnerOrder(SALES_ORDER_ID, ADMIN_ID, ROLE, new PlatformAdminPartnerOrderDto.Request.IssuePartnerOrder(
                 PARTNER_ID, LocalDateTime.now().plusDays(2), null, null, "  행사 1시간 전 도착\n주차 등록 필요  "
@@ -169,6 +178,11 @@ class PartnerOrderServiceTest {
         assertThat(issued.getPartnerRateCardId()).isEqualTo(31L);
         assertThat(issued.getRegionSurchargeId()).isEqualTo(41L);
         assertThat(issued.getMemo()).isEqualTo("행사 1시간 전 도착\n주차 등록 필요");
+        // 발주 시점 패키지 구성을 복사해 두어 나중에 플랜이 바뀌어도 발주 내용이 그대로다(I05)
+        ArgumentCaptor<PartnerOrderPackageItem> itemCaptor = ArgumentCaptor.forClass(PartnerOrderPackageItem.class);
+        verify(partnerOrderPackageItemRepository).save(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getName()).isEqualTo("서명자");
+        assertThat(itemCaptor.getValue().getQuantity()).isEqualTo(50);
     }
 
     @Test

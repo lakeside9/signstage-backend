@@ -103,4 +103,17 @@ public class PlatformAdminCustomerInvoiceController {
                 traceIdProvider.getTraceId()
         );
     }
+
+    @Operation(summary = "환불 완료 기록", description = "고객 취소로 생긴 환불을 시스템 밖에서 돌려준 뒤 환불일을 기록한다.")
+    @PostMapping("/customer-refunds/{refundId}/refunded")
+    public ApiResponse<CustomerInvoiceDto.Response.SalesOrderBilling> recordRefund(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long refundId,
+            @Valid @RequestBody CustomerInvoiceDto.Request.RecordRefund request
+    ) {
+        return ApiResponse.success(
+                customerInvoiceService.recordRefund(refundId, currentUser.userId(), currentUser.platformRole(), request),
+                traceIdProvider.getTraceId()
+        );
+    }
 }

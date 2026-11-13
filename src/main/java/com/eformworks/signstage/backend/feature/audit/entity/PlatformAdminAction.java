@@ -78,6 +78,9 @@ public enum PlatformAdminAction {
     UPDATE_SALES_ORDER,
     ACCEPT_SALES_ORDER,
     CANCEL_SALES_ORDER,
+    /** 고객 사정 취소 — signstage-docs business/platform-order-pending-items.md C02. */
+    CUSTOMER_CANCEL_SALES_ORDER,
+    RECORD_CUSTOMER_REFUND,
     ISSUE_PARTNER_ORDER,
     CANCEL_PARTNER_ORDER,
     /** 검수·파트너 지급 — signstage-docs business/platform-order-partner-subcontract-review.md D11·D13. */

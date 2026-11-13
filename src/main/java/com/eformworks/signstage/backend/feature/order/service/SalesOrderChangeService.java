@@ -330,6 +330,14 @@ public class SalesOrderChangeService {
                 .forEach(change -> change.cancel(reason));
     }
 
+    /** 고객 취소(C02) 때 수주의 진행 중 변경을 모두 취소한다. */
+    @Transactional
+    public void cancelProposedForSalesOrder(Long salesOrderId, String reason) {
+        salesOrderChangeRepository.findAllBySalesOrderIdOrderByIdDesc(salesOrderId).stream()
+                .filter(change -> change.getStatus() == SalesOrderChangeStatus.PROPOSED)
+                .forEach(change -> change.cancel(reason));
+    }
+
     /** 진행 중인 변경이 있으면 새 발주를 내지 않는다 — 변경 전 범위로 발주가 나가지 않게 한다. */
     public boolean hasProposedChange(Long salesOrderId) {
         return salesOrderChangeRepository.existsBySalesOrderIdAndStatus(salesOrderId, SalesOrderChangeStatus.PROPOSED);

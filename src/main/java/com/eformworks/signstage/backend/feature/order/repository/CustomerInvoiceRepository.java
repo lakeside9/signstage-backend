@@ -14,7 +14,6 @@ public interface CustomerInvoiceRepository extends JpaRepository<CustomerInvoice
 
     List<CustomerInvoice> findAllBySalesOrderIdOrderByIdAsc(Long salesOrderId);
 
-    boolean existsBySalesOrderIdAndStatusNot(Long salesOrderId, CustomerInvoiceStatus status);
 
     /** 입금 기한이 지났는데 아직 미수 알림을 보내지 않은 청구. */
     List<CustomerInvoice> findAllByStatusAndDueDateBeforeAndOverdueNotifiedAtIsNull(

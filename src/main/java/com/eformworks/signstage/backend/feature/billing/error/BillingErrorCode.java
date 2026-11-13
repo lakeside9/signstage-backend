@@ -24,6 +24,12 @@ public enum BillingErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "플랫폼 수주 카탈로그에서 허용하지 않는 구성입니다. 현장 인력은 하나만, 현장지원 요청형은 등록할 수 없고, 판매 가격·할인 기간과 구독 조건은 두지 않습니다."
     ),
+    /** 플랫폼 수주 플랜 구성에 파트너 수행 상품(플랫폼 이용료가 아닌 상품)을 넣으려 함(I06). */
+    PLATFORM_ORDER_PLAN_PARTNER_PRODUCT(
+            "BILLING_PLATFORM_ORDER_PLAN_PARTNER_PRODUCT",
+            HttpStatus.CONFLICT,
+            "플랫폼 수주 플랜에는 플랫폼 제공 상품만 넣을 수 있습니다. 태블릿·현장 인력 같은 파트너 수행 상품은 수주 견적의 옵션으로 넣어주세요."
+    ),
     BILLING_PLAN_IN_USE(
             "BILLING_PLAN_IN_USE",
             HttpStatus.CONFLICT,

@@ -176,6 +176,17 @@ public class SalesOrder extends BaseEntity {
     @Column(name = "cancellation_reason", length = 500)
     private String cancellationReason;
 
+    /** 고객 사정 취소(C02)면 true — 견적 단계 취소와 구분한다. */
+    @Column(name = "cancelled_by_customer", nullable = false)
+    private boolean cancelledByCustomer;
+
+    /** 고객 취소 때 적용한 취소 수수료 비율(%)과 금액(C03). 견적 단계 취소면 null이다. */
+    @Column(name = "cancellation_fee_rate_percent", precision = 7, scale = 4)
+    private BigDecimal cancellationFeeRatePercent;
+
+    @Column(name = "cancellation_fee_amount", precision = 19, scale = 4)
+    private BigDecimal cancellationFeeAmount;
+
     @Column(length = 1000)
     private String memo;
 
@@ -277,6 +288,14 @@ public class SalesOrder extends BaseEntity {
         this.status = SalesOrderStatus.CANCELLED;
         this.cancelledAt = LocalDateTime.now();
         this.cancellationReason = cancellationReason;
+    }
+
+    /** 고객 사정 취소(C02·C03) — 취소 수수료를 함께 남긴다. */
+    public void cancelByCustomer(String cancellationReason, BigDecimal feeRatePercent, BigDecimal feeAmount) {
+        cancel(cancellationReason);
+        this.cancelledByCustomer = true;
+        this.cancellationFeeRatePercent = feeRatePercent;
+        this.cancellationFeeAmount = feeAmount;
     }
 
     public boolean isQuoteExpired(LocalDate today) {

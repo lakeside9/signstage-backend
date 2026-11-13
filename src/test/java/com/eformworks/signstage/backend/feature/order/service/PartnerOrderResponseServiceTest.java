@@ -22,6 +22,8 @@ import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLine;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderLineType;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
+import com.eformworks.signstage.backend.feature.order.repository.PartnerCompensationRepository;
+import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderPackageItemRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
 import com.eformworks.signstage.backend.feature.organization.entity.MemberRole;
@@ -56,6 +58,10 @@ class PartnerOrderResponseServiceTest {
 
     @Mock
     private PartnerOrderRepository partnerOrderRepository;
+    @Mock
+    private PartnerOrderPackageItemRepository partnerOrderPackageItemRepository;
+    @Mock
+    private PartnerCompensationRepository partnerCompensationRepository;
     @Mock
     private MemberRepository memberRepository;
     @Mock

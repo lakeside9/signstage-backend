@@ -218,6 +218,16 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "완료된 행사는 더 이상 수정할 수 없습니다."
     ),
+    CEREMONY_CANCELLED(
+            "CEREMONY_CANCELLED",
+            HttpStatus.CONFLICT,
+            "고객 사정으로 취소된 행사는 더 이상 수정할 수 없습니다."
+    ),
+    CEREMONY_EVENT_STARTED(
+            "CEREMONY_EVENT_STARTED",
+            HttpStatus.CONFLICT,
+            "서명이 진행 중인 하위 행사가 있어 행사를 취소할 수 없습니다. 하위 행사를 먼저 마쳐주세요."
+    ),
     CEREMONY_PLAN_ALREADY_CONFIRMED(
             "CEREMONY_PLAN_ALREADY_CONFIRMED",
             HttpStatus.CONFLICT,

@@ -29,14 +29,18 @@ public class OrderNotificationService {
 
     private static final String PARTNER_ORDER_PERMISSION = "ACTION_PARTNER_ORDER_RESPOND";
     private static final String PARTNER_PAYOUT_PERMISSION = "ACTION_PARTNER_PAYOUT_VIEW";
-    private static final DateTimeFormatter DUE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final DateTimeFormatter DUE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH시");
+    private static final int MEMO_PREVIEW_LENGTH = 200;
 
     private final NotificationService notificationService;
 
     public void partnerOrderIssued(PartnerOrder order) {
-        notifyPartner(order, NotificationType.PARTNER_ORDER_ISSUED, "새 발주가 도착했습니다",
-                title(order) + " · 발주 금액 " + money(order.getTotalAmount(), order.getCurrencyCode())
-                        + " · 응답 기한 " + order.getResponseDueAt().format(DUE_FORMAT));
+        String message = title(order) + " · 발주 금액 " + money(order.getTotalAmount(), order.getCurrencyCode())
+                + " · 응답 기한 " + order.getResponseDueAt().format(DUE_FORMAT);
+        if (order.getMemo() != null) {
+            message += " · 메모: " + abbreviate(order.getMemo(), MEMO_PREVIEW_LENGTH);
+        }
+        notifyPartner(order, NotificationType.PARTNER_ORDER_ISSUED, "새 발주가 도착했습니다", message);
     }
 
     public void partnerOrderDueSoon(PartnerOrder order) {
@@ -47,6 +51,15 @@ public class OrderNotificationService {
     public void partnerOrderCancelled(PartnerOrder order, String reason) {
         notifyPartner(order, NotificationType.PARTNER_ORDER_CANCELLED, "발주가 취소되었습니다",
                 title(order) + " · 사유: " + reason);
+    }
+
+    /** 고객 사정 취소(C02) — 취소 보상이 있으면 금액을 함께 알린다(C04). */
+    public void partnerOrderCancelledByCustomer(PartnerOrder order, String reason, BigDecimal compensation) {
+        String message = title(order) + " · 고객 사정으로 취소 · 사유: " + reason;
+        if (compensation != null && compensation.signum() > 0) {
+            message += " · 취소 보상 " + money(compensation, order.getCurrencyCode()) + "(다음 정산에 포함)";
+        }
+        notifyPartner(order, NotificationType.PARTNER_ORDER_CANCELLED, "고객 사정으로 발주가 취소되었습니다", message);
     }
 
     public void partnerOrderResponded(PartnerOrder order) {
@@ -155,6 +168,12 @@ public class OrderNotificationService {
 
     private static String title(PartnerOrder order) {
         return order.getSalesOrder().getTitle();
+    }
+
+    /** 알림 본문은 1,000자까지라 발주 메모는 앞부분만 싣는다 — 전체는 발주 상세에서 본다. */
+    private static String abbreviate(String text, int maxLength) {
+        String singleLine = text.replaceAll("\\s+", " ").strip();
+        return singleLine.length() <= maxLength ? singleLine : singleLine.substring(0, maxLength) + "…";
     }
 
     private static String money(BigDecimal amount, String currencyCode) {

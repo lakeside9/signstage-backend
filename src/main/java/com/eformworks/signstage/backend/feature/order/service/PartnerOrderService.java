@@ -2,16 +2,19 @@ package com.eformworks.signstage.backend.feature.order.service;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.ceremony.service.PlatformOrderCeremonyService;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminPartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
+import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderPackageItem;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderStatus;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.model.PartnerOrderAmount;
+import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderPackageItemRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
 import com.eformworks.signstage.backend.feature.organization.entity.OrganizationStatus;
@@ -52,6 +55,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PartnerOrderService {
 
     private final PartnerOrderRepository partnerOrderRepository;
+    private final PartnerOrderPackageItemRepository partnerOrderPackageItemRepository;
     private final SalesOrderService salesOrderService;
     private final OrganizationRepository organizationRepository;
     private final PartnerSubcontractProfileService partnerSubcontractProfileService;
@@ -148,6 +152,7 @@ public class PartnerOrderService {
                 .regionSurchargeId(amount.regionSurchargeId())
                 .memo(request.getMemo() != null && !request.getMemo().isBlank() ? request.getMemo().strip() : null)
                 .build());
+        snapshotPackageItems(partnerOrder, salesOrder);
 
         orderNotificationService.partnerOrderIssued(partnerOrder);
         auditLogRecorder.record(adminUserId, PlatformAdminAction.ISSUE_PARTNER_ORDER, null, partner.getId(),
@@ -190,6 +195,21 @@ public class PartnerOrderService {
         return PlatformAdminPartnerOrderDto.Response.AdminPartnerOrderSummary.from(
                 partnerOrder, LocalDateTime.now(SalesOrderService.PLATFORM_ZONE)
         );
+    }
+
+    /** 발주 시점의 패키지 기본 포함 구성을 복사해 둔다 — 이후 플랜 구성이 바뀌어도 파트너가 받은 범위는 그대로다(I05). */
+    private void snapshotPackageItems(PartnerOrder partnerOrder, SalesOrder salesOrder) {
+        List<BillingPlanUnitProduct> inclusions = salesOrderService.findPlanInclusions(salesOrder);
+        for (int index = 0; index < inclusions.size(); index++) {
+            BillingPlanUnitProduct inclusion = inclusions.get(index);
+            partnerOrderPackageItemRepository.save(PartnerOrderPackageItem.builder()
+                    .partnerOrder(partnerOrder)
+                    .name(inclusion.getUnitProduct().getName())
+                    .quantity(inclusion.totalQuantity())
+                    .quantityUnit(inclusion.getUnitProduct().getType().quantityUnit())
+                    .displayOrder(index)
+                    .build());
+        }
     }
 
     private PartnerOrderAmount calculateAmount(SalesOrder salesOrder, Long organizationId, BigDecimal adjustmentAmount) {

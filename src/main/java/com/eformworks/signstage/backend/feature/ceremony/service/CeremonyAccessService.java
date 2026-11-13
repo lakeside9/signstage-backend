@@ -134,6 +134,9 @@ public class CeremonyAccessService {
         if (ceremony.getStatus() == CeremonyStatus.COMPLETED) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_ALREADY_COMPLETED);
         }
+        if (ceremony.getStatus() == CeremonyStatus.CANCELLED) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_CANCELLED);
+        }
     }
 
     /**

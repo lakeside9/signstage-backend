@@ -9,16 +9,19 @@ import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQu
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyAssignment;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOrderRoute;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.model.PlatformOrderCeremonyCommand;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyAssignmentRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyRepository;
+import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseLineRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyUnitProductPurchaseRepository;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.identity.repository.UserRepository;
 import com.eformworks.signstage.backend.feature.organization.entity.Organization;
+import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.organization.error.OrganizationErrorCode;
 import com.eformworks.signstage.backend.feature.organization.repository.OrganizationRepository;
 import java.math.BigDecimal;
@@ -48,6 +51,7 @@ public class PlatformOrderCeremonyService {
 
     private final CeremonyRepository ceremonyRepository;
     private final CeremonyAssignmentRepository ceremonyAssignmentRepository;
+    private final CeremonyEventRepository ceremonyEventRepository;
     private final CeremonyUnitProductPurchaseRepository ceremonyUnitProductPurchaseRepository;
     private final CeremonyUnitProductPurchaseLineRepository ceremonyUnitProductPurchaseLineRepository;
     private final OrganizationRepository organizationRepository;
@@ -118,6 +122,24 @@ public class PlatformOrderCeremonyService {
     public void suspendPartnerAccess(Ceremony ceremony) {
         ceremonyAssignmentRepository.deleteAllByCeremonyId(ceremony.getId());
         ceremony.suspendPartnerAccess();
+    }
+
+    /**
+     * 고객 사정으로 수주를 취소할 때 행사를 닫는다(signstage-docs business/platform-order-pending-items.md C01·C02).
+     * 완료된 행사는 그대로 두고, 서명이 진행 중인 하위 행사가 있으면 거부한다. 담당자 배정을 지우고 접근을 막는다.
+     */
+    @Transactional
+    public void cancelForCustomer(Ceremony ceremony) {
+        if (ceremony.isClosed()) {
+            return;
+        }
+        boolean signing = ceremonyEventRepository.findAllByCeremonyId(ceremony.getId()).stream()
+                .anyMatch(event -> event.getStatus() == CeremonyEventStatus.STARTED);
+        if (signing) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_EVENT_STARTED);
+        }
+        ceremonyAssignmentRepository.deleteAllByCeremonyId(ceremony.getId());
+        ceremony.cancelByCustomer();
     }
 
     /**

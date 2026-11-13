@@ -4,9 +4,11 @@ import com.eformworks.signstage.backend.core.logging.TraceIdProvider;
 import com.eformworks.signstage.backend.core.security.CurrentUser;
 import com.eformworks.signstage.backend.core.web.ApiResponse;
 import com.eformworks.signstage.backend.core.web.PageResponse;
+import com.eformworks.signstage.backend.feature.order.dto.CustomerCancellationDto;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminPartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminSalesOrderDto;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderStatus;
+import com.eformworks.signstage.backend.feature.order.service.CustomerCancellationService;
 import com.eformworks.signstage.backend.feature.order.service.PartnerOrderService;
 import com.eformworks.signstage.backend.feature.order.service.SalesOrderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PlatformAdminSalesOrderController {
 
     private final SalesOrderService salesOrderService;
+    private final CustomerCancellationService customerCancellationService;
     private final PartnerOrderService partnerOrderService;
     private final TraceIdProvider traceIdProvider;
 
@@ -103,7 +106,40 @@ public class PlatformAdminSalesOrderController {
         );
     }
 
-    @Operation(summary = "수주 취소", description = "파트너가 수락한 발주가 있으면 취소할 수 없다. 응답 대기 발주는 함께 취소한다.")
+    @Operation(
+            summary = "고객 취소 미리보기",
+            description = "고객이 수락한 수주를 고객 사정으로 취소하면 생길 취소 수수료·환불·취소 수수료 청구·파트너 취소 보상·함께 닫을 행사를 돌려준다. 저장하지 않는다."
+    )
+    @GetMapping("/{salesOrderId}/customer-cancellation")
+    public ApiResponse<CustomerCancellationDto.Response.Preview> previewCustomerCancellation(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long salesOrderId
+    ) {
+        return ApiResponse.success(
+                customerCancellationService.preview(salesOrderId, currentUser.platformRole()),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(
+            summary = "고객 취소",
+            description = "고객이 수락한 수주를 고객 사정으로 취소한다. 발주·범위 변경·행사·입금 전 청구를 함께 정리하고, 취소 수수료와 받은 금액의 차액을 환불 대기 또는 취소 수수료 청구로 남기며, 수락한 파트너에게 취소 보상을 남긴다."
+    )
+    @PostMapping("/{salesOrderId}/customer-cancellation")
+    public ApiResponse<PlatformAdminSalesOrderDto.Response.AdminSalesOrderDetail> cancelByCustomer(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long salesOrderId,
+            @Valid @RequestBody PlatformAdminSalesOrderDto.Request.Cancel request
+    ) {
+        return ApiResponse.success(
+                customerCancellationService.cancelByCustomer(
+                        salesOrderId, currentUser.userId(), currentUser.platformRole(), request.getReason()
+                ),
+                traceIdProvider.getTraceId()
+        );
+    }
+
+    @Operation(summary = "수주 취소", description = "견적 단계(QUOTED) 수주만 취소한다. 고객이 수락한 수주는 고객 취소로 처리한다.")
     @PostMapping("/{salesOrderId}/cancel")
     public ApiResponse<PlatformAdminSalesOrderDto.Response.AdminSalesOrderDetail> cancelSalesOrder(
             @AuthenticationPrincipal CurrentUser currentUser,

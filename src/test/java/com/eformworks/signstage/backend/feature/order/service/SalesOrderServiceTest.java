@@ -10,22 +10,16 @@ import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitPr
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
-import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceStatus;
-import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
-import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderAcceptanceChannel;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderStatus;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
-import com.eformworks.signstage.backend.feature.order.repository.CustomerInvoiceRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.order.repository.QuoteTemplateRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderLineRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
-import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,8 +48,6 @@ class SalesOrderServiceTest {
     private QuoteTemplateRepository quoteTemplateRepository;
     @Mock
     private PartnerOrderRepository partnerOrderRepository;
-    @Mock
-    private CustomerInvoiceRepository customerInvoiceRepository;
     @Mock
     private CustomerService customerService;
     @Mock
@@ -132,63 +124,28 @@ class SalesOrderServiceTest {
     }
 
     @Test
-    @DisplayName("파트너가 수락한 발주가 있으면 수주를 취소하지 않는다")
-    void cancelSalesOrder_rejectsWhenPartnerAccepted() {
+    @DisplayName("고객이 수락한 수주는 수주 취소가 아니라 고객 취소로만 취소한다")
+    void cancelSalesOrder_rejectsAcceptedOrder() {
         given(rolePermissionService.isAllowed(ROLE, "ACTION_SALES_ORDER_MANAGE")).willReturn(true);
         given(salesOrderRepository.findById(100L)).willReturn(Optional.of(salesOrder));
-        PartnerOrder accepted = partnerOrder();
-        accepted.accept(70L, null);
-        given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(100L)).willReturn(List.of(accepted));
+        salesOrder.accept("김담당", SalesOrderAcceptanceChannel.PLATFORM_RECORDED);
 
-        assertThatThrownBy(() -> salesOrderService.cancelSalesOrder(100L, 1L, ROLE, "고객 취소"))
+        assertThatThrownBy(() -> salesOrderService.cancelSalesOrder(100L, 1L, ROLE, "견적 철회"))
                 .isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
-                .isEqualTo(OrderErrorCode.SALES_ORDER_HAS_ACCEPTED_PARTNER_ORDER);
+                .isEqualTo(OrderErrorCode.SALES_ORDER_CUSTOMER_CANCELLATION_REQUIRED);
     }
 
     @Test
-    @DisplayName("취소되지 않은 청구가 있으면 수주를 취소하지 않는다")
-    void cancelSalesOrder_rejectsWhenInvoiceActive() {
+    @DisplayName("견적 단계 수주는 바로 취소한다")
+    void cancelSalesOrder_cancelsQuotedOrder() {
         given(rolePermissionService.isAllowed(ROLE, "ACTION_SALES_ORDER_MANAGE")).willReturn(true);
         given(salesOrderRepository.findById(100L)).willReturn(Optional.of(salesOrder));
-        given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(100L)).willReturn(List.of());
-        given(customerInvoiceRepository.existsBySalesOrderIdAndStatusNot(100L, CustomerInvoiceStatus.CANCELLED)).willReturn(true);
-
-        assertThatThrownBy(() -> salesOrderService.cancelSalesOrder(100L, 1L, ROLE, "고객 취소"))
-                .isInstanceOf(ApplicationException.class)
-                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
-                .isEqualTo(OrderErrorCode.SALES_ORDER_HAS_ACTIVE_INVOICE);
-    }
-
-    @Test
-    @DisplayName("수주를 취소하면 응답 대기 발주도 함께 취소한다")
-    void cancelSalesOrder_cancelsIssuedPartnerOrders() {
-        given(rolePermissionService.isAllowed(ROLE, "ACTION_SALES_ORDER_MANAGE")).willReturn(true);
-        given(salesOrderRepository.findById(100L)).willReturn(Optional.of(salesOrder));
-        PartnerOrder issued = partnerOrder();
-        given(partnerOrderRepository.findAllBySalesOrderIdOrderByIssuedAtDesc(100L)).willReturn(List.of(issued));
         given(salesOrderLineRepository.findAllBySalesOrderIdOrderByDisplayOrder(100L)).willReturn(List.of());
 
-        salesOrderService.cancelSalesOrder(100L, 1L, ROLE, "고객 취소");
+        salesOrderService.cancelSalesOrder(100L, 1L, ROLE, "견적 철회");
 
         assertThat(salesOrder.getStatus()).isEqualTo(SalesOrderStatus.CANCELLED);
-        assertThat(issued.getStatus()).isEqualTo(PartnerOrderStatus.CANCELLED);
-        assertThat(issued.getCancellationReason()).isEqualTo("고객 취소");
-    }
-
-    private PartnerOrder partnerOrder() {
-        return PartnerOrder.builder()
-                .salesOrder(salesOrder)
-                .organization(OrderFixtures.organization(7L))
-                .currencyCode("KRW")
-                .baseFee(BigDecimal.ZERO)
-                .tabletUnitRate(BigDecimal.ZERO)
-                .onsiteStaffDayRate(BigDecimal.ZERO)
-                .regionSurcharge(BigDecimal.ZERO)
-                .adjustmentAmount(BigDecimal.ZERO)
-                .totalAmount(BigDecimal.ZERO)
-                .responseDueAt(LocalDateTime.now().plusDays(1))
-                .issuedBy(1L)
-                .build();
+        assertThat(salesOrder.isCancelledByCustomer()).isFalse();
     }
 }

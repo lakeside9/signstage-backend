@@ -15,10 +15,13 @@ import com.eformworks.signstage.backend.feature.order.dto.CustomerInvoiceDto;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoice;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceStatus;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceType;
+import com.eformworks.signstage.backend.feature.order.entity.CustomerRefund;
+import com.eformworks.signstage.backend.feature.order.entity.CustomerRefundStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrderAcceptanceChannel;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.repository.CustomerInvoiceRepository;
+import com.eformworks.signstage.backend.feature.order.repository.CustomerRefundRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.math.BigDecimal;
@@ -45,6 +48,8 @@ class CustomerInvoiceServiceTest {
     @Mock
     private CustomerInvoiceRepository customerInvoiceRepository;
     @Mock
+    private CustomerRefundRepository customerRefundRepository;
+    @Mock
     private PartnerOrderRepository partnerOrderRepository;
     @Mock
     private SalesOrderService salesOrderService;
@@ -60,7 +65,7 @@ class CustomerInvoiceServiceTest {
     @BeforeEach
     void setUp() {
         customerInvoiceService = new CustomerInvoiceService(
-                customerInvoiceRepository, partnerOrderRepository, salesOrderService,
+                customerInvoiceRepository, customerRefundRepository, partnerOrderRepository, salesOrderService,
                 new CustomerBillingPolicy(new BigDecimal("0.3")), new MoneyCalculator(), rolePermissionService, auditLogRecorder
         );
         // 공급가 3,000,000 · 부가세 300,000
@@ -245,6 +250,25 @@ class CustomerInvoiceServiceTest {
     private CustomerInvoiceDto.Response.SalesOrderBilling issueAdvance(CustomerInvoiceType type, DiscountType amountType, String value) {
         return customerInvoiceService.issueInvoice(SALES_ORDER_ID, ADMIN_ID, ROLE, new CustomerInvoiceDto.Request.Issue(
                 type, LocalDate.now(SalesOrderService.PLATFORM_ZONE).plusDays(7), amountType, value != null ? new BigDecimal(value) : null));
+    }
+
+    @Test
+    @DisplayName("고객 취소 환불은 시스템 밖에서 보낸 뒤 환불일만 기록한다 — 미래 날짜와 중복 기록은 거부한다")
+    void recordRefund_recordsOnceWithPastDate() {
+        CustomerRefund refund = CustomerRefund.builder().salesOrder(salesOrder).amount(BigDecimal.valueOf(200_000)).reason("고객 취소").build();
+        given(customerRefundRepository.findById(700L)).willReturn(Optional.of(refund));
+
+        assertErrorCode(() -> customerInvoiceService.recordRefund(700L, ADMIN_ID, ROLE,
+                new CustomerInvoiceDto.Request.RecordRefund(LocalDate.now().plusDays(3), null)), OrderErrorCode.REFUND_DATE_INVALID);
+
+        CustomerInvoiceDto.Response.SalesOrderBilling billing = customerInvoiceService.recordRefund(700L, ADMIN_ID, ROLE,
+                new CustomerInvoiceDto.Request.RecordRefund(LocalDate.now().minusDays(1), " 계좌 이체 "));
+
+        assertThat(refund.getStatus()).isEqualTo(CustomerRefundStatus.REFUNDED);
+        assertThat(refund.getRefundMemo()).isEqualTo("계좌 이체");
+        assertThat(billing).isNotNull();
+        assertErrorCode(() -> customerInvoiceService.recordRefund(700L, ADMIN_ID, ROLE,
+                new CustomerInvoiceDto.Request.RecordRefund(LocalDate.now(), null)), OrderErrorCode.REFUND_ALREADY_RECORDED);
     }
 
     private static void assertErrorCode(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, Object errorCode) {
