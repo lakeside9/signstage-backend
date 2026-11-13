@@ -6,6 +6,9 @@ import static org.mockito.BDDMockito.given;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
+import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceStatus;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
@@ -72,6 +75,22 @@ class SalesOrderServiceTest {
     @BeforeEach
     void setUp() {
         salesOrder = OrderFixtures.salesOrder(100L, OrderFixtures.customer(1L), OrderFixtures.plan(1L));
+    }
+
+    @Test
+    @DisplayName("파트너에게 보일 패키지 구성은 포함 수량이 있는 상품만 상품 표시 순서대로 준다")
+    void findPlanInclusions_keepsIncludedProductsInDisplayOrder() {
+        UnitProduct signers = OrderFixtures.unitProduct(11L, UnitProductType.SIGNERS, "서명자");
+        signers.updateDisplayOrder(2);
+        UnitProduct templates = OrderFixtures.unitProduct(12L, UnitProductType.TEMPLATES, "템플릿 문서");
+        templates.updateDisplayOrder(1);
+        UnitProduct tablets = OrderFixtures.unitProduct(13L, UnitProductType.TABLETS, "태블릿");
+        BillingPlanUnitProduct signerRow = OrderFixtures.planUnitProduct(salesOrder.getBillingPlan(), signers, 300);
+        BillingPlanUnitProduct templateRow = OrderFixtures.planUnitProduct(salesOrder.getBillingPlan(), templates, 2);
+        BillingPlanUnitProduct tabletRow = OrderFixtures.planUnitProduct(salesOrder.getBillingPlan(), tablets, 0);
+        given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of(signerRow, tabletRow, templateRow));
+
+        assertThat(salesOrderService.findPlanInclusions(salesOrder)).containsExactly(templateRow, signerRow);
     }
 
     @Test

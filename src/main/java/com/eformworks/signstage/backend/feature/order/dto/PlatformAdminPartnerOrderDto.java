@@ -50,6 +50,10 @@ public final class PlatformAdminPartnerOrderDto {
 
             @Size(max = 500)
             private String adjustmentReason;
+
+            /** 파트너에게 전할 메모 — 비워 둘 수 있다. */
+            @Size(max = 2000)
+            private String memo;
         }
 
         @Getter
@@ -104,6 +108,7 @@ public final class PlatformAdminPartnerOrderDto {
             private final int lodgingPersons;
             private final BigDecimal lodgingNightRate;
             private final BigDecimal customItemAmount;
+            private final String memo;
 
             public static AdminPartnerOrderSummary from(PartnerOrder partnerOrder, LocalDateTime now) {
                 return new AdminPartnerOrderSummary(
@@ -137,7 +142,8 @@ public final class PlatformAdminPartnerOrderDto {
                         partnerOrder.getLodgingNights(),
                         partnerOrder.getLodgingPersons(),
                         partnerOrder.getLodgingNightRate(),
-                        partnerOrder.getCustomItemAmount()
+                        partnerOrder.getCustomItemAmount(),
+                        partnerOrder.getMemo()
                 );
             }
         }

@@ -1,5 +1,6 @@
 package com.eformworks.signstage.backend.feature.order.dto;
 
+import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
@@ -89,6 +90,8 @@ public final class PartnerOrderDto {
 
             private final PartnerOrderSummary summary;
             private final String billingPlanName;
+            /** 패키지 기본 포함 구성(서명자 수·템플릿 수 등) — 한 줄에 하나씩 보인다. */
+            private final List<PackageItem> packageItems;
             private final List<ScopeOption> options;
             private final String customerName;
             private final String customerContactName;
@@ -116,9 +119,12 @@ public final class PartnerOrderDto {
             private final String rejectionReason;
             /** 행사가 완료돼 검수가 생겼으면 그 상태(D11·D13). 그 전에는 null이다. */
             private final OrderInspectionDto.Response.InspectionSummary inspection;
+            /** 발주 메모(관리자가 적은 전달 사항). */
+            private final String memo;
 
             public static PartnerOrderDetail of(
                     PartnerOrder partnerOrder,
+                    List<BillingPlanUnitProduct> planInclusions,
                     List<SalesOrderLine> optionLines,
                     OrderInspectionDto.Response.InspectionSummary inspection,
                     LocalDateTime now
@@ -130,6 +136,7 @@ public final class PartnerOrderDto {
                 return new PartnerOrderDetail(
                         PartnerOrderSummary.from(partnerOrder, now),
                         salesOrder.getBillingPlan().getName(),
+                        planInclusions.stream().map(PackageItem::from).toList(),
                         optionLines.stream().map(ScopeOption::from).toList(),
                         salesOrder.getCustomer().getName(),
                         showsContact ? salesOrder.getCustomer().getContactName() : null,
@@ -153,7 +160,24 @@ public final class PartnerOrderDto {
                         partnerOrder.getAdjustmentReason(),
                         partnerOrder.getRespondedAt(),
                         partnerOrder.getRejectionReason(),
-                        inspection
+                        inspection,
+                        partnerOrder.getMemo()
+                );
+            }
+        }
+
+        /** 패키지 기본 포함 상품 하나 — 실제 개수(묶음 수 × 판매 단위)와 단위("명", "개" 등). */
+        @Getter
+        @AllArgsConstructor
+        public static class PackageItem {
+
+            private final String name;
+            private final int quantity;
+            private final String quantityUnit;
+
+            public static PackageItem from(BillingPlanUnitProduct source) {
+                return new PackageItem(
+                        source.getUnitProduct().getName(), source.totalQuantity(), source.getUnitProduct().getType().quantityUnit()
                 );
             }
         }

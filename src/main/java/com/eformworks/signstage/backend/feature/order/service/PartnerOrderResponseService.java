@@ -227,6 +227,7 @@ public class PartnerOrderResponseService {
     private PartnerOrderDto.Response.PartnerOrderDetail toDetail(PartnerOrder partnerOrder) {
         return PartnerOrderDto.Response.PartnerOrderDetail.of(
                 partnerOrder,
+                salesOrderService.findPlanInclusions(partnerOrder.getSalesOrder()),
                 salesOrderService.findPartnerScopeLines(partnerOrder.getSalesOrder().getId()),
                 orderInspectionService.findByPartnerOrder(partnerOrder.getId()),
                 LocalDateTime.now(SalesOrderService.PLATFORM_ZONE)

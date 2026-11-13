@@ -7,6 +7,7 @@ import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.service.BillingCatalogQueryService;
 import com.eformworks.signstage.backend.feature.order.dto.PlatformAdminPartnerOrderDto;
@@ -37,6 +38,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -216,6 +218,18 @@ public class SalesOrderService {
         return salesOrderLineRepository.findAllBySalesOrderIdOrderByDisplayOrder(salesOrderId).stream()
                 .filter(line -> line.getLineType() == SalesOrderLineType.UNIT_PRODUCT
                         || line.getLineType() == SalesOrderLineType.CUSTOM_ITEM)
+                .toList();
+    }
+
+    /**
+     * 파트너에게 보여줄 패키지 기본 포함 구성 — 포함 수량이 있는 상품만, 상품 표시 순서대로. 견적서 표시 여부와 상관없이
+     * 모두 보인다(파트너는 행사 준비에 전체 구성이 필요하다). 수주에 복사해 둔 값이 아니라 지금 플랜 구성이다.
+     */
+    List<BillingPlanUnitProduct> findPlanInclusions(SalesOrder salesOrder) {
+        return billingCatalogQueryService.findPlanUnitProducts(salesOrder.getBillingPlan().getId()).stream()
+                .filter(source -> source.getIncludedQuantity() > 0)
+                .sorted(Comparator.comparing((BillingPlanUnitProduct source) -> source.getUnitProduct().getDisplayOrder(),
+                        Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
     }
 

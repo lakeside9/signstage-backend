@@ -146,6 +146,7 @@ public class PartnerOrderService {
                 .issuedBy(adminUserId)
                 .partnerRateCardId(amount.partnerRateCardId())
                 .regionSurchargeId(amount.regionSurchargeId())
+                .memo(request.getMemo() != null && !request.getMemo().isBlank() ? request.getMemo().strip() : null)
                 .build());
 
         orderNotificationService.partnerOrderIssued(partnerOrder);

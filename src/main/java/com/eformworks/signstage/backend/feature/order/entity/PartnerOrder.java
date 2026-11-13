@@ -110,6 +110,10 @@ public class PartnerOrder extends BaseEntity {
     @Column(name = "adjustment_reason", length = 500)
     private String adjustmentReason;
 
+    /** 발주 메모 — 관리자가 파트너에게 전하는 내용(준비물·주의사항 등). 파트너 발주함에 보인다. */
+    @Column(columnDefinition = "TEXT")
+    private String memo;
+
     /** 공급가(세금 별도). 파트너 세금계산서·지급은 다음 단계(검수·지급)에서 다룬다. */
     @Column(name = "total_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal totalAmount;
@@ -158,7 +162,7 @@ public class PartnerOrder extends BaseEntity {
             BigDecimal regionSurcharge, ScopeExtras extras, BigDecimal lodgingNightRate, BigDecimal customItemAmount,
             BigDecimal adjustmentAmount,
             String adjustmentReason, BigDecimal totalAmount, LocalDateTime responseDueAt, Long issuedBy,
-            Long partnerRateCardId, Long regionSurchargeId
+            Long partnerRateCardId, Long regionSurchargeId, String memo
     ) {
         this.salesOrder = salesOrder;
         this.organization = organization;
@@ -181,6 +185,7 @@ public class PartnerOrder extends BaseEntity {
         this.issuedBy = issuedBy;
         this.partnerRateCardId = partnerRateCardId;
         this.regionSurchargeId = regionSurchargeId;
+        this.memo = memo;
         this.issuedAt = LocalDateTime.now();
         this.status = PartnerOrderStatus.ISSUED;
     }

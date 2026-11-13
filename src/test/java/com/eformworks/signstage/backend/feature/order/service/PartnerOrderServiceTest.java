@@ -138,7 +138,7 @@ class PartnerOrderServiceTest {
     }
 
     @Test
-    @DisplayName("기한이 지난 이전 발주는 EXPIRED로 확정하고, 파트너 단가표 금액을 스냅샷해 발급한다")
+    @DisplayName("기한이 지난 이전 발주는 EXPIRED로 확정하고, 파트너 단가표 금액과 메모를 남겨 발급한다")
     void issuePartnerOrder_expiresOverdueAndSnapshotsAmount() {
         salesOrder.accept("고객 담당자", SalesOrderAcceptanceChannel.PLATFORM_RECORDED);
         PartnerOrder overdue = partnerOrder(LocalDateTime.now().minusHours(1));
@@ -153,7 +153,9 @@ class PartnerOrderServiceTest {
                 .willReturn(amount);
         given(partnerOrderRepository.save(any(PartnerOrder.class))).willAnswer(invocation -> invocation.getArgument(0));
 
-        partnerOrderService.issuePartnerOrder(SALES_ORDER_ID, ADMIN_ID, ROLE, issueRequest(null, null));
+        partnerOrderService.issuePartnerOrder(SALES_ORDER_ID, ADMIN_ID, ROLE, new PlatformAdminPartnerOrderDto.Request.IssuePartnerOrder(
+                PARTNER_ID, LocalDateTime.now().plusDays(2), null, null, "  행사 1시간 전 도착\n주차 등록 필요  "
+        ));
 
         assertThat(overdue.getStatus()).isEqualTo(PartnerOrderStatus.EXPIRED);
         verify(orderPricingService).checkPartnerOrderMargin(BigDecimal.valueOf(3_000_000), BigDecimal.valueOf(1_300_000));
@@ -166,6 +168,7 @@ class PartnerOrderServiceTest {
         assertThat(issued.getIssuedBy()).isEqualTo(ADMIN_ID);
         assertThat(issued.getPartnerRateCardId()).isEqualTo(31L);
         assertThat(issued.getRegionSurchargeId()).isEqualTo(41L);
+        assertThat(issued.getMemo()).isEqualTo("행사 1시간 전 도착\n주차 등록 필요");
     }
 
     @Test
@@ -251,7 +254,7 @@ class PartnerOrderServiceTest {
 
     private static PlatformAdminPartnerOrderDto.Request.IssuePartnerOrder issueRequest(BigDecimal adjustment, String reason) {
         return new PlatformAdminPartnerOrderDto.Request.IssuePartnerOrder(
-                PARTNER_ID, LocalDateTime.now().plusDays(2), adjustment, reason
+                PARTNER_ID, LocalDateTime.now().plusDays(2), adjustment, reason, null
         );
     }
 }

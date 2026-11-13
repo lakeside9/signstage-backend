@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.order.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -9,10 +10,12 @@ import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.ceremony.entity.Ceremony;
 import com.eformworks.signstage.backend.feature.ceremony.model.PlatformOrderCeremonyCommand;
 import com.eformworks.signstage.backend.feature.ceremony.service.PlatformOrderCeremonyService;
+import com.eformworks.signstage.backend.feature.order.dto.PartnerOrderDto;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrder;
 import com.eformworks.signstage.backend.feature.order.entity.PartnerOrderStatus;
 import com.eformworks.signstage.backend.feature.order.entity.SalesOrder;
@@ -166,6 +169,28 @@ class PartnerOrderResponseServiceTest {
         assertThat(issued.getStatus()).isEqualTo(PartnerOrderStatus.ACCEPTED);
         assertThat(issued.getCeremony()).isSameAs(ceremony);
         verify(orderNotificationService).partnerOrderResponded(issued);
+    }
+
+    @Test
+    @DisplayName("발주 상세는 패키지 포함 구성을 상품별 실제 개수와 단위로 보여준다")
+    void retrieveReceivedOrder_showsPackageItems() {
+        givenMember(MemberRole.OWNER, true);
+        PartnerOrder issued = partnerOrder(LocalDateTime.now().plusDays(1));
+        given(partnerOrderRepository.findByIdAndOrganizationId(PARTNER_ORDER_ID, PARTNER_ID)).willReturn(Optional.of(issued));
+        UnitProduct templates = OrderFixtures.unitProduct(12L, UnitProductType.TEMPLATES, "템플릿 문서");
+        ReflectionTestUtils.setField(templates, "saleUnitQuantity", 10);
+        given(salesOrderService.findPlanInclusions(salesOrder)).willReturn(List.of(
+                OrderFixtures.planUnitProduct(salesOrder.getBillingPlan(), OrderFixtures.unitProduct(11L, UnitProductType.SIGNERS, "서명자"), 300),
+                OrderFixtures.planUnitProduct(salesOrder.getBillingPlan(), templates, 2)
+        ));
+
+        PartnerOrderDto.Response.PartnerOrderDetail detail =
+                partnerOrderResponseService.retrieveReceivedOrder(PARTNER_ID, PARTNER_ORDER_ID, USER_ID);
+
+        assertThat(detail.getPackageItems())
+                .extracting(PartnerOrderDto.Response.PackageItem::getName, PartnerOrderDto.Response.PackageItem::getQuantity,
+                        PartnerOrderDto.Response.PackageItem::getQuantityUnit)
+                .containsExactly(tuple("서명자", 300, "명"), tuple("템플릿 문서", 20, "개"));
     }
 
     @Test
