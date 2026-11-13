@@ -37,6 +37,7 @@ import org.apache.pdfbox.rendering.PDFRenderer;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -88,6 +89,7 @@ public class TemplateService {
             Long currentUserId,
             String title,
             String documentRole,
+            String description,
             MultipartFile file
     ) {
         Ceremony ceremony = ceremonyAccessService.findCeremonyInOrganizationOrThrow(organizationId, ceremonyId);
@@ -104,6 +106,10 @@ public class TemplateService {
 
         TemplateDocumentRole role = parseDocumentRole(documentRole);
         checkPdfExtension(file.getOriginalFilename());
+        String trimmedDescription = trimToNull(description);
+        if (trimmedDescription != null && trimmedDescription.length() > 1000) {
+            throw new ApplicationException(CommonErrorCode.INVALID_REQUEST);
+        }
 
         // storageKey가 자기 자신의 PK(templateId)를 담는 경로다(StorageKeyPrefix, signstage-docs
         // business/document-storage-key-convention-review.md) — 먼저 임시값으로 저장해 ID를
@@ -113,6 +119,7 @@ public class TemplateService {
         Template template = Template.builder()
                 .ceremony(ceremony)
                 .title(title)
+                .description(trimmedDescription)
                 .documentRole(role)
                 .storageKey("")
                 .originalFilename(file.getOriginalFilename())
@@ -373,7 +380,7 @@ public class TemplateService {
         return toSummary(template);
     }
 
-    /** 제목/문서유형만 바꾼다. PDF 파일 자체는 여기서 바꾸지 않는다(서명란 좌표가 깨지기 때문). */
+    /** 제목/문서유형/설명만 바꾼다. PDF 파일 자체는 여기서 바꾸지 않는다(서명란 좌표가 깨지기 때문). */
     @Transactional
     public TemplateDto.Response.TemplateSummary updateTemplate(
             Long organizationId,
@@ -391,7 +398,9 @@ public class TemplateService {
         if (isTemplateInUse(templateId)) {
             throw new ApplicationException(CeremonyErrorCode.TEMPLATE_LOCKED_BY_EVENT);
         }
-        template.updateInfo(request.getTitle(), parseDocumentRole(request.getDocumentRole()));
+        template.updateInfo(
+                request.getTitle(), parseDocumentRole(request.getDocumentRole()), trimToNull(request.getDescription())
+        );
         return toSummary(template);
     }
 
@@ -471,6 +480,7 @@ public class TemplateService {
         Template duplicated = Template.builder()
                 .ceremony(ceremony)
                 .title(original.getTitle() + " (복제)")
+                .description(original.getDescription())
                 .documentRole(original.getDocumentRole())
                 .storageKey("")
                 .originalFilename(original.getOriginalFilename())
@@ -559,6 +569,10 @@ public class TemplateService {
         }
     }
 
+    private static String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.strip() : null;
+    }
+
     private TemplateDto.Response.TemplateSummary toSummary(Template template) {
         long fieldCount = templateFieldRepository.countByTemplateId(template.getId());
         return new TemplateDto.Response.TemplateSummary(
@@ -573,7 +587,8 @@ public class TemplateService {
                 isTemplateInUse(template.getId()),
                 !isTemplateInUse(template.getId()),
                 template.getCreatedAt(),
-                template.isEnabled()
+                template.isEnabled(),
+                template.getDescription()
         );
     }
 }

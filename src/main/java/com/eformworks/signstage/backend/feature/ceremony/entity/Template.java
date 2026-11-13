@@ -47,6 +47,10 @@ public class Template extends BaseEntity {
     @Column(nullable = false, length = 200)
     private String title;
 
+    /** 문서 양식 설명(선택 입력, 2026-11-13) — 추가/수정 화면에서만 쓴다. */
+    @Column(length = 1000)
+    private String description;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "document_role", nullable = false, length = 20)
     private TemplateDocumentRole documentRole;
@@ -76,6 +80,7 @@ public class Template extends BaseEntity {
     private Template(
             Ceremony ceremony,
             String title,
+            String description,
             TemplateDocumentRole documentRole,
             String storageKey,
             String originalFilename,
@@ -84,6 +89,7 @@ public class Template extends BaseEntity {
     ) {
         this.ceremony = ceremony;
         this.title = title;
+        this.description = description;
         this.documentRole = documentRole;
         this.storageKey = storageKey;
         this.originalFilename = originalFilename;
@@ -100,9 +106,10 @@ public class Template extends BaseEntity {
         this.title = title;
     }
 
-    public void updateInfo(String title, TemplateDocumentRole documentRole) {
+    public void updateInfo(String title, TemplateDocumentRole documentRole, String description) {
         this.title = title;
         this.documentRole = documentRole;
+        this.description = description;
     }
 
     /**

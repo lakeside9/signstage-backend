@@ -33,7 +33,7 @@ public final class TemplateDto {
             private String title;
         }
 
-        /** 제목/문서유형만 바꾼다. PDF 파일은 여기서 바꾸지 않는다(서명란 좌표가 깨지기 때문). */
+        /** 제목/문서유형/설명만 바꾼다. PDF 파일은 여기서 바꾸지 않는다(서명란 좌표가 깨지기 때문). */
         @Getter
         @Setter
         @NoArgsConstructor
@@ -45,6 +45,10 @@ public final class TemplateDto {
 
             @NotBlank
             private String documentRole;
+
+            /** 선택 입력. 비우면 설명을 지운다. */
+            @Size(max = 1000)
+            private String description;
         }
     }
 
@@ -73,6 +77,7 @@ public final class TemplateDto {
             private final boolean deletable;
             private final LocalDateTime createdAt;
             private final boolean enabled;
+            private final String description;
         }
 
         /**

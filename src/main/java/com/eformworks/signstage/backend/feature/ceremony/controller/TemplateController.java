@@ -67,10 +67,11 @@ public class TemplateController {
             @PathVariable Long ceremonyId,
             @RequestParam String title,
             @RequestParam String documentRole,
+            @RequestParam(required = false) String description,
             @RequestParam("file") MultipartFile file
     ) {
         TemplateDto.Response.TemplateSummary response = templateService
-                .uploadTemplate(organizationId, ceremonyId, currentUser.userId(), title, documentRole, file);
+                .uploadTemplate(organizationId, ceremonyId, currentUser.userId(), title, documentRole, description, file);
         return ApiResponse.success(response, traceIdProvider.getTraceId());
     }
 

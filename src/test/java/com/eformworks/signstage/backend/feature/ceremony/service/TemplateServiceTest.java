@@ -86,7 +86,7 @@ class TemplateServiceTest {
         given(ceremonyTemplateRepository.existsByTemplateId(TEMPLATE_ID)).willReturn(true);
         assertThat(templateService.retrieveTemplate(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID).isLocked()).isTrue();
         assertThatThrownBy(() -> templateService.updateTemplate(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID,
-                new com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto.Request.UpdateTemplate("changed", "CONTRACT")))
+                new com.eformworks.signstage.backend.feature.ceremony.dto.TemplateDto.Request.UpdateTemplate("changed", "CONTRACT", null)))
                 .isInstanceOf(com.eformworks.signstage.backend.core.error.ApplicationException.class);
         assertThatThrownBy(() -> templateService.deleteTemplate(ORGANIZATION_ID, CEREMONY_ID, TEMPLATE_ID, CURRENT_USER_ID))
                 .isInstanceOf(com.eformworks.signstage.backend.core.error.ApplicationException.class);
