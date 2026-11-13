@@ -61,6 +61,13 @@ public class UnitProduct extends BaseEntity {
     @Column(length = 500)
     private String description;
 
+    /**
+     * 견적서 표시 설명 — 고객 견적서에서 이 상품 줄 아래 보이는 문구. 관리자 메모인 {@code description}과
+     * 따로 둔다(내부 메모가 고객에게 나가지 않게). null이면 설명 없이 이름만 보인다.
+     */
+    @Column(name = "quote_description", length = 500)
+    private String quoteDescription;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UnitProductCategory category;
@@ -133,12 +140,13 @@ public class UnitProduct extends BaseEntity {
     private UnitProduct(
             UnitProductType type, String name, String description, UnitProductCategory category,
             String exclusivityGroup, Integer maxPurchaseQuantity, Integer saleUnitQuantity, Boolean platformUsageFee,
-            SalesChannel salesChannel
+            SalesChannel salesChannel, String quoteDescription
     ) {
         this.type = type;
         this.salesChannel = salesChannel != null ? salesChannel : SalesChannel.PARTNER_DIRECT;
         this.name = name;
         this.description = description;
+        this.quoteDescription = quoteDescription;
         this.category = category;
         this.exclusivityGroup = exclusivityGroup;
         // type이 null인 빌더 호출(테스트 픽스처가 id만 필요해 다른 필드를 생략하는 경우 등)이
@@ -157,10 +165,11 @@ public class UnitProduct extends BaseEntity {
      */
     public void updateInfo(
             String name, String description, UnitProductCategory category, String exclusivityGroup,
-            Integer maxPurchaseQuantity, Integer saleUnitQuantity, boolean platformUsageFee
+            Integer maxPurchaseQuantity, Integer saleUnitQuantity, boolean platformUsageFee, String quoteDescription
     ) {
         this.name = name;
         this.description = description;
+        this.quoteDescription = quoteDescription;
         this.category = category;
         this.exclusivityGroup = exclusivityGroup;
         boolean toggle = this.type.isToggle();

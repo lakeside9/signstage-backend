@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * 카탈로그 단위 상품(서명자/템플릿 문서/테스트·리허설·본 행사/태블릿/현장지원/온라인지원/이벤트 효과 묶음)
@@ -107,6 +108,7 @@ public class UnitProductService {
                 .type(type)
                 .name(request.getName())
                 .description(request.getDescription())
+                .quoteDescription(trimToNull(request.getQuoteDescription()))
                 .category(parseCategory(request.getCategory()))
                 .exclusivityGroup(request.getExclusivityGroup())
                 .maxPurchaseQuantity(request.getMaxPurchaseQuantity())
@@ -186,7 +188,7 @@ public class UnitProductService {
         unitProduct.updateInfo(
                 request.getName(), request.getDescription(), parseCategory(request.getCategory()),
                 request.getExclusivityGroup(), request.getMaxPurchaseQuantity(), request.getSaleUnitQuantity(),
-                request.getPlatformUsageFee()
+                request.getPlatformUsageFee(), trimToNull(request.getQuoteDescription())
         );
         recordProductHistory(unitProduct);
 
@@ -576,7 +578,8 @@ public class UnitProductService {
                 effective.map(p -> computeStatus(p.isActive(), p.getEffectiveFrom(), p.getEffectiveTo())).orElse("NO_ACTIVE_PERIOD"),
                 unitProduct.getDisplayOrder(),
                 !hasAnyUsage(unitProduct.getId()),
-                unitProduct.getSalesChannel().name()
+                unitProduct.getSalesChannel().name(),
+                unitProduct.getQuoteDescription()
         );
     }
 
@@ -592,7 +595,8 @@ public class UnitProductService {
                 history.getSaleUnitQuantity(),
                 history.isPlatformUsageFee(),
                 history.getCreatedBy(),
-                history.getCreatedAt()
+                history.getCreatedAt(),
+                history.getQuoteDescription()
         );
     }
 
@@ -616,5 +620,10 @@ public class UnitProductService {
         if (!rolePermissionService.isAllowed(actingPlatformRole, permissionKey)) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
+    }
+
+    /** 공백뿐인 설명은 "설명 없음"(null)으로 저장한다. */
+    private static String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.strip() : null;
     }
 }

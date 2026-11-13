@@ -47,10 +47,14 @@ public class BillingPlanHistoryUnitProduct extends BaseEntity {
     @Column(name = "included_quantity", nullable = false)
     private Integer includedQuantity;
 
+    @Column(name = "show_on_quote", nullable = false)
+    private boolean showOnQuote;
+
     @Builder
     private BillingPlanHistoryUnitProduct(BillingPlanHistory billingPlanHistory, BillingPlanUnitProduct source) {
         this.billingPlanHistory = billingPlanHistory;
         this.unitProduct = source.getUnitProduct();
         this.includedQuantity = source.getIncludedQuantity();
+        this.showOnQuote = source.isShowOnQuote();
     }
 }

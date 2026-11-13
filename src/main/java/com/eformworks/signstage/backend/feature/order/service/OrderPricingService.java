@@ -31,6 +31,7 @@ import com.eformworks.signstage.backend.feature.order.repository.RegionSurcharge
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -323,6 +324,35 @@ public class OrderPricingService {
                 line.lineType(), null, line.name(), 1, line.unitPrice().negate(), line.amount().negate(),
                 line.taxCode(), line.taxRatePercent(), line.taxAmount().negate(), null
         ));
+    }
+
+    /**
+     * 견적서 줄 아래 보이는 설명 — 견적을 저장할 때 줄에 복사한다. 패키지 줄은 플랜 구성에서 "견적서 표시"를 켠
+     * 상품의 포함 수량(한 줄에 하나, "서명자 1,500명: 견적 설명"), 옵션 줄은 그 단위 상품의 견적 설명이다.
+     * 나머지 줄은 설명이 없다.
+     */
+    public String describeLine(SalesQuoteCalculation.Line line, BillingPlan plan) {
+        return switch (line.lineType()) {
+            case BILLING_PLAN -> describePlanInclusions(plan);
+            case UNIT_PRODUCT -> line.unitProduct() != null ? line.unitProduct().getQuoteDescription() : null;
+            default -> null;
+        };
+    }
+
+    private String describePlanInclusions(BillingPlan plan) {
+        List<String> rows = billingCatalogQueryService.findPlanUnitProducts(plan.getId()).stream()
+                .filter(source -> source.getIncludedQuantity() > 0)
+                .filter(BillingPlanUnitProduct::isShowOnQuote)
+                .sorted(Comparator.comparing((BillingPlanUnitProduct source) -> source.getUnitProduct().getDisplayOrder(),
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(source -> {
+                    UnitProduct unitProduct = source.getUnitProduct();
+                    String row = unitProduct.getName() + " " + String.format("%,d", source.totalQuantity())
+                            + unitProduct.getType().quantityUnit();
+                    return unitProduct.getQuoteDescription() == null ? row : row + ": " + unitProduct.getQuoteDescription();
+                })
+                .toList();
+        return rows.isEmpty() ? null : String.join("\n", rows);
     }
 
     private SalesQuoteCalculation.Line buildLine(

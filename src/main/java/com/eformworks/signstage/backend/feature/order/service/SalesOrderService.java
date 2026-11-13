@@ -263,6 +263,11 @@ public class SalesOrderService {
         );
         salesOrder.useRegionSurcharge(calculation.regionSurchargeId());
         salesOrder.useQuoteAdjustment(request.quoteAdjustment());
+        // 생략하면 플랜 문구를 복사한다 — 이후 플랜 문구를 고쳐도 이 견적은 그대로다.
+        String serviceDescription = request.getServiceDescription();
+        salesOrder.useServiceDescription(serviceDescription == null
+                ? plan.getServiceDescription()
+                : (serviceDescription.isBlank() ? null : serviceDescription.strip()));
         if (isNew) {
             salesOrderRepository.save(salesOrder);
         } else {
@@ -275,6 +280,7 @@ public class SalesOrderService {
                     .lineType(line.lineType())
                     .unitProduct(line.unitProduct())
                     .name(line.name())
+                    .description(orderPricingService.describeLine(line, plan))
                     .quantity(line.quantity())
                     .unitPrice(line.unitPrice())
                     .amount(line.amount())

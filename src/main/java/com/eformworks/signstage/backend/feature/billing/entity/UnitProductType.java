@@ -84,6 +84,19 @@ public enum UnitProductType {
      * 검증한다 — 전에는 두 곳이 각자 {@code type == EVENT_EFFECT_BUNDLE}를 인라인으로 검사해
      * 새 토글형 타입이 추가되면 양쪽 다 고쳐야 했다.
      */
+    /** 수량 단위 — 견적서 포함 구성 문구에 쓴다(프론트 UNIT_PRODUCT_QUANTITY_UNIT과 같다). */
+    public String quantityUnit() {
+        return switch (this) {
+            case SIGNERS -> "명";
+            case TEMPLATES -> "개";
+            case TEST_EVENTS, REHEARSAL_EVENTS, MAIN_EVENTS -> "회";
+            case TABLETS, WIFI_EQUIPMENT -> "대";
+            case ONSITE_SUPPORT -> "인·일";
+            case ONSITE_SUPPORT_REQUEST, ONLINE_SUPPORT -> "건";
+            case EVENT_EFFECT_BUNDLE -> "묶음";
+        };
+    }
+
     public boolean isToggle() {
         return this == EVENT_EFFECT_BUNDLE;
     }

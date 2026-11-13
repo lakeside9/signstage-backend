@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.billing.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -9,6 +10,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
@@ -18,6 +20,7 @@ import com.eformworks.signstage.backend.feature.billing.error.BillingErrorCode;
 import com.eformworks.signstage.backend.feature.billing.dto.BillingPlanDto;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanType;
+import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
 import com.eformworks.signstage.backend.feature.billing.port.CeremonyBillingUsagePort;
@@ -40,6 +43,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -230,7 +234,7 @@ class BillingPlanServiceTest {
         given(billingPlanUnitProductRepository.findAllByBillingPlanId(PLAN_ID)).willReturn(java.util.List.of());
 
         BillingPlanDto.Request.UpdatePlan request = new BillingPlanDto.Request.UpdatePlan(
-                "Standard", java.util.List.of(new BillingPlanDto.Request.PlanUnitProductLine(55L, 5))
+                "Standard", java.util.List.of(new BillingPlanDto.Request.PlanUnitProductLine(55L, 5)), null
         );
 
         billingPlanService.updatePlan(PLAN_ID, "PLATFORM_OPS", 1L, request);
@@ -239,6 +243,32 @@ class BillingPlanServiceTest {
         order.verify(billingPlanUnitProductRepository).deleteAllByBillingPlanId(PLAN_ID);
         order.verify(billingPlanUnitProductRepository).flush();
         order.verify(billingPlanUnitProductRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("수정 — 견적서 표시 여부는 요청 값을 저장하고, 생략하면 서명자만 켠다")
+    void updatePlan_savesShowOnQuote() {
+        BillingPlan plan = plan();
+        given(billingPlanRepository.findById(PLAN_ID)).willReturn(Optional.of(plan));
+        UnitProduct signers = UnitProduct.builder().type(UnitProductType.SIGNERS).name("서명자").category(UnitProductCategory.ESSENTIAL).build();
+        ReflectionTestUtils.setField(signers, "id", 55L);
+        UnitProduct templates = UnitProduct.builder().type(UnitProductType.TEMPLATES).name("템플릿").category(UnitProductCategory.ESSENTIAL).build();
+        ReflectionTestUtils.setField(templates, "id", 56L);
+        UnitProduct mainEvents = UnitProduct.builder().type(UnitProductType.MAIN_EVENTS).name("본행사").category(UnitProductCategory.ESSENTIAL).build();
+        ReflectionTestUtils.setField(mainEvents, "id", 57L);
+        given(unitProductRepository.findAllByIdIn(any())).willReturn(java.util.List.of(signers, templates, mainEvents));
+        given(billingPlanUnitProductRepository.findAllByBillingPlanId(PLAN_ID)).willReturn(java.util.List.of());
+
+        billingPlanService.updatePlan(PLAN_ID, "PLATFORM_OPS", 1L, new BillingPlanDto.Request.UpdatePlan("Standard", java.util.List.of(
+                new BillingPlanDto.Request.PlanUnitProductLine(55L, 5),
+                new BillingPlanDto.Request.PlanUnitProductLine(56L, 2),
+                new BillingPlanDto.Request.PlanUnitProductLine(57L, 1, true)
+        ), null));
+
+        ArgumentCaptor<BillingPlanUnitProduct> saved = ArgumentCaptor.forClass(BillingPlanUnitProduct.class);
+        verify(billingPlanUnitProductRepository, times(3)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(line -> line.getUnitProduct().getName(), BillingPlanUnitProduct::isShowOnQuote)
+                .containsExactly(tuple("서명자", true), tuple("템플릿", false), tuple("본행사", true));
     }
 
     private static BillingPlanDto.Request.CreatePlan platformOrderPlan(Long unitProductId) {

@@ -14,6 +14,7 @@ import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.billing.entity.BillingPlan;
+import com.eformworks.signstage.backend.feature.billing.entity.BillingPlanUnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.SalesChannel;
 import com.eformworks.signstage.backend.feature.billing.entity.TaxPolicy;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
@@ -75,6 +76,33 @@ class OrderPricingServiceTest {
                 billingCatalogQueryService, taxPolicyResolver, new MoneyCalculator(),
                 new PlatformOrderMarginPolicy(new BigDecimal("0.2"))
         );
+    }
+
+    @Test
+    @DisplayName("견적서 줄 설명 — 패키지 줄은 견적서 표시를 켠 포함 상품만, 옵션 줄은 상품 견적 설명, 나머지는 없다")
+    void describeLine_showsOnlyFlaggedPlanInclusionsAndOptionDescriptions() {
+        BillingPlan plan = OrderFixtures.plan(1L);
+        UnitProduct templates = OrderFixtures.unitProduct(11L, UnitProductType.TEMPLATES, "템플릿 문서");
+        ReflectionTestUtils.setField(templates, "saleUnitQuantity", 10);
+        ReflectionTestUtils.setField(templates, "quoteDescription", "행사용 서명 문서 템플릿 제작");
+        UnitProduct signers = OrderFixtures.unitProduct(12L, UnitProductType.SIGNERS, "서명자");
+        UnitProduct tablet = OrderFixtures.unitProduct(13L, UnitProductType.TABLETS, "태블릿");
+        BillingPlanUnitProduct templateLine = OrderFixtures.planUnitProduct(plan, templates, 2);
+        BillingPlanUnitProduct signerLine = OrderFixtures.planUnitProduct(plan, signers, 1_500);
+        BillingPlanUnitProduct tabletLine = OrderFixtures.planUnitProduct(plan, tablet, 0);
+        ReflectionTestUtils.setField(signerLine, "showOnQuote", true);
+        ReflectionTestUtils.setField(tabletLine, "showOnQuote", true);
+        given(billingCatalogQueryService.findPlanUnitProducts(1L)).willReturn(List.of(templateLine, signerLine, tabletLine));
+        ReflectionTestUtils.setField(tablet, "quoteDescription", "현장용 태블릿 대여");
+
+        String planDescription = orderPricingService.describeLine(line(SalesOrderLineType.BILLING_PLAN, null), plan);
+        String optionDescription = orderPricingService.describeLine(line(SalesOrderLineType.UNIT_PRODUCT, tablet), plan);
+        String discountDescription = orderPricingService.describeLine(line(SalesOrderLineType.DISCOUNT, null), plan);
+
+        // 견적서 표시를 끈 템플릿은 빠지고, 켰더라도 기본 포함이 0인 태블릿(추가구매만 가능)은 빠진다.
+        assertThat(planDescription).isEqualTo("서명자 1,500명");
+        assertThat(optionDescription).isEqualTo("현장용 태블릿 대여");
+        assertThat(discountDescription).isNull();
     }
 
     @Test
@@ -456,6 +484,12 @@ class OrderPricingServiceTest {
         )).isInstanceOf(ApplicationException.class)
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(OrderErrorCode.MARGIN_BELOW_MINIMUM);
+    }
+
+    private static SalesQuoteCalculation.Line line(SalesOrderLineType lineType, UnitProduct unitProduct) {
+        return new SalesQuoteCalculation.Line(
+                lineType, unitProduct, "줄", 1, BigDecimal.ONE, BigDecimal.ONE, "VAT", BigDecimal.TEN, BigDecimal.ZERO, null
+        );
     }
 
     private void stubVat() {

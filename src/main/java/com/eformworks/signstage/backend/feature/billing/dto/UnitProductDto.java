@@ -2,6 +2,7 @@ package com.eformworks.signstage.backend.feature.billing.dto;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -123,6 +124,10 @@ public final class UnitProductDto {
              * business/platform-order-unit-product-composition-review.md U01 결정(2026-11-12).
              */
             private String salesChannel;
+
+            /** 고객 견적서에서 이 상품 줄 아래 보이는 설명(관리자 메모인 description과 별개). 생략하면 설명 없음. */
+            @Size(max = 500)
+            private String quoteDescription;
         }
 
         /**
@@ -177,6 +182,10 @@ public final class UnitProductDto {
              * 그대로 둔다. 빈 배열을 명시적으로 보내면 전부 해제한다.
              */
             private List<Long> effectDefinitionIds;
+
+            /** 고객 견적서 표시 설명. null이면 설명 없음. */
+            @Size(max = 500)
+            private String quoteDescription;
         }
 
         /** 판매가격 기간 하나를 새로 추가한다. */
@@ -287,6 +296,8 @@ public final class UnitProductDto {
             private final boolean canDelete;
             /** 판매 경로 — {@code PARTNER_DIRECT}(직접 수주) 또는 {@code PLATFORM_ORDER}(플랫폼 수주). */
             private final String salesChannel;
+            /** 고객 견적서 표시 설명(관리자 메모인 description과 별개). */
+            private final String quoteDescription;
         }
 
         /** 단위 상품 이름/설명/분류/배타그룹/최대 구매 수량 변경 이력 한 행(가격/사용여부는 판매가격 기간 이력 참고). */
@@ -305,6 +316,7 @@ public final class UnitProductDto {
             private final boolean platformUsageFee;
             private final Long createdBy;
             private final LocalDateTime createdAt;
+            private final String quoteDescription;
         }
 
         /** 판매가격 기간 목록/상세 화면 한 행. */

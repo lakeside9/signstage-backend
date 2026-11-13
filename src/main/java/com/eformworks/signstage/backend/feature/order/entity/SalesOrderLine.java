@@ -49,6 +49,10 @@ public class SalesOrderLine extends BaseEntity {
     @Column(nullable = false, length = 200)
     private String name;
 
+    /** 견적서에 줄 이름 아래 보이는 설명 — 저장 시점의 단위 상품 견적 설명(패키지 줄은 포함 구성)을 복사한다. */
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
     @Column(nullable = false)
     private int quantity;
 
@@ -80,7 +84,7 @@ public class SalesOrderLine extends BaseEntity {
 
     @Builder
     private SalesOrderLine(
-            SalesOrder salesOrder, SalesOrderLineType lineType, UnitProduct unitProduct, String name, int quantity,
+            SalesOrder salesOrder, SalesOrderLineType lineType, UnitProduct unitProduct, String name, String description, int quantity,
             BigDecimal unitPrice, BigDecimal amount, String taxCode, BigDecimal taxRatePercent, BigDecimal taxAmount,
             int displayOrder, Long customerPriceId, BigDecimal partnerUnitPrice
     ) {
@@ -88,6 +92,7 @@ public class SalesOrderLine extends BaseEntity {
         this.lineType = lineType;
         this.unitProduct = unitProduct;
         this.name = name;
+        this.description = description;
         this.quantity = quantity;
         this.unitPrice = unitPrice;
         this.amount = amount;

@@ -62,6 +62,8 @@ public final class SalesQuotePortalDto {
             private final String status;
             private final LocalDateTime acceptedAt;
             private final String acceptedByName;
+            /** 견적서 "제공 서비스" 본문. null이면 그 칸이 없다. */
+            private final String serviceDescription;
 
             public static SalesQuote of(SalesOrder salesOrder, List<SalesOrderLine> lines) {
                 return new SalesQuote(
@@ -80,7 +82,8 @@ public final class SalesQuotePortalDto {
                         salesOrder.getQuoteValidUntil(),
                         salesOrder.getStatus().name(),
                         salesOrder.getAcceptedAt(),
-                        salesOrder.getAcceptedByName()
+                        salesOrder.getAcceptedByName(),
+                        salesOrder.getServiceDescription()
                 );
             }
         }
@@ -94,9 +97,14 @@ public final class SalesQuotePortalDto {
             private final int quantity;
             private final BigDecimal unitPrice;
             private final BigDecimal amount;
+            /** 줄 이름 아래 보이는 설명(패키지는 기본 포함 구성, 옵션은 상품 견적 설명). */
+            private final String description;
 
             public static Line from(SalesOrderLine line) {
-                return new Line(line.getLineType().name(), line.getName(), line.getQuantity(), line.getUnitPrice(), line.getAmount());
+                return new Line(
+                        line.getLineType().name(), line.getName(), line.getQuantity(), line.getUnitPrice(), line.getAmount(),
+                        line.getDescription()
+                );
             }
         }
     }

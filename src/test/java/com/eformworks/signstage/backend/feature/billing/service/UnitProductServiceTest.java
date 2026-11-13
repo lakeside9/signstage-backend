@@ -187,7 +187,7 @@ class UnitProductServiceTest {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "EVENT_EFFECT_BUNDLE", "3종 묶음", null, "APPLICATION", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
-                null, null, java.util.List.of(10L, 20L), null
+                null, null, java.util.List.of(10L, 20L), null, null
         );
 
         unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request);
@@ -201,7 +201,7 @@ class UnitProductServiceTest {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "SIGNERS", "서명자", null, "ESSENTIAL", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
-                null, null, java.util.List.of(10L), null
+                null, null, java.util.List.of(10L), null, null
         );
 
         assertThatThrownBy(() -> unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request))
@@ -222,7 +222,7 @@ class UnitProductServiceTest {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "TEMPLATES", "템플릿 문서", null, "ESSENTIAL", null, null, 10, null, "KRW",
                 java.math.BigDecimal.valueOf(500), java.math.BigDecimal.valueOf(1000), "KR_VAT_STANDARD", true,
-                null, null, null, null
+                null, null, null, null, null
         );
 
         UnitProductDto.Response.UnitProductSummary result = unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request);
@@ -236,7 +236,7 @@ class UnitProductServiceTest {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "TEMPLATES", "템플릿 문서", null, "ESSENTIAL", null, 25, 10, null, "KRW",
                 java.math.BigDecimal.valueOf(500), java.math.BigDecimal.valueOf(1000), "KR_VAT_STANDARD", true,
-                null, null, null, null
+                null, null, null, null, null
         );
 
         assertThatThrownBy(() -> unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request))
@@ -251,7 +251,7 @@ class UnitProductServiceTest {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "SIGNERS", "서명자", "행사장 서명자 한도를 늘립니다.", "ESSENTIAL", null, null, null, null, "KRW",
                 java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true,
-                null, null, null, null
+                null, null, null, null, null
         );
 
         UnitProductDto.Response.UnitProductSummary result = unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request);
@@ -264,11 +264,11 @@ class UnitProductServiceTest {
     void createUnitProduct_platformUsageFeeOmitted_defaultsFromCategory() {
         UnitProductDto.Request.CreateUnitProduct essential = new UnitProductDto.Request.CreateUnitProduct(
                 "SIGNERS", "서명자", null, "ESSENTIAL", null, null, null, null, "KRW",
-                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null, null
+                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null, null, null
         );
         UnitProductDto.Request.CreateUnitProduct personnel = new UnitProductDto.Request.CreateUnitProduct(
                 "ONSITE_SUPPORT", "현장지원", null, "PERSONNEL", null, null, null, null, "KRW",
-                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null, null
+                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null, null, null
         );
 
         UnitProductDto.Response.UnitProductSummary essentialResult = unitProductService.createUnitProduct("PLATFORM_OPS", 1L, essential);
@@ -283,7 +283,7 @@ class UnitProductServiceTest {
     void createUnitProduct_platformUsageFeeExplicit_overridesCategoryDefault() {
         UnitProductDto.Request.CreateUnitProduct request = new UnitProductDto.Request.CreateUnitProduct(
                 "ONSITE_SUPPORT", "현장지원(요청형·관리자 견적)", null, "PERSONNEL", null, null, null, true, "KRW",
-                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null, null
+                java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(20), "KR_VAT_STANDARD", true, null, null, null, null, null
         );
 
         UnitProductDto.Response.UnitProductSummary result = unitProductService.createUnitProduct("PLATFORM_OPS", 1L, request);
@@ -298,7 +298,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(product));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("서명자", null, "PERSONNEL", null, null, null, true, null);
+                new UnitProductDto.Request.UpdateUnitProduct("서명자", null, "PERSONNEL", null, null, null, true, null, null);
 
         UnitProductDto.Response.UnitProductSummary result =
                 unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
@@ -313,7 +313,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(product));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("서명자", "새 설명", "ESSENTIAL", null, null, null, true, null);
+                new UnitProductDto.Request.UpdateUnitProduct("서명자", "새 설명", "ESSENTIAL", null, null, null, true, null, null);
 
         UnitProductDto.Response.UnitProductSummary result =
                 unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
@@ -330,7 +330,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(bundle));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, null, true, null);
+                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, null, true, null, null);
 
         unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
 
@@ -346,7 +346,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(bundle));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, null, true, java.util.List.of(10L));
+                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, null, true, java.util.List.of(10L), null);
 
         unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
 
@@ -362,7 +362,7 @@ class UnitProductServiceTest {
         given(unitProductRepository.findById(UNIT_PRODUCT_ID)).willReturn(Optional.of(bundle));
 
         UnitProductDto.Request.UpdateUnitProduct request =
-                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, null, true, java.util.List.of());
+                new UnitProductDto.Request.UpdateUnitProduct("3종 묶음", null, "APPLICATION", null, null, null, true, java.util.List.of(), null);
 
         unitProductService.updateUnitProduct(UNIT_PRODUCT_ID, "PLATFORM_OPS", 1L, request);
 

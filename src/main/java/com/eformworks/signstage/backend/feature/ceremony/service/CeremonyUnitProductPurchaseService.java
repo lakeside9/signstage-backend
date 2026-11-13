@@ -385,7 +385,8 @@ public class CeremonyUnitProductPurchaseService {
                 // 6곳 조회로 계산한다) — 이 조직 사용자 화면(구매 후보 목록)은 어차피 이 값을
                 // 쓰지 않으므로 보수적으로 false를 채운다.
                 false,
-                unitProduct.getSalesChannel().name()
+                unitProduct.getSalesChannel().name(),
+                unitProduct.getQuoteDescription()
         );
     }
 

@@ -128,6 +128,13 @@ public class SalesOrder extends BaseEntity {
     @Column(name = "truncation_unit")
     private Integer truncationUnit;
 
+    /**
+     * 견적서 "제공 서비스" 본문 — 견적 저장 시 플랜 문구를 복사하고 관리자가 견적마다 고칠 수 있다. 플랜 문구를 나중에
+     * 고쳐도 이미 보낸 견적은 바뀌지 않는다. null이면 견적서에 그 칸이 없다.
+     */
+    @Column(name = "service_description", columnDefinition = "TEXT")
+    private String serviceDescription;
+
     @Column(name = "discount_reason", length = 500)
     private String discountReason;
 
@@ -212,6 +219,10 @@ public class SalesOrder extends BaseEntity {
         BigDecimal rate = adjustment.discountRatePercent();
         this.discountRatePercent = rate == null || rate.signum() == 0 ? null : rate;
         this.truncationUnit = adjustment.truncationUnit();
+    }
+
+    public void useServiceDescription(String serviceDescription) {
+        this.serviceDescription = serviceDescription;
     }
 
     public void useRegionSurcharge(Long regionSurchargeId) {

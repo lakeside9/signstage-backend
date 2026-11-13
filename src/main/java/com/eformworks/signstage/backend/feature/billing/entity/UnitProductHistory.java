@@ -49,6 +49,9 @@ public class UnitProductHistory extends BaseEntity {
     @Column(length = 500)
     private String description;
 
+    @Column(name = "quote_description", length = 500)
+    private String quoteDescription;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UnitProductCategory category;
@@ -73,6 +76,7 @@ public class UnitProductHistory extends BaseEntity {
         this.type = unitProduct.getType();
         this.name = unitProduct.getName();
         this.description = unitProduct.getDescription();
+        this.quoteDescription = unitProduct.getQuoteDescription();
         this.category = unitProduct.getCategory();
         this.exclusivityGroup = unitProduct.getExclusivityGroup();
         this.maxPurchaseQuantity = unitProduct.getMaxPurchaseQuantity();

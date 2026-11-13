@@ -92,6 +92,10 @@ public final class PlatformAdminSalesOrderDto {
             /** 공급가(부가세 별도) 절사 단위 — 절사한 금액에 부가세를 매긴다 — 10·100·1,000·10,000. 생략하면 절사하지 않는다. */
             private Integer truncationUnit;
 
+            /** 견적서 "제공 서비스" 본문. 생략하면(null) 플랜 문구를 쓰고, 빈 문자열이면 견적서에 그 칸을 두지 않는다. */
+            @Size(max = 5000)
+            private String serviceDescription;
+
             /** 예비 태블릿(D23, 발주에만). 생략하면 0이다. */
             @PositiveOrZero
             @Max(MAX_EXTRA_QUANTITY)
@@ -294,6 +298,8 @@ public final class PlatformAdminSalesOrderDto {
             private final LocalDateTime cancelledAt;
             private final String cancellationReason;
             private final String memo;
+            /** 견적서 "제공 서비스" 본문(견적 저장 시점 복사본). */
+            private final String serviceDescription;
             private final List<QuoteLine> lines;
             private final List<PlatformAdminPartnerOrderDto.Response.AdminPartnerOrderSummary> partnerOrders;
 
@@ -339,6 +345,7 @@ public final class PlatformAdminSalesOrderDto {
                         salesOrder.getCancelledAt(),
                         salesOrder.getCancellationReason(),
                         salesOrder.getMemo(),
+                        salesOrder.getServiceDescription(),
                         lines.stream().map(QuoteLine::from).toList(),
                         partnerOrders
                 );
@@ -359,6 +366,8 @@ public final class PlatformAdminSalesOrderDto {
             private final BigDecimal taxAmount;
             /** 직접 입력 줄의 발주 단가 — 관리자 화면에만 보인다. */
             private final BigDecimal partnerUnitPrice;
+            /** 견적서 줄 설명(저장된 줄만, 계산 미리보기는 null). */
+            private final String description;
 
             public static QuoteLine from(SalesQuoteCalculation.Line line) {
                 return new QuoteLine(
@@ -370,7 +379,8 @@ public final class PlatformAdminSalesOrderDto {
                         line.amount(),
                         line.taxRatePercent(),
                         line.taxAmount(),
-                        line.partnerUnitPrice()
+                        line.partnerUnitPrice(),
+                        null
                 );
             }
 
@@ -384,7 +394,8 @@ public final class PlatformAdminSalesOrderDto {
                         line.getAmount(),
                         line.getTaxRatePercent(),
                         line.getTaxAmount(),
-                        line.getPartnerUnitPrice()
+                        line.getPartnerUnitPrice(),
+                        line.getDescription()
                 );
             }
 
@@ -398,7 +409,8 @@ public final class PlatformAdminSalesOrderDto {
                         line.getAmount(),
                         line.getTaxRatePercent(),
                         line.getTaxAmount(),
-                        line.getPartnerUnitPrice()
+                        line.getPartnerUnitPrice(),
+                        line.getDescription()
                 );
             }
         }

@@ -131,7 +131,8 @@ public class CeremonyCatalogService {
                             // 자체는 정확하게 false로 채운다(UnitProductService#toSummary만 실제
                             // 6곳 조회로 계산한다).
                             false,
-                            unitProduct.getSalesChannel().name()
+                            unitProduct.getSalesChannel().name(),
+                            unitProduct.getQuoteDescription()
                     );
                 })
                 .toList();

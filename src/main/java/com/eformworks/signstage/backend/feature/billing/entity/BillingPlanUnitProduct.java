@@ -71,15 +71,21 @@ public class BillingPlanUnitProduct extends BaseEntity {
     @Column(name = "included_quantity", nullable = false)
     private Integer includedQuantity;
 
+    /** 고객 견적서 패키지 줄 아래에 이 상품의 포함 수량을 보일지 — 관리자가 플랜 구성에서 고른다. */
+    @Column(name = "show_on_quote", nullable = false)
+    private boolean showOnQuote;
+
     @Builder
     private BillingPlanUnitProduct(
             BillingPlan billingPlan,
             UnitProduct unitProduct,
-            Integer includedQuantity
+            Integer includedQuantity,
+            boolean showOnQuote
     ) {
         this.billingPlan = billingPlan;
         this.unitProduct = unitProduct;
         this.includedQuantity = includedQuantity;
+        this.showOnQuote = showOnQuote;
     }
 
     /** 포함 묶음 수 × 판매 단위 = 실제 포함 개수(한도·금액·행사 스냅샷에 쓴다). 판매 단위가 1이면 묶음 수와 같다. */
