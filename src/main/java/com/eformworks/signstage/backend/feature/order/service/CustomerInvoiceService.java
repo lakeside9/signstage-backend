@@ -3,6 +3,7 @@ package com.eformworks.signstage.backend.feature.order.service;
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
 import com.eformworks.signstage.backend.core.money.CurrencyPolicy;
+import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.audit.entity.PlatformAdminAction;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
@@ -17,6 +18,7 @@ import com.eformworks.signstage.backend.feature.order.repository.CustomerInvoice
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Function;
@@ -31,7 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
  * D12(선금+잔금), D16(세금계산서 발행 기록만).
  *
  * <ul>
- *   <li>선금: 고객이 수락한 수주에 수주 금액 × 선금 비율(공급가·부가세 각각, 통화 반올림)을 청구한다.</li>
+ *   <li>선금: 고객이 수락한 수주에 수주 금액 × 선금 비율(공급가·부가세 각각, 통화 반올림)을 청구한다. 청구할 때
+ *       퍼센트나 정액(부가세 포함 총액)으로 바꿀 수 있다.</li>
  *   <li>잔금: 수락된 발주의 행사가 완료된 뒤 수주 금액에서 선금을 뺀 나머지를 청구한다. 선금 없이
  *       잔금만 청구하면 전액이다. 잔금을 청구한 뒤에는 선금을 새로 청구하지 않는다.</li>
  *   <li>입금·세금계산서는 시스템 밖에서 처리하고 기록만 한다. 입금 전 청구는 취소할 수 있다(잔금이
@@ -44,6 +47,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class CustomerInvoiceService {
+
+    private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
 
     private final CustomerInvoiceRepository customerInvoiceRepository;
     private final PartnerOrderRepository partnerOrderRepository;
@@ -99,9 +104,21 @@ public class CustomerInvoiceService {
             if (hasType(active, CustomerInvoiceType.BALANCE)) {
                 throw new ApplicationException(OrderErrorCode.INVOICE_ADVANCE_AFTER_BALANCE);
             }
-            BigDecimal rate = customerBillingPolicy.advancePaymentRate();
-            supplyAmount = moneyCalculator.normalize(salesOrder.getSupplyAmount().multiply(rate), currencyPolicy);
-            vatAmount = moneyCalculator.normalize(salesOrder.getVatAmount().multiply(rate), currencyPolicy);
+            if (request.getAdvanceAmountType() == DiscountType.FIXED_AMOUNT) {
+                BigDecimal total = moneyCalculator.normalize(requireAdvanceValue(request), currencyPolicy);
+                BigDecimal contractTotal = salesOrder.getSupplyAmount().add(salesOrder.getVatAmount());
+                if (total.signum() <= 0 || total.compareTo(contractTotal) >= 0) {
+                    throw new ApplicationException(OrderErrorCode.INVOICE_ADVANCE_AMOUNT_INVALID);
+                }
+                // 부가세 포함 총액을 수주의 공급가:부가세 비율로 나눈다 — 반올림 차이는 부가세에 둬서 총액이 입력값과 같다.
+                supplyAmount = moneyCalculator.normalize(
+                        total.multiply(salesOrder.getSupplyAmount()).divide(contractTotal, MathContext.DECIMAL64), currencyPolicy);
+                vatAmount = total.subtract(supplyAmount);
+            } else {
+                BigDecimal rate = advanceRate(request);
+                supplyAmount = moneyCalculator.normalize(salesOrder.getSupplyAmount().multiply(rate), currencyPolicy);
+                vatAmount = moneyCalculator.normalize(salesOrder.getVatAmount().multiply(rate), currencyPolicy);
+            }
         } else {
             if (!partnerOrderRepository.existsCompletedBySalesOrderId(salesOrderId)) {
                 throw new ApplicationException(OrderErrorCode.INVOICE_BALANCE_BEFORE_COMPLETION);
@@ -188,6 +205,25 @@ public class CustomerInvoiceService {
         auditLogRecorder.record(adminUserId, PlatformAdminAction.CANCEL_CUSTOMER_INVOICE, null, null,
                 "customerInvoiceId=" + invoiceId + ", reason=" + reason);
         return CustomerInvoiceDto.Response.InvoiceSummary.from(invoice, today());
+    }
+
+    /** 퍼센트로 지정했으면 그 비율, 아니면 기본 선금 비율. */
+    private BigDecimal advanceRate(CustomerInvoiceDto.Request.Issue request) {
+        if (request.getAdvanceAmountType() != DiscountType.PERCENT) {
+            return customerBillingPolicy.advancePaymentRate();
+        }
+        BigDecimal percent = requireAdvanceValue(request);
+        if (percent.signum() <= 0 || percent.compareTo(ONE_HUNDRED) >= 0) {
+            throw new ApplicationException(OrderErrorCode.INVOICE_ADVANCE_AMOUNT_INVALID);
+        }
+        return percent.divide(ONE_HUNDRED, MathContext.DECIMAL64);
+    }
+
+    private static BigDecimal requireAdvanceValue(CustomerInvoiceDto.Request.Issue request) {
+        if (request.getAdvanceValue() == null) {
+            throw new ApplicationException(OrderErrorCode.INVOICE_ADVANCE_AMOUNT_INVALID);
+        }
+        return request.getAdvanceValue();
     }
 
     private CustomerInvoiceDto.Response.SalesOrderBilling toBilling(SalesOrder salesOrder) {

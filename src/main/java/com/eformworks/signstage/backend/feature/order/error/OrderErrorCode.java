@@ -214,6 +214,11 @@ public enum OrderErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "행사가 완료된 뒤에 잔금을 청구할 수 있습니다."
     ),
+    INVOICE_ADVANCE_AMOUNT_INVALID(
+            "ORDER_INVOICE_ADVANCE_AMOUNT_INVALID",
+            HttpStatus.BAD_REQUEST,
+            "선금은 0보다 크고 수주 금액보다 작아야 합니다(퍼센트는 0 초과 100 미만)."
+    ),
     INVOICE_NOTHING_TO_BILL("ORDER_INVOICE_NOTHING_TO_BILL", HttpStatus.CONFLICT, "청구할 잔액이 없습니다."),
     INVOICE_NOT_ISSUED("ORDER_INVOICE_NOT_ISSUED", HttpStatus.CONFLICT, "입금 대기 중인 청구만 입금 기록·취소할 수 있습니다."),
     INVOICE_CANCELLED("ORDER_INVOICE_CANCELLED", HttpStatus.CONFLICT, "취소된 청구입니다."),

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.lenient;
 
 import com.eformworks.signstage.backend.core.error.ApplicationException;
 import com.eformworks.signstage.backend.core.error.CommonErrorCode;
+import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.core.money.MoneyCalculator;
 import com.eformworks.signstage.backend.feature.audit.service.PlatformAdminAuditLogRecorder;
 import com.eformworks.signstage.backend.feature.order.dto.CustomerInvoiceDto;
@@ -90,6 +91,38 @@ class CustomerInvoiceServiceTest {
         assertThat(billing.getOutstandingAmount()).isEqualByComparingTo("990000");
         assertThat(billing.isAdvanceIssuable()).isFalse();
         assertThat(billing.isBalanceIssuable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("선금을 퍼센트로 지정하면 그 비율로 공급가·부가세를 각각 계산한다")
+    void issueAdvance_withPercent() {
+        issueAdvance(CustomerInvoiceType.ADVANCE, DiscountType.PERCENT, "50");
+
+        CustomerInvoice advance = stored.getFirst();
+        assertThat(advance.getSupplyAmount()).isEqualByComparingTo("1500000");
+        assertThat(advance.getVatAmount()).isEqualByComparingTo("150000");
+    }
+
+    @Test
+    @DisplayName("선금을 정액으로 지정하면 부가세 포함 총액을 수주의 공급가:부가세 비율로 나눈다")
+    void issueAdvance_withFixedAmount() {
+        issueAdvance(CustomerInvoiceType.ADVANCE, DiscountType.FIXED_AMOUNT, "1000000");
+
+        CustomerInvoice advance = stored.getFirst();
+        assertThat(advance.getSupplyAmount()).isEqualByComparingTo("909091");
+        assertThat(advance.getVatAmount()).isEqualByComparingTo("90909");
+        assertThat(advance.getTotalAmount()).isEqualByComparingTo("1000000");
+    }
+
+    @Test
+    @DisplayName("선금은 수주 금액 이상이거나 100% 이상일 수 없다")
+    void issueAdvance_rejectsAmountNotBelowContract() {
+        assertErrorCode(() -> issueAdvance(CustomerInvoiceType.ADVANCE, DiscountType.FIXED_AMOUNT, "3300000"),
+                OrderErrorCode.INVOICE_ADVANCE_AMOUNT_INVALID);
+        assertErrorCode(() -> issueAdvance(CustomerInvoiceType.ADVANCE, DiscountType.PERCENT, "100"),
+                OrderErrorCode.INVOICE_ADVANCE_AMOUNT_INVALID);
+        assertErrorCode(() -> issueAdvance(CustomerInvoiceType.ADVANCE, DiscountType.PERCENT, null),
+                OrderErrorCode.INVOICE_ADVANCE_AMOUNT_INVALID);
     }
 
     @Test
@@ -200,14 +233,18 @@ class CustomerInvoiceServiceTest {
     void issue_requiresPermission() {
         assertErrorCode(
                 () -> customerInvoiceService.issueInvoice(SALES_ORDER_ID, ADMIN_ID, "PLATFORM_SUPPORT",
-                        new CustomerInvoiceDto.Request.Issue(CustomerInvoiceType.ADVANCE, LocalDate.now().plusDays(7))),
+                        new CustomerInvoiceDto.Request.Issue(CustomerInvoiceType.ADVANCE, LocalDate.now().plusDays(7), null, null)),
                 CommonErrorCode.ACCESS_DENIED
         );
     }
 
     private CustomerInvoiceDto.Response.SalesOrderBilling issue(CustomerInvoiceType type) {
+        return issueAdvance(type, null, null);
+    }
+
+    private CustomerInvoiceDto.Response.SalesOrderBilling issueAdvance(CustomerInvoiceType type, DiscountType amountType, String value) {
         return customerInvoiceService.issueInvoice(SALES_ORDER_ID, ADMIN_ID, ROLE, new CustomerInvoiceDto.Request.Issue(
-                type, LocalDate.now(SalesOrderService.PLATFORM_ZONE).plusDays(7)));
+                type, LocalDate.now(SalesOrderService.PLATFORM_ZONE).plusDays(7), amountType, value != null ? new BigDecimal(value) : null));
     }
 
     private static void assertErrorCode(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, Object errorCode) {

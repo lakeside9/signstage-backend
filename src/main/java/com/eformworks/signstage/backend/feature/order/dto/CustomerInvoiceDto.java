@@ -1,9 +1,11 @@
 package com.eformworks.signstage.backend.feature.order.dto;
 
+import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoice;
 import com.eformworks.signstage.backend.feature.order.entity.CustomerInvoiceType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -36,6 +38,15 @@ public final class CustomerInvoiceDto {
 
             @NotNull
             private LocalDate dueDate;
+
+            /**
+             * 선금 금액 방식 — PERCENT면 {@code advanceValue}가 수주 금액의 퍼센트(0 초과 100 미만), FIXED_AMOUNT면
+             * 부가세 포함 청구 총액이다. 비우면 기본 선금 비율을 쓴다. 잔금 청구에서는 무시한다.
+             */
+            private DiscountType advanceAmountType;
+
+            @Positive
+            private BigDecimal advanceValue;
         }
 
         @Getter
