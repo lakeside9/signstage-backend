@@ -18,6 +18,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyPlanHist
 import com.eformworks.signstage.backend.core.money.DiscountType;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProduct;
 import com.eformworks.signstage.backend.feature.billing.entity.UnitProductType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.identity.entity.User;
 import com.eformworks.signstage.backend.feature.organization.entity.Member;
@@ -209,5 +210,35 @@ class CeremonyServiceTest extends CeremonyServiceTestSupport {
         assertThat(result.getStatus()).isEqualTo("DRAFT");
         verify(ceremonyPlanHistoryRepository, never()).save(any());
         verify(billingPlanRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("관리자 상태 강제 변경 — 완료된 행사는 진행 중으로 되돌릴 수 없다(2026-11-13 사용자 결정)")
+    void updateStatusByPlatformAdmin_rejectsRevertingCompletedCeremony() {
+        Ceremony ceremony = ceremony(organization(), 10L);
+        ceremony.changeStatus(CeremonyStatus.COMPLETED);
+        given(rolePermissionService.isAllowed("PLATFORM_OPS", "ACTION_CEREMONY_STATUS_CONTROL")).willReturn(true);
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+
+        assertThatThrownBy(() -> ceremonyService.updateStatusByPlatformAdmin(
+                ORGANIZATION_ID, 10L, CURRENT_USER_ID, "PLATFORM_OPS", new CeremonyDto.Request.UpdateStatus("IN_PROGRESS")))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.CEREMONY_ALREADY_COMPLETED);
+        assertThat(ceremony.getStatus()).isEqualTo(CeremonyStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("관리자 상태 강제 변경 — 진행 중인 행사는 완료로 바꿀 수 있다")
+    void updateStatusByPlatformAdmin_completesInProgressCeremony() {
+        Ceremony ceremony = ceremony(organization(), 10L);
+        ceremony.changeStatus(CeremonyStatus.IN_PROGRESS);
+        given(rolePermissionService.isAllowed("PLATFORM_OPS", "ACTION_CEREMONY_STATUS_CONTROL")).willReturn(true);
+        given(ceremonyRepository.findById(10L)).willReturn(Optional.of(ceremony));
+
+        CeremonyDto.Response.CeremonySummary result = ceremonyService.updateStatusByPlatformAdmin(
+                ORGANIZATION_ID, 10L, CURRENT_USER_ID, "PLATFORM_OPS", new CeremonyDto.Request.UpdateStatus("COMPLETED"));
+
+        assertThat(result.getStatus()).isEqualTo("COMPLETED");
     }
 }

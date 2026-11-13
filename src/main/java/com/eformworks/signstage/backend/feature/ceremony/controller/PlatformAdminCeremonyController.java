@@ -90,7 +90,8 @@ public class PlatformAdminCeremonyController {
 
     @Operation(
             summary = "행사 상태 강제 변경",
-            description = "IN_PROGRESS/COMPLETED 양방향 변경. PLATFORM_OPS 이상만 호출할 수 있다."
+            description = "IN_PROGRESS → COMPLETED 강제 변경. 완료된 행사는 되돌릴 수 없다(CEREMONY_ALREADY_COMPLETED). "
+                    + "PLATFORM_OPS 이상만 호출할 수 있다."
     )
     @PutMapping("/{ceremonyId}/status")
     public ApiResponse<CeremonyDto.Response.CeremonySummary> updateCeremonyStatus(

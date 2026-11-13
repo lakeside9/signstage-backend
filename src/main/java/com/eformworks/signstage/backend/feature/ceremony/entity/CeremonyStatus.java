@@ -2,10 +2,10 @@ package com.eformworks.signstage.backend.feature.ceremony.entity;
 
 /**
  * 행사 마스터(Ceremony) 전체 완료 상태. 하위 행사(CeremonyEvent)의 상태({@link CeremonyEventStatus})와
- * 별개다 — 이 Ceremony 아래 만들어진 본행사(MAIN 타입 CeremonyEvent)가 전부 FINISHED + 결과 PDF
- * 생성까지 끝나면 자동으로 COMPLETED로 전이한다({@code CeremonyResultService#generateResults}).
- * COMPLETED가 되면 그 Ceremony 하위 데이터는 조회만 가능하다. 플랫폼 관리자는 양방향으로
- * 강제 변경할 수 있다(signstage-docs business/ceremony-feature-migration-review.md 참고).
+ * 별개다 — 이 Ceremony 아래 만들어진 본행사(MAIN 타입 CeremonyEvent)가 전부 FINISHED 또는 FORCE_FINISHED이고
+ * 결과 PDF 생성까지 끝나면 자동으로 COMPLETED로 전이한다({@code CeremonyResultService#generateResults}).
+ * COMPLETED가 되면 그 Ceremony 하위 데이터는 조회만 가능하다. 플랫폼 관리자는 IN_PROGRESS → COMPLETED로만
+ * 강제 변경할 수 있고, 완료를 되돌리는 방법은 없다(2026-11-13 사용자 결정).
  *
  * <p>{@code DRAFT}는 플랜 확정 전 상태다(signstage-docs
  * business/ceremony-plan-confirmation-review.md) — 새로 만든 Ceremony는 이 상태로 시작하고,

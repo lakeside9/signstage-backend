@@ -120,8 +120,8 @@ public class CeremonyResultService {
     }
 
     /**
-     * 이 Ceremony 아래 만들어진 본행사(MAIN)가 전부 FINISHED + 결과 생성까지 끝났으면 Ceremony를
-     * COMPLETED로 전이한다. 방금 결과를 생성한 {@code justCompletedEvent}는 DB 재조회 없이
+     * 이 Ceremony 아래 만들어진 본행사(MAIN)가 전부 FINISHED 또는 FORCE_FINISHED이고 결과 생성까지 끝났으면
+     * Ceremony를 COMPLETED로 전이한다(강제종료한 본행사도 PDF를 만들면 끝난 것으로 본다, 2026-11-13 사용자 결정). 방금 결과를 생성한 {@code justCompletedEvent}는 DB 재조회 없이
      * "결과 있음"으로 간주한다(같은 트랜잭션에서 방금 만들었으므로). 본행사가 하나도 없으면
      * 당연히 미완료다.
      */
@@ -140,7 +140,9 @@ public class CeremonyResultService {
         for (CeremonyEvent mainEvent : mainEvents) {
             boolean hasResults = mainEvent.getId().equals(justCompletedEvent.getId())
                     || ceremonyResultRepository.existsByCeremonyEventId(mainEvent.getId());
-            if (mainEvent.getStatus() != CeremonyEventStatus.FINISHED || !hasResults) {
+            boolean ended = mainEvent.getStatus() == CeremonyEventStatus.FINISHED
+                    || mainEvent.getStatus() == CeremonyEventStatus.FORCE_FINISHED;
+            if (!ended || !hasResults) {
                 return;
             }
         }

@@ -136,7 +136,7 @@ public final class CeremonyDto {
             private Integer quantity;
         }
 
-        /** 플랫폼 관리자 전용. IN_PROGRESS/COMPLETED만 허용한다. */
+        /** 플랫폼 관리자 전용. IN_PROGRESS → COMPLETED만 허용한다(완료는 되돌릴 수 없다). */
         @Getter
         @Setter
         @NoArgsConstructor

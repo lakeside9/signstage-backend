@@ -6,6 +6,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventAction;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyStatus;
 import com.eformworks.signstage.backend.feature.ceremony.error.CeremonyErrorCode;
 import com.eformworks.signstage.backend.feature.ceremony.port.DocumentStoragePort;
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyEventLogRepository;
@@ -14,6 +15,7 @@ import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyResu
 import com.eformworks.signstage.backend.feature.ceremony.repository.CeremonyTemplateRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.StrokeDataRepository;
 import com.eformworks.signstage.backend.feature.ceremony.repository.TemplateFieldRepository;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -22,6 +24,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.given;
@@ -84,5 +88,45 @@ class CeremonyResultServiceTest {
                 .extracting(ex -> ((ApplicationException) ex).getErrorCode())
                 .isEqualTo(CeremonyErrorCode.RESULTS_ALREADY_GENERATED);
         verifyNoInteractions(documentStoragePort);
+    }
+
+    /** 강제종료한 본행사도 PDF를 만들면 끝난 것으로 보고 행사 전체를 완료로 바꾼다(2026-11-13 사용자 결정). */
+    @ParameterizedTest
+    @EnumSource(value = CeremonyEventStatus.class, names = {"FINISHED", "FORCE_FINISHED"})
+    void generateResults_completesCeremonyWhenAllMainEventsEndedWithResults(CeremonyEventStatus otherMainStatus) {
+        CeremonyEvent event = stubEvent(CeremonyEventType.MAIN, CeremonyEventStatus.FORCE_FINISHED);
+        Ceremony ceremony = event.getCeremony();
+        ReflectionTestUtils.setField(ceremony, "id", 2L);
+        ReflectionTestUtils.setField(ceremony, "status", CeremonyStatus.IN_PROGRESS);
+        CeremonyEvent otherMain = CeremonyEvent.builder()
+                .ceremony(ceremony).name("본행사 2").eventType(CeremonyEventType.MAIN).accessKey("key2").build();
+        ReflectionTestUtils.setField(otherMain, "id", 5L);
+        ReflectionTestUtils.setField(otherMain, "status", otherMainStatus);
+        given(ceremonyEventRepository.findAllByCeremonyIdAndEventType(2L, CeremonyEventType.MAIN))
+                .willReturn(List.of(event, otherMain));
+        given(ceremonyResultRepository.existsByCeremonyEventId(3L)).willReturn(false);
+        given(ceremonyResultRepository.existsByCeremonyEventId(5L)).willReturn(true);
+
+        resultService.generateResults(1L, 2L, 3L, 4L);
+
+        assertThat(ceremony.getStatus()).isEqualTo(CeremonyStatus.COMPLETED);
+    }
+
+    @Test
+    void generateResults_keepsCeremonyInProgressWhileAnotherMainEventIsStillRunning() {
+        CeremonyEvent event = stubEvent(CeremonyEventType.MAIN, CeremonyEventStatus.FORCE_FINISHED);
+        Ceremony ceremony = event.getCeremony();
+        ReflectionTestUtils.setField(ceremony, "id", 2L);
+        ReflectionTestUtils.setField(ceremony, "status", CeremonyStatus.IN_PROGRESS);
+        CeremonyEvent otherMain = CeremonyEvent.builder()
+                .ceremony(ceremony).name("본행사 2").eventType(CeremonyEventType.MAIN).accessKey("key2").build();
+        ReflectionTestUtils.setField(otherMain, "id", 5L);
+        ReflectionTestUtils.setField(otherMain, "status", CeremonyEventStatus.STARTED);
+        given(ceremonyEventRepository.findAllByCeremonyIdAndEventType(2L, CeremonyEventType.MAIN))
+                .willReturn(List.of(event, otherMain));
+
+        resultService.generateResults(1L, 2L, 3L, 4L);
+
+        assertThat(ceremony.getStatus()).isEqualTo(CeremonyStatus.IN_PROGRESS);
     }
 }

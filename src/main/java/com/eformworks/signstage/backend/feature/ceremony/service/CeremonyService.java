@@ -246,8 +246,9 @@ public class CeremonyService {
     }
 
     /**
-     * 플랫폼 관리자가 Ceremony 상태를 IN_PROGRESS/COMPLETED 사이에서 양방향으로 강제 변경한다
-     * (실수로 완료됐거나 예외 상황 처리용). DRAFT는 대상이 아니다 — 플랜 확정(DRAFT →
+     * 플랫폼 관리자가 IN_PROGRESS인 Ceremony를 COMPLETED로 강제 변경한다(예외 상황 처리용). 완료를
+     * 되돌리는 COMPLETED → IN_PROGRESS는 허용하지 않는다 — 완료는 단방향이다(2026-11-13 사용자 결정, 그전엔
+     * 양방향이었다). DRAFT는 대상이 아니다 — 플랜 확정(DRAFT →
      * IN_PROGRESS)은 {@link CeremonyPlanService#confirmPlan}의 단방향 전이로만 이뤄진다(signstage-docs
      * business/ceremony-plan-confirmation-review.md 4.4절). 플랫폼 관리자용 기능도 도메인
      * 서비스에 직접 둔다 — 관리자 컨트롤러는 도메인 feature에 {@code PlatformAdmin*} 이름으로
@@ -273,6 +274,9 @@ public class CeremonyService {
         }
         if (previousStatus == CeremonyStatus.CANCELLED) {
             throw new ApplicationException(CeremonyErrorCode.CEREMONY_CANCELLED);
+        }
+        if (previousStatus == CeremonyStatus.COMPLETED && newStatus != CeremonyStatus.COMPLETED) {
+            throw new ApplicationException(CeremonyErrorCode.CEREMONY_ALREADY_COMPLETED);
         }
         ceremony.changeStatus(newStatus);
 

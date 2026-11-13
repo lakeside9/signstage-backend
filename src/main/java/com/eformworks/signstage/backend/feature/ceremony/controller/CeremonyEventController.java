@@ -320,8 +320,8 @@ public class CeremonyEventController {
 
     @Operation(
             summary = "강제종료 전이(FORCE_FINISHED)",
-            description = "STARTED 상태의 TEST/REHEARSAL 행사만 서명 완료 여부와 무관하게 강제로 끝낼 수 있다. "
-                    + "MAIN에는 허용하지 않는다."
+            description = "STARTED 상태의 TEST/REHEARSAL/MAIN 행사를 서명 완료 여부와 무관하게 강제로 끝낸다. "
+                    + "강제종료 후에도 결과물(PDF)을 생성할 수 있다."
     )
     @PostMapping("/{eventId}/force-finish")
     public ApiResponse<CeremonyEventDto.Response.CeremonyEventSummary> forceFinishEvent(
@@ -397,7 +397,7 @@ public class CeremonyEventController {
 
     @Operation(
             summary = "결과물 생성",
-            description = "FINISHED 상태여야 하고, 이벤트당 1회만 생성할 수 있다. "
+            description = "FINISHED 또는 FORCE_FINISHED 상태여야 하고, 이벤트당 1회만 생성할 수 있다. "
                     + "매핑된 CONTRACT/EXHIBITION 문서마다 서명이 그려진 PDF를 만든다."
     )
     @PostMapping("/{eventId}/results")
