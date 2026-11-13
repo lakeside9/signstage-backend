@@ -238,6 +238,11 @@ public enum CeremonyErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "플랫폼 수주 행사에서는 플랜 변경·추가구매·고객 견적·현장지원 요청을 할 수 없습니다. 범위 변경은 플랫폼에 문의해주세요."
     ),
+    UNIT_PRODUCT_PURCHASE_PLATFORM_ORDER_NOT_CANCELLABLE(
+            "CEREMONY_UNIT_PRODUCT_PURCHASE_PLATFORM_ORDER_NOT_CANCELLABLE",
+            HttpStatus.CONFLICT,
+            "플랫폼 수주 행사의 구매는 수주 범위라 취소할 수 없습니다. 범위는 수주 상세의 범위 변경으로, 행사 취소는 발주·수주 취소로 처리해주세요."
+    ),
     CEREMONY_PLATFORM_ORDER_CONTRACT_FIELD_LOCKED(
             "CEREMONY_PLATFORM_ORDER_CONTRACT_FIELD_LOCKED",
             HttpStatus.CONFLICT,

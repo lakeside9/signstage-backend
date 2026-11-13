@@ -86,6 +86,8 @@ public final class PlatformAdminCeremonyPurchaseDto {
              */
             private final List<CeremonyEventStatusSummary> ceremonyEvents;
             private final LocalDateTime createdAt;
+            /** 플랫폼 수주 행사의 구매(수주 범위를 옮긴 0원 기록)면 true — 관리자도 취소할 수 없다. */
+            private final boolean platformOrder;
         }
 
         /**

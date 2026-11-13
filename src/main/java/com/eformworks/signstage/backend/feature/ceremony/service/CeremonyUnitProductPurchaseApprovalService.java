@@ -135,6 +135,10 @@ public class CeremonyUnitProductPurchaseApprovalService {
     ) {
         checkAllowed(actingPlatformRole, "ACTION_PURCHASE_APPROVAL");
         CeremonyUnitProductPurchase purchase = findApprovedUnitProductPurchaseOrThrow(purchaseId);
+        // 플랫폼 수주 행사의 구매는 수주·발주 범위를 옮긴 0원 기록이다 — 여기서 취소하면 행사 한도만 줄고 수주·발주와 어긋난다(D08).
+        if (purchase.getCeremony().isPlatformOrder()) {
+            throw new ApplicationException(CeremonyErrorCode.UNIT_PRODUCT_PURCHASE_PLATFORM_ORDER_NOT_CANCELLABLE);
+        }
         purchase.cancel(adminUserId, request.getCancellationReason());
         unapplyEventEffectBundlesIfCancelled(purchase);
 
@@ -270,7 +274,8 @@ public class CeremonyUnitProductPurchaseApprovalService {
                 purchase.getCancelledAt(),
                 purchase.getCancellationReason(),
                 ceremonyEvents,
-                purchase.getCreatedAt()
+                purchase.getCreatedAt(),
+                purchase.getCeremony().isPlatformOrder()
         );
     }
 

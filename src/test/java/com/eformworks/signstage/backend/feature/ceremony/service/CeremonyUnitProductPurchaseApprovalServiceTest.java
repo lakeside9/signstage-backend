@@ -13,6 +13,7 @@ import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEvent;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventOptionalFeature;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventStatus;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyEventType;
+import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyOrderRoute;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchase;
 import com.eformworks.signstage.backend.feature.ceremony.entity.CeremonyUnitProductPurchaseLine;
 import com.eformworks.signstage.backend.feature.ceremony.entity.PurchaseStatus;
@@ -74,6 +75,25 @@ class CeremonyUnitProductPurchaseApprovalServiceTest extends CeremonyServiceTest
         assertThat(purchase.getCancelledBy()).isEqualTo(999L);
         // 이벤트 효과 묶음이 아니므로 자동 해제 경로 자체를 타지 않아야 한다.
         verify(ceremonyEventOptionalFeatureRepository, never()).findAllByCeremonyEventId(any());
+    }
+
+    @Test
+    @DisplayName("구매 취소 — 플랫폼 수주 행사의 구매(수주 범위)는 취소할 수 없다")
+    void cancelUnitProductPurchase_platformOrderCeremony_rejected() {
+        Ceremony ceremony = ceremony(organization(), 10L);
+        ReflectionTestUtils.setField(ceremony, "orderRoute", CeremonyOrderRoute.PLATFORM_ORDER);
+        CeremonyUnitProductPurchase purchase = CeremonyUnitProductPurchase.builder().ceremony(ceremony).build();
+        ReflectionTestUtils.setField(purchase, "id", 504L);
+        ReflectionTestUtils.setField(purchase, "status", PurchaseStatus.APPROVED);
+        given(ceremonyUnitProductPurchaseRepository.findById(504L)).willReturn(Optional.of(purchase));
+
+        PlatformAdminCeremonyPurchaseDto.Request.Cancel request = new PlatformAdminCeremonyPurchaseDto.Request.Cancel("고객 사정");
+
+        assertThatThrownBy(() -> ceremonyUnitProductPurchaseApprovalService.cancelUnitProductPurchase(504L, 999L, "PLATFORM_OPS", request))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                .isEqualTo(CeremonyErrorCode.UNIT_PRODUCT_PURCHASE_PLATFORM_ORDER_NOT_CANCELLABLE);
+        assertThat(purchase.getStatus()).isEqualTo(PurchaseStatus.APPROVED);
     }
 
     @Test
