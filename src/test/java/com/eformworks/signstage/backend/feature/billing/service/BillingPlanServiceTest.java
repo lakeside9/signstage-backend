@@ -234,7 +234,7 @@ class BillingPlanServiceTest {
         given(billingPlanUnitProductRepository.findAllByBillingPlanId(PLAN_ID)).willReturn(java.util.List.of());
 
         BillingPlanDto.Request.UpdatePlan request = new BillingPlanDto.Request.UpdatePlan(
-                "Standard", java.util.List.of(new BillingPlanDto.Request.PlanUnitProductLine(55L, 5)), null
+                "Standard", java.util.List.of(new BillingPlanDto.Request.PlanUnitProductLine(55L, 5))
         );
 
         billingPlanService.updatePlan(PLAN_ID, "PLATFORM_OPS", 1L, request);
@@ -263,7 +263,7 @@ class BillingPlanServiceTest {
                 new BillingPlanDto.Request.PlanUnitProductLine(55L, 5),
                 new BillingPlanDto.Request.PlanUnitProductLine(56L, 2),
                 new BillingPlanDto.Request.PlanUnitProductLine(57L, 1, true)
-        ), null));
+        )));
 
         ArgumentCaptor<BillingPlanUnitProduct> saved = ArgumentCaptor.forClass(BillingPlanUnitProduct.class);
         verify(billingPlanUnitProductRepository, times(3)).save(saved.capture());

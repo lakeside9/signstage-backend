@@ -27,6 +27,7 @@ import com.eformworks.signstage.backend.feature.order.model.SalesQuoteCalculatio
 import com.eformworks.signstage.backend.feature.order.model.SalesQuoteOption;
 import com.eformworks.signstage.backend.feature.order.repository.CustomerInvoiceRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
+import com.eformworks.signstage.backend.feature.order.repository.QuoteTemplateRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderLineRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
@@ -68,6 +69,7 @@ public class SalesOrderService {
 
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
+    private final QuoteTemplateRepository quoteTemplateRepository;
     private final PartnerOrderRepository partnerOrderRepository;
     private final CustomerInvoiceRepository customerInvoiceRepository;
     private final CustomerService customerService;
@@ -263,11 +265,17 @@ public class SalesOrderService {
         );
         salesOrder.useRegionSurcharge(calculation.regionSurchargeId());
         salesOrder.useQuoteAdjustment(request.quoteAdjustment());
-        // 생략하면 플랜 문구를 복사한다 — 이후 플랜 문구를 고쳐도 이 견적은 그대로다.
-        String serviceDescription = request.getServiceDescription();
-        salesOrder.useServiceDescription(serviceDescription == null
-                ? plan.getServiceDescription()
-                : (serviceDescription.isBlank() ? null : serviceDescription.strip()));
+        // 새 견적은 저장일의 견적 공통 문구를 복사한다 — 이후 공통 문구를 고쳐도 이 견적은 그대로다. 요청에 문구가 있으면 그 값을
+        // 쓰고(빈 문자열이면 그 칸을 비운다), 생략하면 새 견적은 복사한 문구를, 기존 견적은 지금 문구를 그대로 둔다.
+        if (isNew) {
+            salesOrder.copyQuoteTemplate(quoteTemplateRepository.findEffective(today).orElse(null));
+        }
+        if (request.getServiceDescription() != null) {
+            salesOrder.useServiceDescription(blankToNull(request.getServiceDescription()));
+        }
+        if (request.getQuoteFooterNotice() != null) {
+            salesOrder.useQuoteFooterNotice(blankToNull(request.getQuoteFooterNotice()));
+        }
         if (isNew) {
             salesOrderRepository.save(salesOrder);
         } else {
@@ -329,5 +337,9 @@ public class SalesOrderService {
         byte[] bytes = new byte[32];
         SECURE_RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private static String blankToNull(String value) {
+        return value.isBlank() ? null : value.strip();
     }
 }

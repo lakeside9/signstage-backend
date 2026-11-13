@@ -24,6 +24,17 @@ public enum OrderErrorCode implements ErrorCode {
             HttpStatus.CONFLICT,
             "같은 대상에 기간이 겹치는 가격이 있습니다. 기존 가격 기간을 먼저 종료해주세요."
     ),
+    QUOTE_TEMPLATE_NOT_FOUND("ORDER_QUOTE_TEMPLATE_NOT_FOUND", HttpStatus.NOT_FOUND, "견적 공통 문구를 찾을 수 없습니다."),
+    QUOTE_TEMPLATE_IN_USE(
+            "ORDER_QUOTE_TEMPLATE_IN_USE",
+            HttpStatus.CONFLICT,
+            "견적에 쓰인 공통 문구는 고치거나 삭제할 수 없습니다. 기간을 종료하고 새 문구를 등록해주세요."
+    ),
+    QUOTE_TEMPLATE_PERIOD_OVERLAP(
+            "ORDER_QUOTE_TEMPLATE_PERIOD_OVERLAP",
+            HttpStatus.CONFLICT,
+            "기간이 겹치는 견적 공통 문구가 있습니다. 기존 문구의 기간을 먼저 종료해주세요."
+    ),
     CUSTOMER_PRICE_NOT_FOUND(
             "ORDER_CUSTOMER_PRICE_NOT_FOUND",
             HttpStatus.CONFLICT,

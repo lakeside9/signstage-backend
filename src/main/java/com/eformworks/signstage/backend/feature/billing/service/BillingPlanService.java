@@ -42,7 +42,6 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 /**
  * 행사(Ceremony) 과금 플랜 카탈로그 — 단위 상품 묶음 + 전체 할인(signstage-docs
@@ -106,7 +105,6 @@ public class BillingPlanService {
 
         BillingPlan plan = BillingPlan.builder()
                 .name(request.getName())
-                .serviceDescription(trimToNull(request.getServiceDescription()))
                 .planType(planType)
                 .subscriptionType(planType == BillingPlanType.SUBSCRIPTION
                         ? SubscriptionType.valueOf(request.getSubscriptionType()) : null)
@@ -163,7 +161,7 @@ public class BillingPlanService {
 
         String detail = "planId=" + planId + ", name: " + plan.getName() + " -> " + request.getName();
 
-        plan.updateInfo(request.getName(), trimToNull(request.getServiceDescription()));
+        plan.updateInfo(request.getName());
 
         // 단위 상품 구성 통째로 교체 — 이미 확정/진행 중인 Ceremony는 CeremonyPlanHistoryUnitProduct
         // 스냅샷으로 보호되어 이 변경에 영향받지 않는다.
@@ -589,8 +587,7 @@ public class BillingPlanService {
                 effective.map(BillingPlanDiscountPeriod::getEffectiveTo).orElse(null),
                 effective.map(p -> computeStatus(p.isActive(), p.getEffectiveFrom(), p.getEffectiveTo())).orElse("NO_ACTIVE_PERIOD"),
                 !hasAnyUsage(plan.getId()),
-                plan.getSalesChannel().name(),
-                plan.getServiceDescription()
+                plan.getSalesChannel().name()
         );
     }
 
@@ -636,8 +633,7 @@ public class BillingPlanService {
                 history.getName(),
                 lines,
                 history.getCreatedBy(),
-                history.getCreatedAt(),
-                history.getServiceDescription()
+                history.getCreatedAt()
         );
     }
 
@@ -659,10 +655,5 @@ public class BillingPlanService {
         if (!rolePermissionService.isAllowed(actingPlatformRole, permissionKey)) {
             throw new ApplicationException(CommonErrorCode.ACCESS_DENIED);
         }
-    }
-
-    /** 공백뿐인 설명은 "설명 없음"(null)으로 저장한다. */
-    private static String trimToNull(String value) {
-        return StringUtils.hasText(value) ? value.strip() : null;
     }
 }

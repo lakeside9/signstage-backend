@@ -34,5 +34,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
 
     boolean existsByRegionSurchargeId(Long regionSurchargeId);
 
+    boolean existsByQuoteTemplateId(Long quoteTemplateId);
+
     boolean existsByBillingPlanId(Long billingPlanId);
 }

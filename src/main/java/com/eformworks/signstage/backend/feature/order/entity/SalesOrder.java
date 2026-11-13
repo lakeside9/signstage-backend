@@ -129,11 +129,19 @@ public class SalesOrder extends BaseEntity {
     private Integer truncationUnit;
 
     /**
-     * 견적서 "제공 서비스" 본문 — 견적 저장 시 플랜 문구를 복사하고 관리자가 견적마다 고칠 수 있다. 플랜 문구를 나중에
-     * 고쳐도 이미 보낸 견적은 바뀌지 않는다. null이면 견적서에 그 칸이 없다.
+     * 견적서 "제공 서비스" 본문 — 견적을 처음 저장할 때 그날 유효한 견적 공통 문구를 복사하고 관리자가 견적마다 고칠 수 있다.
+     * 공통 문구를 나중에 고쳐도 이미 만든 견적은 바뀌지 않는다. null이면 견적서에 그 칸이 없다.
      */
     @Column(name = "service_description", columnDefinition = "TEXT")
     private String serviceDescription;
+
+    /** 처음 저장할 때 복사한 견적 공통 문구. 그날 유효한 문구가 없었으면 null이다 — 쓰인 문구는 고치거나 지우지 못한다. */
+    @Column(name = "quote_template_id")
+    private Long quoteTemplateId;
+
+    /** 견적서 하단 안내문구(복사본, 견적마다 고칠 수 있다). null이면 견적서에 그 줄이 없다. */
+    @Column(name = "quote_footer_notice", columnDefinition = "TEXT")
+    private String quoteFooterNotice;
 
     @Column(name = "discount_reason", length = 500)
     private String discountReason;
@@ -221,8 +229,19 @@ public class SalesOrder extends BaseEntity {
         this.truncationUnit = adjustment.truncationUnit();
     }
 
+    /** 새 견적에 그날의 견적 공통 문구를 복사한다. 유효한 문구가 없으면(null) 두 문구를 비운다. */
+    public void copyQuoteTemplate(QuoteTemplate template) {
+        this.quoteTemplateId = template != null ? template.getId() : null;
+        this.serviceDescription = template != null ? template.getServiceDescription() : null;
+        this.quoteFooterNotice = template != null ? template.getFooterNotice() : null;
+    }
+
     public void useServiceDescription(String serviceDescription) {
         this.serviceDescription = serviceDescription;
+    }
+
+    public void useQuoteFooterNotice(String quoteFooterNotice) {
+        this.quoteFooterNotice = quoteFooterNotice;
     }
 
     public void useRegionSurcharge(Long regionSurchargeId) {

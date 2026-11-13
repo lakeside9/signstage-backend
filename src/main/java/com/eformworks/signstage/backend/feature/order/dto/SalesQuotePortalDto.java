@@ -64,6 +64,8 @@ public final class SalesQuotePortalDto {
             private final String acceptedByName;
             /** 견적서 "제공 서비스" 본문. null이면 그 칸이 없다. */
             private final String serviceDescription;
+            /** 견적서 하단 안내문구. null이면 그 줄이 없다. */
+            private final String quoteFooterNotice;
 
             public static SalesQuote of(SalesOrder salesOrder, List<SalesOrderLine> lines) {
                 return new SalesQuote(
@@ -83,7 +85,8 @@ public final class SalesQuotePortalDto {
                         salesOrder.getStatus().name(),
                         salesOrder.getAcceptedAt(),
                         salesOrder.getAcceptedByName(),
-                        salesOrder.getServiceDescription()
+                        salesOrder.getServiceDescription(),
+                        salesOrder.getQuoteFooterNotice()
                 );
             }
         }

@@ -58,9 +58,6 @@ public class BillingPlan extends BaseEntity {
      * 견적서 "제공 서비스" 본문 — 고객에게 보이는 플랜 설명(줄바꿈 있는 일반 텍스트, "- "로 시작하면 목록). null이면
      * 견적서에 그 칸을 그리지 않는다. 견적은 저장할 때 이 값을 복사해 두고, 관리자가 견적마다 고칠 수 있다.
      */
-    @Column(name = "service_description", columnDefinition = "TEXT")
-    private String serviceDescription;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "plan_type", nullable = false, length = 20)
     private BillingPlanType planType;
@@ -88,7 +85,6 @@ public class BillingPlan extends BaseEntity {
     @Builder
     private BillingPlan(
             String name,
-            String serviceDescription,
             BillingPlanType planType,
             SubscriptionType subscriptionType,
             Integer subscriptionPeriodMonths,
@@ -96,7 +92,6 @@ public class BillingPlan extends BaseEntity {
             SalesChannel salesChannel
     ) {
         this.name = name;
-        this.serviceDescription = serviceDescription;
         this.salesChannel = salesChannel != null ? salesChannel : SalesChannel.PARTNER_DIRECT;
         this.planType = planType != null ? planType : BillingPlanType.STANDARD;
         this.subscriptionType = subscriptionType;
@@ -118,8 +113,7 @@ public class BillingPlan extends BaseEntity {
      * 가격/사용여부는 여기서 다루지 않는다 — {@link BillingPlanPricePeriod} 기간 단위 CRUD로
      * 관리한다. {@code planType}/구독 조건 4개는 생성 후 불변이라 여기서 바꾸지 않는다.
      */
-    public void updateInfo(String name, String serviceDescription) {
+    public void updateInfo(String name) {
         this.name = name;
-        this.serviceDescription = serviceDescription;
     }
 }

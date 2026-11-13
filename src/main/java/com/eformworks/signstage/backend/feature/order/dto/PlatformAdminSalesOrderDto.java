@@ -92,7 +92,10 @@ public final class PlatformAdminSalesOrderDto {
             /** 공급가(부가세 별도) 절사 단위 — 절사한 금액에 부가세를 매긴다 — 10·100·1,000·10,000. 생략하면 절사하지 않는다. */
             private Integer truncationUnit;
 
-            /** 견적서 "제공 서비스" 본문. 생략하면(null) 플랜 문구를 쓰고, 빈 문자열이면 견적서에 그 칸을 두지 않는다. */
+            /**
+             * 견적서 "제공 서비스" 본문. 생략하면(null) 새 견적은 저장일의 견적 공통 문구를, 기존 견적은 지금 문구를 그대로 쓴다.
+             * 빈 문자열이면 견적서에 그 칸을 두지 않는다.
+             */
             @Size(max = 5000)
             private String serviceDescription;
 
@@ -119,6 +122,10 @@ public final class PlatformAdminSalesOrderDto {
 
             @Size(max = 1000)
             private String memo;
+
+            /** 견적서 하단 안내문구. 생략·빈 문자열 규칙은 {@code serviceDescription}과 같다. */
+            @Size(max = 2000)
+            private String quoteFooterNotice;
 
             public ScopeExtras scopeExtras() {
                 return ScopeExtras.of(spareTabletCount, rehearsalStaffPersonDays, lodgingNights, lodgingPersons);
@@ -300,6 +307,8 @@ public final class PlatformAdminSalesOrderDto {
             private final String memo;
             /** 견적서 "제공 서비스" 본문(견적 저장 시점 복사본). */
             private final String serviceDescription;
+            /** 견적서 하단 안내문구(복사본). */
+            private final String quoteFooterNotice;
             private final List<QuoteLine> lines;
             private final List<PlatformAdminPartnerOrderDto.Response.AdminPartnerOrderSummary> partnerOrders;
 
@@ -346,6 +355,7 @@ public final class PlatformAdminSalesOrderDto {
                         salesOrder.getCancellationReason(),
                         salesOrder.getMemo(),
                         salesOrder.getServiceDescription(),
+                        salesOrder.getQuoteFooterNotice(),
                         lines.stream().map(QuoteLine::from).toList(),
                         partnerOrders
                 );

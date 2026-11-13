@@ -16,6 +16,7 @@ import com.eformworks.signstage.backend.feature.order.entity.SalesOrderStatus;
 import com.eformworks.signstage.backend.feature.order.error.OrderErrorCode;
 import com.eformworks.signstage.backend.feature.order.repository.CustomerInvoiceRepository;
 import com.eformworks.signstage.backend.feature.order.repository.PartnerOrderRepository;
+import com.eformworks.signstage.backend.feature.order.repository.QuoteTemplateRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderLineRepository;
 import com.eformworks.signstage.backend.feature.order.repository.SalesOrderRepository;
 import com.eformworks.signstage.backend.feature.permission.service.RolePermissionService;
@@ -46,6 +47,8 @@ class SalesOrderServiceTest {
     private SalesOrderRepository salesOrderRepository;
     @Mock
     private SalesOrderLineRepository salesOrderLineRepository;
+    @Mock
+    private QuoteTemplateRepository quoteTemplateRepository;
     @Mock
     private PartnerOrderRepository partnerOrderRepository;
     @Mock

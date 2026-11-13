@@ -73,9 +73,6 @@ public final class BillingPlanDto {
             @NotBlank
             private String name;
 
-            /** 견적서 "제공 서비스" 본문(일반 텍스트, 줄바꿈 유지). 생략하면 견적서에 그 칸이 없다. */
-            private String serviceDescription;
-
             /** 이 플랜이 포함하는 단위 상품 구성 전체(생략하면 빈 목록). */
             private List<PlanUnitProductLine> unitProducts;
 
@@ -143,9 +140,6 @@ public final class BillingPlanDto {
             private String name;
 
             private List<PlanUnitProductLine> unitProducts;
-
-            /** 견적서 "제공 서비스" 본문. null·공백이면 지운다. 이미 저장된 견적은 복사본이라 바뀌지 않는다. */
-            private String serviceDescription;
         }
 
         /** 할인 기간 하나를 새로 추가한다. */
@@ -260,8 +254,6 @@ public final class BillingPlanDto {
             private final boolean canDelete;
             /** 판매 경로 — {@code PARTNER_DIRECT}(직접 수주) 또는 {@code PLATFORM_ORDER}(플랫폼 수주). */
             private final String salesChannel;
-            /** 견적서 "제공 서비스" 본문. */
-            private final String serviceDescription;
         }
 
         /** 플랜 이름/단위 상품 구성 변경 이력 한 행(할인/사용여부는 {@link BillingPlanPeriodSummary} 쪽 이력 참고). */
@@ -274,7 +266,6 @@ public final class BillingPlanDto {
             private final List<PlanUnitProductLineSummary> unitProducts;
             private final Long createdBy;
             private final LocalDateTime createdAt;
-            private final String serviceDescription;
         }
 
         /**

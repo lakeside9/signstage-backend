@@ -48,13 +48,9 @@ public class BillingPlanHistory extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "service_description", columnDefinition = "TEXT")
-    private String serviceDescription;
-
     @Builder
     private BillingPlanHistory(BillingPlan billingPlan) {
         this.billingPlan = billingPlan;
         this.name = billingPlan.getName();
-        this.serviceDescription = billingPlan.getServiceDescription();
     }
 }
